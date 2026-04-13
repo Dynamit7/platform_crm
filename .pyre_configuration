@@ -1,0 +1,9 @@
+{
+  "source_directories": [
+    "."
+  ],
+  "site_package_search_strategy": "pep561",
+  "search_path": [
+    "c:/Users/Samad/Desktop/New folder/.venv/Lib/site-packages"
+  ]
+}
