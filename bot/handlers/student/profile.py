@@ -10,36 +10,48 @@ from bot.keyboards.student import get_back_to_cabinet_kb
 router = Router(name="student_profile")
 logger = logging.getLogger(__name__)
 
-@router.callback_query(F.data == "student:profile")
+@router.callback_query(F.data.in_(["student:profile", "teacher:profile"]))
 async def view_profile(callback: types.CallbackQuery, db_user: User):
     """Экран профиля с кнопками редактирования."""
+    from bot.models.user import UserRole
+    
+    role_str = "Преподаватель" if db_user.role == UserRole.TEACHER else "Ученик"
+    if db_user.role == UserRole.ADMIN: role_str = "Администратор"
+    
     text = (
         f"👤 *Мой профиль*\n\n"
         f"📍 *Имя:* {db_user.full_name}\n"
-        f"📱 *Телефон:* `{db_user.phone}`\n"
+        f"📱 *Телефон:* `{db_user.phone or 'не указан'}`\n"
         f"🔗 *Username:* @{db_user.username or 'отсутствует'}\n"
-        f"🎓 *Роль:* {db_user.role}\n\n"
+        f"🎓 *Роль:* {role_str}\n\n"
         f"Для защиты данных изменение ФИО или телефона требует подтверждения кодом."
     )
+    
+    back_cb = "teacher:main" if db_user.role in [UserRole.TEACHER, UserRole.ADMIN] else "student:main"
     
     kb = types.InlineKeyboardMarkup(inline_keyboard=[
         [types.InlineKeyboardButton(text="✏️ Изменить Имя", callback_data="p_edit:name")],
         [types.InlineKeyboardButton(text="📱 Изменить Телефон", callback_data="p_edit:phone")],
-        [types.InlineKeyboardButton(text="⬅️ В кабинет", callback_data="student:main")]
+        [types.InlineKeyboardButton(text="⬅️ Меню", callback_data=back_cb)]
     ])
     
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=kb)
 
 @router.callback_query(F.data.startswith("p_edit:"))
-async def start_profile_edit(callback: types.CallbackQuery, state: FSMContext):
+async def start_profile_edit(callback: types.CallbackQuery, state: FSMContext, db_user: User):
+    from bot.models.user import UserRole
     field = callback.data.split(":")[1]
     await state.update_data(editing_field=field)
     
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    back_cb = "teacher:profile" if db_user.role in [UserRole.TEACHER, UserRole.ADMIN] else "student:profile"
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data=back_cb)]])
+    
     if field == "name":
-        await callback.message.edit_text("📝 Введите ваше новое Имя (ФИО):", reply_markup=get_back_to_cabinet_kb())
+        await callback.message.edit_text("📝 Введите ваше новое Имя (ФИО):", reply_markup=kb)
         await state.set_state(ProfileEditStates.waiting_for_new_name)
     else:
-        await callback.message.edit_text("📱 Введите ваш новый номер телефона:", reply_markup=get_back_to_cabinet_kb())
+        await callback.message.edit_text("📱 Введите ваш новый номер телефона:", reply_markup=kb)
         await state.set_state(ProfileEditStates.waiting_for_new_phone)
 
 @router.message(ProfileEditStates.waiting_for_new_name)
@@ -78,5 +90,11 @@ async def finalize_edit(message: types.Message, state: FSMContext, session: Asyn
         db_user.phone = new_value
         
     await session.commit()
-    await message.answer("✅ Данные успешно обновлены!", reply_markup=get_back_to_cabinet_kb())
+    
+    from bot.models.user import UserRole
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    back_cb = "teacher:profile" if db_user.role in [UserRole.TEACHER, UserRole.ADMIN] else "student:profile"
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Ок, назад в профиль", callback_data=back_cb)]])
+    
+    await message.answer("✅ Данные успешно обновлены!", reply_markup=kb)
     await state.clear()

@@ -2,8 +2,11 @@ import logging
 from aiogram import Router, types, F, Bot
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
-from bot.models.education import Material
+from bot.models.education import Material, Lesson
 from bot.keyboards.common import get_back_button
+from aiogram.fsm.context import FSMContext
+from bot.states.teacher import TeacherLessonStates
+from bot.models.user import Teacher
 
 router = Router(name="teacher_materials")
 logger = logging.getLogger(__name__)
@@ -76,10 +79,65 @@ async def delete_material(callback: types.CallbackQuery, session: AsyncSession):
     mat_id = int(callback.data.split(":")[1])
     
     # Проверка прав (преподаватель может удалять только свои или материалы своей группы)
-    # Для упрощения удаляем по ID
     stmt = delete(Material).where(Material.id == mat_id)
     await session.execute(stmt)
     await session.commit()
     
     await callback.answer("✅ Материал успешно удален", show_alert=True)
     await callback.message.delete()
+
+@router.callback_query(F.data.startswith("t_mat_send_"))
+async def start_send_material(callback: types.CallbackQuery, state: FSMContext):
+    lesson_id = int(callback.data.split("_")[-1])
+    await state.update_data(lesson_id=lesson_id)
+    
+    await callback.message.edit_text(
+        "📚 *Дотрузка материалов*\n\nОтправьте файл в чат (фото, видео или документ).",
+        parse_mode="Markdown",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text="❌ Отмена", callback_data=f"t_lesson_view_{lesson_id}")]
+        ])
+    )
+    await state.set_state(TeacherLessonStates.waiting_for_material_file)
+
+@router.message(TeacherLessonStates.waiting_for_material_file, F.photo | F.document | F.video)
+async def finalize_send_material(message: types.Message, state: FSMContext, session: AsyncSession):
+    data = await state.get_data()
+    lesson_id = data["lesson_id"]
+    
+    stmt = select(Lesson).where(Lesson.id == lesson_id)
+    lesson = (await session.execute(stmt)).scalar_one()
+    
+    stmt_t = select(Teacher).where(Teacher.user_id == message.from_user.id)
+    teacher = (await session.execute(stmt_t)).scalar_one()
+    
+    if message.photo:
+        file_id = message.photo[-1].file_id
+        file_type = "photo"
+    elif message.video:
+        file_id = message.video.file_id
+        file_type = "video"
+    else:
+        file_id = message.document.file_id
+        file_type = "document"
+        
+    title = message.caption or (message.document.file_name if message.document else f"Материал к уроку: {lesson.topic}")
+    
+    mat = Material(
+        uploader_id=teacher.id,
+        file_id=file_id,
+        file_type=file_type,
+        title=title,
+        group_id=lesson.group_id,
+        lesson_id=lesson.id
+    )
+    session.add(mat)
+    await session.commit()
+    
+    await message.answer(
+        "✅ Учебный материал успешно сохранен и привязан к уроку!",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text="🔙 Обратно к уроку", callback_data=f"t_lesson_view_{lesson_id}")]
+        ])
+    )
+    await state.clear()

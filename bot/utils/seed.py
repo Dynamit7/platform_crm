@@ -48,6 +48,17 @@ async def seed_basic_data(session: AsyncSession):
             lessons_count=24
         )
         session.add(default_course)
-        logger.info("Seed: Added default Course A1")
+    # 4. Базовые достижения для модуля Геймификации
+    from bot.models.features import Achievement
+    achievements = [
+        {"name": "Первое ДЗ", "description": "Вы сдали свое первое домашнее задание и оно было принято!", "icon": "🥉", "xp_reward": 50},
+        {"name": "Новатор", "description": "Сдано 5 домашних заданий подряд.", "icon": "🥈", "xp_reward": 150},
+        {"name": "Магистр ДЗ", "description": "Сдано 10 домашних заданий подряд. Настоящий гений!", "icon": "🏆", "xp_reward": 300},
+    ]
+    for ach in achievements:
+        stmt_a = select(Achievement).where(Achievement.name == ach["name"])
+        if not (await session.execute(stmt_a)).scalar_one_or_none():
+            session.add(Achievement(**ach))
+            logger.info(f"Seed: Added achievement {ach['name']}")
 
     await session.commit()

@@ -4,6 +4,11 @@ from aiogram.filters import Command
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+
+class BroadcastStates(StatesGroup):
+    waiting_for_message = State()
 
 from bot.models.user import User, UserRole, Teacher
 from bot.models.education import Group
@@ -68,3 +73,74 @@ async def manage_group(callback: types.CallbackQuery):
         reply_markup=get_group_manage_kb(group_id)
     )
     await callback.answer()
+
+@router.callback_query(F.data.startswith("t_broadcast_start:"))
+async def start_broadcast(callback: types.CallbackQuery, state: FSMContext):
+    group_id = int(callback.data.split(":")[1])
+    await state.update_data(broadcast_group_id=group_id)
+    
+    await callback.message.edit_text(
+        "📢 *Рассылка группе*\n\n"
+        "Введите сообщение, которое хотите отправить всем ученикам этой группы. "
+        "Оно придет им от лица бота с вашей подписью.\n\n"
+        "_(Для отмены введите /cancel)_",
+        parse_mode="Markdown"
+    )
+    await state.set_state(BroadcastStates.waiting_for_message)
+
+@router.message(BroadcastStates.waiting_for_message)
+async def process_broadcast_message(message: types.Message, state: FSMContext, session: AsyncSession):
+    data = await state.get_data()
+    group_id = data.get("broadcast_group_id")
+    text = message.text
+    
+    if not text:
+        await message.answer("Пожалуйста, отправьте текстовое сообщение.")
+        return
+        
+    from bot.models.education import StudentGroup
+    from bot.models.user import Student
+    from bot.notifications.service import NotificationService
+    
+    stmt = (
+        select(StudentGroup)
+        .where(StudentGroup.group_id == group_id, StudentGroup.status == "active")
+        .options(selectinload(StudentGroup.student).selectinload(Student.user))
+    )
+    links = (await session.execute(stmt)).scalars().all()
+    
+    notifier = NotificationService(message.bot)
+    count = 0
+    for link in links:
+        if link.student and link.student.user and link.student.is_active:
+            try:
+                await notifier.notify_user_status_change(
+                    link.student.user.telegram_id,
+                    f"📢 *Сообщение от преподавателя:*\n\n{text}"
+                )
+                count += 1
+            except Exception as e:
+                logger.error(f"Failed to broadcast to {link.student.user.id}: {e}")
+                
+    await message.answer(
+        f"✅ Сообщение успешно отправлено {count} ученикам(у)!",
+        reply_markup=get_teacher_main_kb()
+    )
+    await state.clear()
+
+@router.callback_query(F.data == "teacher:profile")
+async def show_teacher_profile(callback: types.CallbackQuery, session: AsyncSession, db_user: User):
+    stmt = select(Teacher).options(selectinload(Teacher.user)).where(Teacher.user_id == db_user.id)
+    t = (await session.execute(stmt)).scalar_one_or_none()
+    
+    if not t:
+        return await callback.answer("Профиль не найден", show_alert=True)
+        
+    text = (
+        f"👤 *Ваш профиль преподавателя*\n\n"
+        f"Имя: {t.user.full_name}\n"
+        f"Специализация: {t.specialization or 'Не указана'}\n"
+    )
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    builder = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data="teacher:main")]])
+    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=builder)

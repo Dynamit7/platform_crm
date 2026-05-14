@@ -35,6 +35,18 @@ async def show_settings_main(callback: types.CallbackQuery, session: AsyncSessio
     )
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_admin_settings_main_kb())
 
+@router.callback_query(F.data == "admin_set:backup")
+async def send_db_backup(callback: types.CallbackQuery):
+    import os
+    from aiogram.types import FSInputFile
+    db_path = "education_center_v2.db"
+    if os.path.exists(db_path):
+        document = FSInputFile(db_path)
+        await callback.message.answer_document(document, caption="💾 ЭКСТРЕННЫЙ БЭКАП БАЗЫ ДАННЫХ\n\nНикому не передавайте этот файл!")
+        await callback.answer()
+    else:
+        await callback.answer("❌ Файл базы данных не найден!", show_alert=True)
+
 @router.callback_query(F.data == "admin_set:info")
 async def show_info_settings(callback: types.CallbackQuery, session: AsyncSession):
     name = await get_setting(session, "center_name", "SmartEdu")

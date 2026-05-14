@@ -78,16 +78,38 @@ async def show_attendance_list(callback: types.CallbackQuery, session: AsyncSess
 
 @router.callback_query(F.data.startswith("t_att_pick:"))
 async def pick_status(callback: types.CallbackQuery):
-    _, _, lesson_id, student_id = callback.data.split(":")
+    _, lesson_id, student_id = callback.data.split(":")
     await callback.message.edit_reply_markup(reply_markup=get_attendance_status_kb(int(lesson_id), int(student_id)))
 
 @router.callback_query(F.data.startswith("att_set:"))
 async def set_attendance_status(callback: types.CallbackQuery, session: AsyncSession):
-    _, _, lesson_id, student_id, status = callback.data.split(":")
+    _, lesson_id, student_id, status = callback.data.split(":")
     
     service = AttendanceService(session)
     await service.mark_attendance(int(lesson_id), int(student_id), status)
     
+    # Автоматическое уведомление об отсутствии
+    if status == "absent":
+        stmt = select(Student).where(Student.id == int(student_id)).options(selectinload(Student.user))
+        student = (await session.execute(stmt)).scalar_one_or_none()
+        
+        stmt_l = select(Lesson).where(Lesson.id == int(lesson_id))
+        lesson = (await session.execute(stmt_l)).scalar_one_or_none()
+        
+        if student and student.user and lesson:
+            from bot.notifications.service import NotificationService
+            notifier = NotificationService(callback.bot)
+            try:
+                await notifier.notify_user_status_change(
+                    student.user.telegram_id,
+                    f"⚠️ *Отметка об отсутствии*\n\n"
+                    f"Преподаватель отметил, что вас нет на занятии:\n"
+                    f"📖 Тема: `{lesson.topic}`\n"
+                    f"Если это ошибка, обратитесь к преподавателю."
+                )
+            except Exception as e:
+                logger.error(f"Failed to send absent alert to {student.id}: {e}")
+                
     rate = await service.get_student_attendance_rate(int(student_id))
     await callback.answer(f"✅ Статус: {status}\nОбщая посещаемость ученика: {rate:.1f}%")
     

@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "production"  # development, production
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
+    
+    # --- API Integration ---
+    API_URL: str = "http://127.0.0.1:8000/api/bot"
 
     # --- ЮKassa Settings (Payments) ---
     YOOKASSA_SHOP_ID: str = ""

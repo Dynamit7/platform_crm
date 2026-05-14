@@ -2,11 +2,14 @@ import logging
 from aiogram import Router, types, F, Bot
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from bot.models.education import Course
 from bot.states.student import RegistrationStates
 from bot.services.registration_service import RegistrationService
 from bot.services.notification_service import NotificationService
 from bot.models.user import UserRole
 from bot.config import config
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 router = Router(name="registration")
 logger = logging.getLogger(__name__)
@@ -39,15 +42,45 @@ async def process_name(message: types.Message, state: FSMContext):
     await state.set_state(RegistrationStates.waiting_for_phone)
 
 @router.message(RegistrationStates.waiting_for_phone, F.contact)
-async def process_phone_contact(message: types.Message, state: FSMContext):
+async def process_phone_contact(message: types.Message, state: FSMContext, session: AsyncSession):
     phone = message.contact.phone_number
     if not phone.startswith('+'):
         phone = '+' + phone
     
     await state.update_data(phone=phone)
     await message.answer(f"✅ Номер {phone} принят.", reply_markup=types.ReplyKeyboardRemove())
-    await message.answer("📚 Какой курс вас интересует?")
-    await state.set_state(RegistrationStates.waiting_for_course)
+    
+    stmt = select(Course).where(Course.is_active == True)
+    courses = (await session.execute(stmt)).scalars().all()
+
+    if not courses:
+         await message.answer("📚 Какой курс вас интересует?")
+         await state.set_state(RegistrationStates.waiting_for_course)
+    else:
+        builder = InlineKeyboardBuilder()
+        for course in courses:
+            builder.row(types.InlineKeyboardButton(text=course.name, callback_data=f"reg_course:{course.id}"))
+        
+        await message.answer("📚 Выберите курс, который вас интересует:", reply_markup=builder.as_markup())
+        await state.set_state(RegistrationStates.waiting_for_course_selection)
+
+@router.callback_query(RegistrationStates.waiting_for_course_selection, F.data.startswith("reg_course:"))
+async def process_course_selection(callback: types.CallbackQuery, state: FSMContext, session: AsyncSession):
+    course_id = int(callback.data.split(":")[1])
+    stmt = select(Course).where(Course.id == course_id)
+    course = (await session.execute(stmt)).scalar_one_or_none()
+    
+    course_name = course.name if course else "Выбранный курс"
+    
+    await state.update_data(course_interest=course_name)
+    await callback.message.edit_text(f"✅ Вы выбрали курс: *{course_name}*", parse_mode="Markdown")
+    
+    await callback.message.answer(
+        "🗓 *Запись на пробный урок*\n\n"
+        "Напишите удобное для вас время (например: Завтра вечером, или В субботу после 14:00):",
+        parse_mode="Markdown"
+    )
+    await state.set_state(RegistrationStates.waiting_for_trial_time)
 
 @router.message(RegistrationStates.waiting_for_phone)
 async def process_phone_manual(message: types.Message):
@@ -81,14 +114,35 @@ async def process_trial_time(message: types.Message, state: FSMContext, session:
             trial_time=trial_time
         )
         
+        # Sync user with Web API to link by phone or create CRM student
+        try:
+            import aiohttp
+            from bot.config import config
+            async with aiohttp.ClientSession() as http_session:
+                payload = {
+                    "telegram_id": message.from_user.id,
+                    "name": data["full_name"],
+                    "phone": data["phone"],
+                    "email": None,
+                    "course_interest": data["course_interest"],
+                    "trial_time": trial_time
+                }
+                await http_session.post(f"{config.API_URL}/sync-user", json=payload, timeout=3)
+        except Exception as e:
+            logger.error(f"Failed to sync user with API on registration: {e}")
+        
         # Уведомляем админов
         notifier = NotificationService(bot)
+        msg_text = f"🆕 *Новая заявка!*\n\n👤 Имя: {user.full_name}\n📞 Телефон: {user.phone}\n📚 Курс: {data['course_interest']}\n🗓 Время (пробный): {trial_time}"
         for admin_id in config.ADMIN_IDS:
             await bot.send_message(
                 admin_id,
-                f"🆕 *Новая заявка!*\n\n👤 {user.full_name}\n📞 {user.phone}\n🗓 Пробный: {trial_time}",
+                msg_text,
                 parse_mode="Markdown"
             )
+            
+        # Уведомляем канал
+        await notifier.notify_channel_action(f"📢 *НОВАЯ ЗАЯВКА*\n\nВ бот поступила новая заявка на обучение:\n\n👤 {user.full_name}\n📞 {user.phone}\n📚 Желаемый курс: {data['course_interest']}\n🗓 Запрос на время: {trial_time}\n\n_Перейдите в панель админа для подтверждения._")
             
         await message.answer("✅ Ваша заявка принята! Мы свяжемся с вами для подтверждения.")
         await state.clear()

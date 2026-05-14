@@ -8,7 +8,8 @@ class TeacherService:
         self.session = session
 
     async def get_all_teachers(self, only_active: bool = True) -> List[Teacher]:
-        stmt = select(Teacher)
+        from sqlalchemy.orm import selectinload
+        stmt = select(Teacher).options(selectinload(Teacher.user))
         if only_active:
             stmt = stmt.where(Teacher.is_active == True)
         result = await self.session.execute(stmt)

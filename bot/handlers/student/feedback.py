@@ -3,8 +3,12 @@ from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.ext.asyncio import AsyncSession
+from bot.models.user import User
 from bot.models.education import Feedback, Lesson
 from bot.keyboards.student import get_back_to_cabinet_kb
+import aiohttp
+from bot.config import config
+
 
 router = Router(name="student_feedback")
 logger = logging.getLogger(__name__)
@@ -47,22 +51,36 @@ async def process_rating(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(FeedbackStates.waiting_for_comment)
 
 @router.message(FeedbackStates.waiting_for_comment)
-async def finalize_feedback(message: types.Message, state: FSMContext, session: AsyncSession, db_user: types.User):
+async def finalize_feedback(message: types.Message, state: FSMContext, session: AsyncSession, db_user: User):
     data = await state.get_data()
     from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
     
-    lesson_stmt = select(Lesson).where(Lesson.id == data['lesson_id'])
-    lesson = (await session.execute(lesson_stmt)).scalar_one()
+    lesson_stmt = select(Lesson).where(Lesson.id == data['lesson_id']).options(selectinload(Lesson.group))
+    lesson = (await session.execute(lesson_stmt)).scalar_one_or_none()
     
-    new_fb = Feedback(
-        user_id=db_user.id,
-        lesson_id=lesson.id,
-        course_id=lesson.group.course_id,
-        rating=data['rating'],
-        comment=message.text
-    )
-    session.add(new_fb)
-    await session.commit()
+    if lesson:
+        new_fb = Feedback(
+            user_id=db_user.id,
+            lesson_id=lesson.id,
+            course_id=lesson.group.course_id if lesson.group else None,
+            rating=data['rating'],
+            comment=message.text
+        )
+        session.add(new_fb)
+        await session.commit()
+        
+    # Sync with CRM
+    try:
+        async with aiohttp.ClientSession() as http_session:
+            payload = {
+                "telegram_id": db_user.telegram_id,
+                "rating": data['rating'],
+                "text": message.text
+            }
+            await http_session.post(f"{config.API_URL}/sync-review", json=payload, timeout=3)
+    except Exception as e:
+        logger.error(f"Failed to sync review to CRM: {e}")
     
     await message.answer("🙏 Спасибо за ваш отзыв!", reply_markup=get_back_to_cabinet_kb())
     await state.clear()

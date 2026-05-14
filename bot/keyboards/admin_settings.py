@@ -5,6 +5,7 @@ def get_admin_settings_main_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🏢 Информация о центре", callback_data="admin_set:info")],
         [InlineKeyboardButton(text="🔔 Настройки уведомлений", callback_data="admin_set:notify")],
         [InlineKeyboardButton(text="🕒 Время напоминаний", callback_data="admin_set:time")],
+        [InlineKeyboardButton(text="📥 Скачать Backup БД", callback_data="admin_set:backup")],
         [InlineKeyboardButton(text="⬅️ Назад", callback_data="admin:main")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)

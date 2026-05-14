@@ -27,6 +27,14 @@ class AuthMiddleware(BaseMiddleware):
         db_user = await user_repo.get_by_telegram_id(telegram_id)
         
         if db_user:
+            # Block check
+            if not db_user.is_active:
+                if getattr(event, "message", None):
+                    await event.message.answer("🚫 Ваш аккаунт в боте заблокирован администрацией.")
+                elif getattr(event, "callback_query", None):
+                    await event.callback_query.answer("🚫 Ваш аккаунт заблокирован.", show_alert=True)
+                return  # Drop the event
+
             # 2. Если роль STUDENT, проверяем наличие профиля в таблице students
             if db_user.role == "student":
                 stmt = select(Student).where(Student.user_id == db_user.id)

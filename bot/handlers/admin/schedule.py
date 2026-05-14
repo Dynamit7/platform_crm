@@ -60,38 +60,132 @@ async def bulk_generate_exec(callback: types.CallbackQuery, session: AsyncSessio
     await show_schedule_main(callback)
 
 @router.callback_query(F.data == "admin_sch:list_all")
-async def list_all_lessons(callback: types.CallbackQuery, session: AsyncSession):
-    """Список всех ближайших уроков."""
+async def list_all_schedule_courses(callback: types.CallbackQuery, session: AsyncSession):
+    from bot.models.education import Course, Group
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    from sqlalchemy import func
+    
+    # Step 1: Courses
+    stmt = select(Course).where(Course.is_active == True)
+    courses = (await session.execute(stmt)).scalars().all()
+    
+    if not courses:
+        return await callback.message.edit_text("Нет активных курсов.", reply_markup=get_admin_schedule_main_kb())
+        
+    builder = InlineKeyboardBuilder()
+    for c in courses:
+        # Get active groups count
+        g_count = await session.scalar(select(func.count(Group.id)).where(Group.course_id == c.id, Group.is_active == True))
+        builder.row(types.InlineKeyboardButton(text=f"📚 {c.name} ({g_count} групп)", callback_data=f"sch_c:{c.id}"))
+    builder.row(types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin:schedule"))
+    
+    await callback.message.edit_text("📚 *Расписание по курсам*\nВыберите курс:", parse_mode="Markdown", reply_markup=builder.as_markup())
+
+
+@router.callback_query(F.data.startswith("sch_c:"))
+async def list_schedule_teachers(callback: types.CallbackQuery, session: AsyncSession):
+    course_id = int(callback.data.split(":")[1])
+    
+    from bot.models.education import Group
+    from bot.models.user import Teacher
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    
     stmt = (
-        select(Lesson)
-        .options(selectinload(Lesson.group))
-        .order_by(Lesson.lesson_date.asc())
-        .limit(20)
+        select(Teacher)
+        .join(Group, Group.teacher_id == Teacher.id)
+        .options(selectinload(Teacher.user))
+        .where(Group.course_id == course_id, Group.is_active == True)
+        .distinct()
     )
-    result = await session.execute(stmt)
-    lessons = result.scalars().all()
+    teachers = (await session.execute(stmt)).scalars().all()
     
-    if not lessons:
-        await callback.message.edit_text(
-            "📅 *Расписание пусто.*\n\nЗапланированных занятий не найдено.",
-            parse_mode="Markdown",
-            reply_markup=get_admin_schedule_main_kb()
-        )
-        return
-
-    text = "🗓 *Ближайшие занятия:* \n\n"
-    buttons = []
-    for l in lessons:
-        text += (
-            f"🔹 {l.lesson_date.strftime('%d.%m')} | {l.lesson_time or '--:--'}\n"
-            f"📍 {l.group.name} | {l.topic[:20]}...\n\n"
-        )
-        buttons.append([types.InlineKeyboardButton(text=f"⚙️ Упр. уроком {l.id}", callback_data=f"lesson_view:{l.id}")])
-
-    buttons.append([types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin:schedule")])
+    builder = InlineKeyboardBuilder()
+    if not teachers:
+        builder.row(types.InlineKeyboardButton(text="Пусто", callback_data="dummy"))
+    else:
+        for t in teachers:
+            builder.row(types.InlineKeyboardButton(text=f"👨‍🏫 {t.user.full_name}", callback_data=f"sch_t:{t.id}_c_{course_id}"))
+    builder.row(types.InlineKeyboardButton(text="⬅️ К курсам", callback_data="admin_sch:list_all"))
     
-    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons))
-    await callback.answer()
+    await callback.message.edit_text("👨‍🏫 *Выберите преподавателя:*", parse_mode="Markdown", reply_markup=builder.as_markup())
+
+
+@router.callback_query(F.data.startswith("sch_t:"))
+async def list_schedule_groups(callback: types.CallbackQuery, session: AsyncSession):
+    parts = callback.data.split(":")
+    data_str = parts[1] # format : "t_id_c_cid"
+    t_id_str, c_id_str = data_str.split("_c_")
+    teacher_id = int(t_id_str)
+    course_id = int(c_id_str)
+    
+    from bot.models.education import Group
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    
+    stmt = select(Group).options(selectinload(Group.schedule)).where(
+        Group.course_id == course_id,
+        Group.teacher_id == teacher_id,
+        Group.is_active == True
+    )
+    groups = (await session.execute(stmt)).scalars().all()
+    
+    builder = InlineKeyboardBuilder()
+    if not groups:
+        builder.row(types.InlineKeyboardButton(text="Пусто", callback_data="dummy"))
+    else:
+        for g in groups:
+            time_str = f"{g.schedule.time_start}-{g.schedule.time_end}" if g.schedule else "Не задано время"
+            builder.row(types.InlineKeyboardButton(
+                text=f"👥 {g.name} | ⏰ {time_str} | 🧑‍🎓 {g.current_students}/{g.max_students}",
+                callback_data=f"sch_g:{g.id}:1"
+            ))
+            
+    builder.row(types.InlineKeyboardButton(text="⬅️ К преподавателям", callback_data=f"sch_c:{course_id}"))
+    
+    await callback.message.edit_text("👥 *Выберите учебную группу:*", parse_mode="Markdown", reply_markup=builder.as_markup())
+
+
+@router.callback_query(F.data.startswith("sch_g:"))
+async def list_group_lessons(callback: types.CallbackQuery, session: AsyncSession, override_group_id: int = None, override_page: int = 1):
+    parts = callback.data.split(":")
+    if override_group_id is not None:
+        group_id = override_group_id
+        page = override_page
+    else:
+        group_id = int(parts[1])
+        page = int(parts[2]) if len(parts) > 2 else 1
+    
+    from bot.utils.pagination import Paginator
+    from bot.models.education import Group, Lesson
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    
+    stmt = select(Group).where(Group.id == group_id)
+    g = (await session.execute(stmt)).scalar_one_or_none()
+    if not g: return await callback.answer("Группа не найдена", show_alert=True)
+    
+    stmt_lsns = select(Lesson).where(Lesson.group_id == group_id).order_by(Lesson.lesson_date.asc(), Lesson.lesson_time.asc())
+    lessons = (await session.execute(stmt_lsns)).scalars().all()
+    
+    paginator = Paginator(lessons, page=page, limit=7, callback_prefix=f"sch_g:{group_id}")
+    current_items = paginator.get_page_items()
+    
+    builder = InlineKeyboardBuilder()
+    if not current_items:
+        builder.row(types.InlineKeyboardButton(text="Уроков пока нет", callback_data="dummy"))
+    else:
+        for l in current_items:
+            builder.row(types.InlineKeyboardButton(
+                text=f"🗓 {l.lesson_date.strftime('%d.%m')} {l.lesson_time or ''} | {l.topic[:15]}",
+                callback_data=f"lesson_view:{l.id}"
+            ))
+            
+    paginator.add_pagination_buttons(builder)
+    
+    # Back button goes to groups list. We need teacher_id and course_id
+    back_data = f"sch_t:{g.teacher_id}_c_{g.course_id}"
+    builder.row(types.InlineKeyboardButton(text="⬅️ Назад к группам", callback_data=back_data))
+    
+    text = f"📋 *Уроки группы {g.name}*\nВсего уроков: {len(lessons)}\nВыберите урок:"
+    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=builder.as_markup())
 
 @router.callback_query(F.data.startswith("lesson_view:"))
 async def view_lesson_details(callback: types.CallbackQuery, session: AsyncSession):
@@ -115,10 +209,15 @@ async def view_lesson_details(callback: types.CallbackQuery, session: AsyncSessi
 @router.callback_query(F.data.startswith("lesson_delete:"))
 async def delete_lesson(callback: types.CallbackQuery, session: AsyncSession):
     lesson_id = int(callback.data.split(":")[1])
-    await session.execute(delete(Lesson).where(Lesson.id == lesson_id))
-    await session.commit()
-    await callback.answer("✅ Урок удален", show_alert=True)
-    await list_all_lessons(callback, session)
+    lesson = (await session.execute(select(Lesson).where(Lesson.id == lesson_id))).scalar_one_or_none()
+    if lesson:
+        group_id = lesson.group_id
+        await session.delete(lesson)
+        await session.commit()
+        await callback.answer("✅ Урок удален", show_alert=True)
+        await list_group_lessons(callback, session, override_group_id=group_id)
+    else:
+        await callback.answer("Урок не найден", show_alert=True)
 
 # --- МАСТЕР СОЗДАНИЯ УРОКА ВРУЧНУЮ ---
 

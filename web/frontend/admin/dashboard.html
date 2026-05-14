@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель управления | TIL USER Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../app.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<aside class="sidebar">
+    <div class="sidebar-logo">
+        <img src="../logo.png" alt="TIL USER Logo" style="height:32px; width:auto; border-radius:4px;">
+        TIL <span>USER</span><small>ADMIN CRM</small>
+    </div>
+    <nav class="sidebar-nav">
+        <div class="section-label">Главное</div>
+        <a href="dashboard.html" class="active"><span class="icon">📊</span> Дашборд</a>
+        <a href="leads.html"><span class="icon">🎯</span> Заявки (Kanban)</a>
+
+        <div class="section-label">Управление</div>
+        <a href="students.html"><span class="icon">👨‍🎓</span> Студенты</a>
+        <a href="teachers.html"><span class="icon">👩‍🏫</span> Преподаватели</a>
+        <a href="groups.html"><span class="icon">👥</span> Группы</a>
+        <a href="courses.html"><span class="icon">📚</span> Курсы</a>
+
+        <div class="section-label">Финансы</div>
+        <a href="payments.html"><span class="icon">💳</span> Платежи</a>
+        <a href="reports.html"><span class="icon">📈</span> Отчёты</a>
+
+        <div class="section-label">Коммуникация</div>
+        <a href="../chat.html"><span class="icon">💬</span> Чат</a>
+        <a href="broadcast.html"><span class="icon">📢</span> Рассылка</a>
+        <a href="pending-users.html"><span class="icon">⏳</span> Новые заявки <span id="pendingBadge" class="chat-badge" style="display:none;"></span></a>
+    </nav>
+    <div class="sidebar-bottom">
+        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+    </div>
+</aside>
+
+<div class="main-content">
+    <div class="top-bar">
+        <h1>📊 Панель управления</h1>
+        <div class="top-bar-right"><button class="theme-toggle-btn" onclick="toggleTheme()" id="themeBtn" style="width:36px; height:36px; font-size:18px; margin-right:15px; border:none; background:var(--bg-color); border-radius:10px; cursor:pointer;">🌙</button>
+            <div class="admin-badge">👑 ADMIN</div>
+            <div class="user-info" style="position:relative; cursor:pointer;" onclick="toggleProfileDropdown(event)" id="profileBtn">
+                Привет, <strong id="adminName">—</strong>
+                <div class="notifications-dropdown" id="profileDropdown" style="width: 200px; padding: 10px; position:absolute; right:0; top:40px; text-align:left; font-weight:normal; display:none; background:#fff; border-radius:10px; box-shadow:0 10px 25px rgba(0,0,0,0.1); border:1px solid var(--border); z-index:100;">
+                    <a href="../settings.html" style="display: block; padding: 10px; color: var(--text); text-decoration: none; transition: 0.2s; border-radius:6px;" onmouseover="this.style.background='var(--bg-color)'" onmouseout="this.style.background='none'">👤 Мой профиль</a>
+                    <a href="#" onclick="localStorage.clear(); window.location.href='../login.html';" style="display: block; padding: 10px; color: var(--danger); text-decoration: none; transition: 0.2s; border-radius:6px;" onmouseover="this.style.background='var(--bg-color)'" onmouseout="this.style.background='none'">🚪 Выйти</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleProfileDropdown(e) {
+            e.stopPropagation();
+            const dp = document.getElementById('profileDropdown');
+            dp.style.display = dp.style.display === 'block' ? 'none' : 'block';
+        }
+        window.addEventListener('click', function(e) {
+            const dp = document.getElementById('profileDropdown');
+            if (dp && dp.style.display === 'block' && !document.getElementById('profileBtn').contains(e.target)) {
+                dp.style.display = 'none';
+            }
+        });
+    </script>
+
+    <div class="page-content">
+
+        <!-- KPI Cards -->
+        <div class="kpi-grid" id="kpiGrid">
+            <div class="kpi-card"><div class="kpi-icon blue">👨‍🎓</div><div class="kpi-info"><h3>Студентов</h3><div class="kpi-value" id="kpiStudents">—</div><div class="kpi-trend up">Всего активных</div></div></div>
+            <div class="kpi-card"><div class="kpi-icon green">💰</div><div class="kpi-info"><h3>Доход в месяц</h3><div class="kpi-value" id="kpiRevenue">—</div><div class="kpi-trend up">Текущий месяц</div></div></div>
+            <div class="kpi-card"><div class="kpi-icon yellow">🎯</div><div class="kpi-info"><h3>Новых заявок</h3><div class="kpi-value" id="kpiLeads">—</div><div class="kpi-trend up">Сегодня</div></div></div>
+            <div class="kpi-card"><div class="kpi-icon red">📝</div><div class="kpi-info"><h3>ДЗ на проверке</h3><div class="kpi-value" id="kpiHomeworks">—</div><div class="kpi-trend">Ожидают оценки</div></div></div>
+            <div class="kpi-card"><div class="kpi-icon purple">👥</div><div class="kpi-info"><h3>Групп</h3><div class="kpi-value" id="kpiGroups">—</div><div class="kpi-trend up">Активных групп</div></div></div>
+            <div class="kpi-card"><div class="kpi-icon blue">📚</div><div class="kpi-info"><h3>Курсов</h3><div class="kpi-value" id="kpiCourses">—</div><div class="kpi-trend up">Доступных</div></div></div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-grid">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>💹 Доходы по месяцам</h2>
+                    <span style="font-size: 13px; color: var(--muted);">UZS</span>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-container">
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>🎯 Воронка заявок</h2>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-container">
+                        <canvas id="funnelChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom grid -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <!-- Recent Leads -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>🆕 Последние заявки</h2>
+                    <a href="leads.html" style="font-size: 13px; color: var(--info); text-decoration: none;">Все →</a>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr><th>Имя</th><th>Телефон</th><th>Статус</th></tr>
+                    </thead>
+                    <tbody id="recentLeads">
+                        <tr><td colspan="3" style="text-align:center; color: var(--muted); padding: 20px;">Загрузка...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="panel">
+                <div class="panel-header"><h2>⚡ Быстрые действия</h2></div>
+                <div class="panel-body" style="display: flex; flex-direction: column; gap: 12px;">
+                    <a href="students.html" class="btn btn-primary" style="justify-content: center; text-decoration: none;">👨‍🎓 Управление студентами</a>
+                    <a href="leads.html" class="btn btn-accent" style="justify-content: center; text-decoration: none;">🎯 Обработать заявки</a>
+                    <a href="payments.html" class="btn btn-success" style="justify-content: center; text-decoration: none;">💳 Добавить платёж</a>
+                    <button class="btn btn-outline" id="remindDebtsBtn">🔔 Напомнить о долгах (Bot)</button>
+                    <a href="broadcast.html" class="btn btn-outline" style="justify-content:center;text-decoration:none;">📢 Telegram рассылка</a>
+                    <a href="pending-users.html" class="btn btn-outline" style="justify-content:center;text-decoration:none;" id="pendingLink">⏳ Новые заявки</a>
+                    <button class="btn btn-outline" id="exportBtn">📊 Экспорт студентов (Excel)</button>
+                    <button class="btn btn-outline" id="exportLeadsBtn">🎯 Экспорт заявок (Excel)</button>
+                    <button class="btn btn-outline" id="exportPaymentsBtn">💰 Экспорт платежей (Excel)</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    const API = '';
+    const token = localStorage.getItem('access_token');
+    const userName = localStorage.getItem('user_name');
+
+    if (!token) window.location.href = '../login.html';
+    document.getElementById('adminName').textContent = userName || 'Admin';
+    document.getElementById('logoutBtn').onclick = () => {
+        localStorage.clear();
+        window.location.href = '../login.html';
+    };
+
+    function authHeaders() {
+        return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    }
+
+    function formatMoney(n) {
+        if (!n) return '0 UZS';
+        if (n >= 1000000000) return (n / 1000000000).toFixed(1) + ' млрд UZS';
+        if (n >= 1000000) return (n / 1000000).toFixed(1) + ' млн UZS';
+        if (n >= 1000) return (n / 1000).toFixed(0) + 'к UZS';
+        return n.toLocaleString('ru-RU') + ' UZS';
+    }
+
+    async function loadStats() {
+        try {
+            const res = await fetch(`${API}/api/admin/stats`, { headers: authHeaders() });
+            if (!res.ok) return;
+            const s = await res.json();
+            document.getElementById('kpiStudents').textContent = s.total_students;
+            document.getElementById('kpiRevenue').textContent = formatMoney(s.monthly_revenue);
+            document.getElementById('kpiLeads').textContent = s.new_leads_today;
+            document.getElementById('kpiHomeworks').textContent = s.pending_homeworks;
+            document.getElementById('kpiGroups').textContent = s.total_groups;
+            document.getElementById('kpiCourses').textContent = s.total_courses;
+        } catch(e) { console.error(e); }
+    }
+
+    async function loadFunnel() {
+        try {
+            const res = await fetch(`${API}/api/leads`, { headers: authHeaders() });
+            if (!res.ok) return;
+            const leads = await res.json();
+            const counts = { new: 0, contacted: 0, enrolled: 0, lost: 0 };
+            leads.forEach(l => { if (counts[l.status] !== undefined) counts[l.status]++; });
+
+            new Chart(document.getElementById('funnelChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['🔵 Новые', '🟡 Обрабатываются', '🟢 Записаны', '🔴 Отказали'],
+                    datasets: [{
+                        data: [counts.new, counts.contacted, counts.enrolled, counts.lost],
+                        backgroundColor: ['#3B82F6', '#F59E0B', '#10B981', '#EF4444'],
+                        borderWidth: 0,
+                        hoverOffset: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { padding: 16, font: { size: 12 } } }
+                    }
+                }
+            });
+        } catch(e) { console.error(e); }
+    }
+
+    async function loadRevenue() {
+        try {
+            const res = await fetch(`${API}/api/payments/monthly-revenue`, { headers: authHeaders() });
+            const monthlyData = res.ok ? await res.json() : [];
+
+            const months = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+            const labels = monthlyData.length
+                ? monthlyData.map(d => months[d.month - 1])
+                : ['Янв','Фев','Мар','Апр','Май','Июн'];
+            const data = monthlyData.length
+                ? monthlyData.map(d => d.total)
+                : [0, 0, 0, 0, 0, 0];
+
+            new Chart(document.getElementById('revenueChart'), {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Доход (UZS)',
+                        data,
+                        backgroundColor: 'rgba(25, 42, 86, 0.8)',
+                        borderRadius: 8,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#F1F5F9' }, ticks: { callback: v => formatMoney(v) } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        } catch(e) { console.error(e); }
+    }
+
+    async function loadRecentLeads() {
+        try {
+            const res = await fetch(`${API}/api/leads`, { headers: authHeaders() });
+            if (!res.ok) return;
+            const leads = await res.json();
+            const tbody = document.getElementById('recentLeads');
+            if (!leads.length) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color: var(--muted); padding: 20px;">Заявок пока нет</td></tr>';
+                return;
+            }
+            tbody.innerHTML = leads.slice(0, 6).map(l => `
+                <tr>
+                    <td><strong>${l.name}</strong></td>
+                    <td>${l.phone}</td>
+                    <td><span class="badge-status ${l.status}">${{new:'Новый',contacted:'Contacted',enrolled:'Enrolled',lost:'Lost'}[l.status]||l.status}</span></td>
+                </tr>
+            `).join('');
+        } catch(e) { console.error(e); }
+    }
+
+    document.getElementById('exportBtn').onclick = () => window.open(`${API}/api/admin/export/students`, '_blank');
+    document.getElementById('exportLeadsBtn').onclick = () => window.open(`${API}/api/admin/export/leads`, '_blank');
+    document.getElementById('exportPaymentsBtn').onclick = () => window.open(`${API}/api/admin/export/payments`, '_blank');
+
+    document.getElementById('remindDebtsBtn').onclick = async () => {
+        if (!confirm('Отправить напоминания всем должникам через Telegram?')) return;
+        try {
+            const res = await fetch(`${API}/api/admin/remind-debts`, { method: 'POST', headers: authHeaders() });
+            if (res.ok) {
+                const data = await res.json();
+                alert(`Успешно отправлено напоминаний: ${data.reminded}`);
+            } else {
+                alert('Ошибка сервера при отправке.');
+            }
+        } catch(e) { console.error(e); alert('Ошибка сети'); }
+    };
+
+    // Load pending users badge
+    async function loadPendingBadge() {
+        try {
+            const res = await fetch(`${API}/api/admin/pending-users`, { headers: authHeaders() });
+            if (res.ok) {
+                const pending = await res.json();
+                const badge = document.getElementById('pendingBadge');
+                if (pending.length > 0 && badge) {
+                    badge.textContent = pending.length;
+                    badge.style.display = '';
+                    const link = document.getElementById('pendingLink');
+                    if (link) link.innerHTML = `⏳ Новые заявки <span style="background:#EF4444;color:#fff;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">${pending.length}</span>`;
+                }
+            }
+        } catch(e) {}
+    }
+
+    loadStats();
+    loadFunnel();
+    loadRevenue();
+    loadRecentLeads();
+    loadPendingBadge();
+</script>
+<script src="../auth-utils.js"></script>
+</body>
+</html>

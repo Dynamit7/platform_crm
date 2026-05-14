@@ -39,60 +39,103 @@ class FinanceService:
         await self.session.refresh(new_finance)
         return new_finance
 
+    async def update_reminder_date(self, student_id: int):
+        stmt = select(Student).where(Student.id == student_id)
+        student = (await self.session.execute(stmt)).scalar_one()
+        student.last_debt_reminder = date.today()
+        await self.session.commit()
+
     async def get_debtors_list(self) -> List[Dict[str, Any]]:
         """
-        Оптимизированный расчет баланса с учетом ТИПОВ платежей (включая возвраты).
+        Умный биллинг: проверяет активные группы студента (StudentGroup).
+        Если с момента последней оплаты прошло более 30 дней, студент считается должником.
+        Оптимизировано для предотвращения N+1 проблемы.
         """
-        # 1. Подзапрос для суммирования платежей (с учетом возвратов через CASE)
-        payments_sum_logic = case(
-            (Finance.payment_type == "refund", -Finance.amount),
-            else_=Finance.amount
-        )
-
-        payments_sub = (
-            select(
-                Finance.student_id,
-                func.sum(payments_sum_logic).label("total_balance")
-            )
-            .where(Finance.status == "succeeded")
-            .group_by(Finance.student_id)
-        ).subquery()
-
-        # 2. Подзапрос стоимости курсов (активные регистрации)
-        courses_sub = (
-            select(
-                Student.id.label("student_id"),
-                func.sum(Course.price_group).label("total_cost")
-            )
-            .join(User, User.id == Student.user_id)
-            .join(Registration, Registration.user_id == User.id)
-            .join(Course, Course.id == Registration.course_id)
-            .group_by(Student.id)
-        ).subquery()
-
-        # 3. Финальный джойн
+        from bot.models.education import StudentGroup, Group
+        from bot.models.user import User
+        from datetime import timedelta
+        
+        thirty_days_ago = date.today() - timedelta(days=30)
+        
+        # Получаем всех активных учеников со связанными данными
         stmt = (
-            select(
-                Student,
-                func.coalesce(payments_sub.c.total_balance, 0).label("paid"),
-                func.coalesce(courses_sub.c.total_cost, 0).label("cost")
+            select(Student)
+            .options(
+                selectinload(Student.user),
+                selectinload(Student.student_groups).selectinload(StudentGroup.group).selectinload(Group.course)
             )
-            .options(selectinload(Student.user))
-            .outerjoin(payments_sub, Student.id == payments_sub.c.student_id)
-            .outerjoin(courses_sub, Student.id == courses_sub.c.student_id)
             .where(Student.is_active == True)
         )
-
-        result = await self.session.execute(stmt)
-        debtors = []
+        students = (await self.session.execute(stmt)).scalars().all()
         
-        for row in result:
-            student, paid, cost = row
-            balance = float(paid) - float(cost)
+        # Создаем список user_id для фильтрации платежей
+        user_ids = [st.user_id for st in students if not (st.frozen_until and st.frozen_until >= date.today())]
+        last_payments = {}
+        if user_ids:
+            # Получаем самый свежий успешный платеж для каждого user_id
+            subq = (
+                select(Finance.user_id, func.max(Finance.payment_date).label('max_date'))
+                .where(Finance.user_id.in_(user_ids), Finance.status == "succeeded")
+                .group_by(Finance.user_id)
+                .subquery()
+            )
             
-            if balance < 0:
-                if student.last_debt_reminder and (date.today() - student.last_debt_reminder).days < 3:
+            pay_stmt = (
+                select(Finance)
+                .join(subq, (Finance.user_id == subq.c.user_id) & (Finance.payment_date == subq.c.max_date))
+            )
+            payments = (await self.session.execute(pay_stmt)).scalars().all()
+            for p in payments:
+                last_payments[p.user_id] = p
+
+        debtors = []
+        for st in students:
+            if st.frozen_until and st.frozen_until >= date.today():
+                continue
+                
+            sgs = [sg for sg in st.student_groups if sg.status == "active"]
+            if not sgs:
+                continue
+                
+            monthly_fee = 0.0
+            for sg in sgs:
+                course = sg.group.course
+                if not course: continue
+                if sg.group.max_students == 1:
+                    monthly_fee += (course.price_individual or 0)
+                else:
+                    monthly_fee += (course.price_group or 0)
+                    
+            if monthly_fee == 0:
+                continue
+                
+            last_payment = last_payments.get(st.user_id)
+            
+            if not last_payment or last_payment.payment_date.date() < thirty_days_ago:
+                if st.last_debt_reminder and (date.today() - st.last_debt_reminder).days < 3:
                     continue
-                debtors.append({"student": student, "debt_amount": abs(balance)})
-        
+                debtors.append({"student": st, "debt_amount": monthly_fee})
+                
         return debtors
+
+    async def is_student_debtor(self, student: Student) -> bool:
+        """Быстрая проверка, является ли студент должником (для блокировки материалов)."""
+        from bot.models.education import StudentGroup, Group
+        from datetime import timedelta
+        
+        thirty_days_ago = date.today() - timedelta(days=30)
+        
+        if not student.is_active or (student.frozen_until and student.frozen_until >= date.today()):
+            return True
+            
+        sg_stmt = select(StudentGroup).where(StudentGroup.student_id == student.id, StudentGroup.status.in_(["active"]))
+        sgs = (await self.session.execute(sg_stmt)).scalars().all()
+        if not sgs: return False # Нет групп - нет долгов
+            
+        pay_stmt = select(Finance).where(Finance.user_id == student.user_id, Finance.status == "succeeded").order_by(Finance.payment_date.desc()).limit(1)
+        last_payment = (await self.session.execute(pay_stmt)).scalars().first()
+        
+        if not last_payment or last_payment.payment_date.date() < thirty_days_ago:
+            return True
+            
+        return False

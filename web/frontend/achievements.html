@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Достижения | TIL USER</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="app.css">
+    <style>
+        .achievements-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .achievement-card {
+            background: white;
+            border-radius: 20px;
+            padding: 28px;
+            text-align: center;
+            border: 1.5px solid var(--border);
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .achievement-card:hover { transform: translateY(-5px); box-shadow: 0 12px 30px rgba(0,0,0,0.08); }
+        .achievement-card.locked { opacity: 0.55; filter: grayscale(0.8); }
+        .achievement-card.earned { border-color: #F59E0B; background: linear-gradient(135deg, #fffbeb, #fff); }
+        .achievement-icon { font-size: 50px; margin-bottom: 16px; display: block; }
+        .achievement-card h3 { font-size: 17px; margin-bottom: 8px; }
+        .achievement-card p { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+        .xp-reward { background: rgba(4,30,66,0.07); padding: 4px 12px; border-radius: 10px; font-size: 12px; font-weight: 800; color: var(--primary); }
+        .locked-badge, .earned-badge { position: absolute; top: 14px; right: 14px; font-size: 18px; }
+        .earned-badge { color: #F59E0B; }
+        .rank-section {
+            background: linear-gradient(135deg, var(--primary), #1a3a6e);
+            color: white; padding: 36px 40px; border-radius: 24px;
+            display: flex; align-items: center; gap: 36px; margin-bottom: 36px;
+        }
+        .rank-icon { font-size: 72px; flex-shrink: 0; }
+        .rank-info h2 { color: white; font-size: 28px; margin-bottom: 8px; }
+        .rank-info p { opacity: 0.85; font-size: 15px; }
+        .rank-progress { width: 100%; height: 10px; background: rgba(255,255,255,0.2); border-radius: 5px; margin-top: 14px; }
+        .rank-fill { height: 100%; background: #F59E0B; border-radius: 5px; transition: width 1s ease; }
+        .stats-row { display: flex; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+        .stat-chip { background: rgba(255,255,255,0.15); padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+    </style>
+</head>
+<body>
+<div class="dashboard-layout">
+    <aside class="sidebar">
+        <div class="sidebar-logo">TIL <span>USER</span></div>
+        <nav class="sidebar-nav">
+            <a href="dashboard.html"><span class="icon">📊</span> Дашборд</a>
+            <a href="courses.html"><span class="icon">📚</span> Мои курсы</a>
+            <a href="schedule.html"><span class="icon">🗓️</span> Расписание</a>
+            <a href="homeworks.html"><span class="icon">📝</span> Домашние задания</a>
+            <a href="achievements.html" class="active"><span class="icon">🏆</span> Достижения</a>
+        </nav>
+        <div class="sidebar-bottom">
+            <a href="settings.html"><span class="icon">⚙️</span> Настройки</a>
+            <a href="login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="top-header">
+            <div class="welcome-text">
+                <h1>Твои достижения 🏆</h1>
+                <p>Собирай награды и повышай свой рейтинг в сообществе TIL USER.</p>
+            </div>
+        </header>
+
+        <!-- Rank Card -->
+        <div class="rank-section">
+            <div class="rank-icon" id="rankIcon">👑</div>
+            <div class="rank-info" style="flex:1;">
+                <h2 id="rankName">Загрузка...</h2>
+                <p>Твой текущий ранг в системе TIL USER</p>
+                <div class="stats-row">
+                    <span class="stat-chip">⭐ <span id="totalXp">0</span> XP</span>
+                    <span class="stat-chip">🏅 <span id="earnedCount">0</span> наград</span>
+                    <span class="stat-chip">🎯 Ещё <span id="xpToNext">—</span> XP до следующего ранга</span>
+                </div>
+                <div class="rank-progress"><div class="rank-fill" id="rankFill" style="width:0%"></div></div>
+            </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <h2>Достижения (<span id="achieveSubtitle">—</span>)</h2>
+            <button class="btn btn-outline btn-sm" onclick="checkAchievements()" id="checkBtn">🔄 Проверить новые</button>
+        </div>
+        <div class="achievements-grid" id="achievementsGrid">
+            <div class="panel"><div class="panel-body" style="text-align:center;padding:40px;color:var(--muted);">Загрузка достижений...</div></div>
+        </div>
+
+        <h2 style="margin: 40px 0 20px;">Рейтинг студентов 👑</h2>
+        <div style="background:white;border-radius:20px;border:1px solid var(--border);overflow:hidden;margin-bottom:50px;">
+            <table style="width:100%;border-collapse:collapse;text-align:left;">
+                <thead>
+                    <tr style="background:var(--bg-color);color:var(--muted);font-size:14px;">
+                        <th style="padding:18px 20px;">Место</th>
+                        <th style="padding:18px 20px;">Студент</th>
+                        <th style="padding:18px 20px;">Ранг</th>
+                        <th style="padding:18px 20px;">XP</th>
+                    </tr>
+                </thead>
+                <tbody id="leaderboardBody">
+                    <tr><td colspan="4" style="padding:30px;text-align:center;color:var(--muted);">Загрузка...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+</div>
+
+<script>
+    const API = '';
+    const token = localStorage.getItem('access_token');
+    const userId = parseInt(localStorage.getItem('user_id'));
+    if (!token) window.location.href = 'login.html';
+    document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = 'login.html'; };
+    function authH() { return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }; }
+
+    const RANK_ICONS = { 'Bronze':'🥉','Silver':'🥈','Gold':'🥇','Platinum':'💎','Champion':'👑' };
+    function rankIcon(r) { for (const [k,v] of Object.entries(RANK_ICONS)) if (r.startsWith(k)) return v; return '🏅'; }
+    const MEDALS = ['🥇','🥈','🥉'];
+
+    async function loadAchievements() {
+        try {
+            const res = await fetch(`${API}/api/student/${userId}/achievements`, { headers: authH() });
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+
+            document.getElementById('rankName').textContent = data.rank;
+            document.getElementById('rankIcon').textContent = rankIcon(data.rank);
+            document.getElementById('totalXp').textContent = data.total_xp.toLocaleString('ru');
+            document.getElementById('earnedCount').textContent = data.earned_count;
+            document.getElementById('xpToNext').textContent = data.xp_to_next.toLocaleString('ru');
+            document.getElementById('achieveSubtitle').textContent = `${data.earned_count} / ${data.total_count}`;
+            const pct = Math.min(100, data.xp_to_next === 0 ? 100 : Math.round((data.total_xp % 1000) / 10));
+            document.getElementById('rankFill').style.width = pct + '%';
+
+            document.getElementById('achievementsGrid').innerHTML = data.achievements.map(a => `
+                <div class="achievement-card ${a.earned ? 'earned' : 'locked'}">
+                    ${a.earned ? `<span class="earned-badge" title="Получено ${a.earned_at||''}">✅</span>` : `<span class="locked-badge">🔒</span>`}
+                    <span class="achievement-icon">${a.icon}</span>
+                    <h3>${a.title}</h3>
+                    <p>${a.description}</p>
+                    <span class="xp-reward">+${a.xp_reward} XP</span>
+                    ${a.earned && a.earned_at ? `<div style="font-size:11px;color:var(--muted);margin-top:8px;">Получено: ${a.earned_at}</div>` : ''}
+                </div>
+            `).join('');
+        } catch(e) {
+            document.getElementById('achievementsGrid').innerHTML =
+                `<div class="panel"><div class="panel-body" style="text-align:center;padding:40px;color:var(--danger);">Ошибка загрузки достижений</div></div>`;
+        }
+    }
+
+    async function loadLeaderboard() {
+        try {
+            const res = await fetch(`${API}/api/leaderboard?limit=10`, { headers: authH() });
+            if (!res.ok) throw new Error();
+            const board = await res.json();
+            const tbody = document.getElementById('leaderboardBody');
+            if (!board.length) {
+                tbody.innerHTML = `<tr><td colspan="4" style="padding:30px;text-align:center;color:var(--muted);">Рейтинг пока пуст — зарабатывайте первые достижения!</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = board.map(r => `
+                <tr style="border-bottom:1px solid var(--border);${r.student_id===userId?'background:rgba(245,158,11,0.06);font-weight:700;':''}">
+                    <td style="padding:16px 20px;">${MEDALS[r.position-1]||r.position}</td>
+                    <td style="padding:16px 20px;">${r.name}${r.student_id===userId?' <span style="font-size:11px;color:#F59E0B;">(Вы)</span>':''}</td>
+                    <td style="padding:16px 20px;">${rankIcon(r.rank)} ${r.rank}</td>
+                    <td style="padding:16px 20px;font-weight:700;">${r.total_xp.toLocaleString('ru')} XP</td>
+                </tr>
+            `).join('');
+        } catch(e) {
+            document.getElementById('leaderboardBody').innerHTML =
+                `<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--muted);">Рейтинг временно недоступен</td></tr>`;
+        }
+    }
+
+    async function checkAchievements() {
+        const btn = document.getElementById('checkBtn');
+        btn.textContent = '⏳ Проверка...'; btn.disabled = true;
+        try {
+            const res = await fetch(`${API}/api/student/${userId}/achievements/check`, { method:'POST', headers: authH() });
+            const data = await res.json();
+            if (data.count > 0) {
+                alert(`🎉 Получено новых достижений: ${data.count}!\n${data.awarded.join(', ')}`);
+                await loadAchievements(); await loadLeaderboard();
+            } else {
+                btn.textContent = '✅ Нет новых';
+                setTimeout(() => { btn.textContent = '🔄 Проверить новые'; btn.disabled = false; }, 2000);
+                return;
+            }
+        } catch(e) { console.error(e); }
+        btn.textContent = '🔄 Проверить новые'; btn.disabled = false;
+    }
+
+    loadAchievements();
+    loadLeaderboard();
+</script>
+<script src="auth-utils.js"></script>
+</body>
+</html>

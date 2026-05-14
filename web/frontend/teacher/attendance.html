@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Посещаемость | TIL USER Teacher</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../app.css">
+    <style>
+        .group-selector {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+        .group-btn {
+            padding: 10px 20px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            background: none;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .group-btn.active {
+            border-color: var(--primary);
+            background: var(--primary);
+            color: white;
+        }
+        .group-btn:hover:not(.active) {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        .attendance-table-wrap { overflow-x: auto; }
+        .attendance-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .attendance-table th {
+            background: var(--bg);
+            padding: 12px 14px;
+            text-align: left;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--muted);
+            border-bottom: 2px solid var(--border);
+            white-space: nowrap;
+        }
+        .attendance-table th.lesson-th {
+            text-align: center;
+            min-width: 80px;
+            max-width: 100px;
+        }
+        .attendance-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+        }
+        .attendance-table tr:last-child td { border-bottom: none; }
+        .attendance-table tr:hover td { background: rgba(4,30,66,0.02); }
+        .att-cell {
+            text-align: center;
+        }
+        .att-checkbox {
+            width: 24px;
+            height: 24px;
+            border-radius: 8px;
+            border: 2px solid var(--border);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            transition: all 0.15s;
+            font-size: 14px;
+            background: white;
+            user-select: none;
+        }
+        .att-checkbox:hover { border-color: var(--primary); background: rgba(4,30,66,0.05); }
+        .att-checkbox.present { background: #DCFCE7; border-color: #10B981; color: #10B981; }
+        .att-checkbox.absent { background: #FEE2E2; border-color: #EF4444; color: #EF4444; }
+        .att-progress {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .att-bar {
+            flex: 1;
+            height: 8px;
+            background: var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .att-bar-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.3s;
+        }
+        .att-bar-fill.high { background: #10B981; }
+        .att-bar-fill.medium { background: #F59E0B; }
+        .att-bar-fill.low { background: #EF4444; }
+        .lesson-header {
+            writing-mode: vertical-lr;
+            text-orientation: mixed;
+            white-space: nowrap;
+            font-size: 12px;
+        }
+        .lesson-header-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+        .lesson-date {
+            font-size: 11px;
+            color: var(--muted);
+        }
+        .save-bar {
+            position: sticky;
+            bottom: 0;
+            background: white;
+            border-top: 2px solid var(--border);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            z-index: 10;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+        }
+        .unsaved-count {
+            font-size: 14px;
+            color: var(--muted);
+        }
+        .unsaved-count.has-changes { color: #F59E0B; font-weight: 600; }
+        .lesson-select-wrap {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .lesson-select {
+            padding: 10px 16px;
+            border: 1.5px solid var(--border);
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: 14px;
+            min-width: 280px;
+            transition: 0.2s;
+        }
+        .lesson-select:focus { outline: none; border-color: var(--primary); }
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .summary-card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+        }
+        .summary-card .num { font-size: 28px; font-weight: 800; color: var(--primary); }
+        .summary-card .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+        .tab-bar {
+            display: flex;
+            gap: 4px;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 24px;
+        }
+        .tab-btn {
+            padding: 12px 20px;
+            border: none;
+            background: none;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--muted);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+    </style>
+</head>
+<body>
+
+<aside class="sidebar">
+    <div class="sidebar-logo">
+        <img src="../logo.png" alt="TIL USER Logo" style="height:32px; width:auto; border-radius:4px;">
+        TIL <span>USER</span><small>TEACHER</small>
+    </div>
+    <nav class="sidebar-nav">
+        <a href="dashboard.html"><span class="icon">📊</span> Мой кабинет</a>
+        <a href="students.html"><span class="icon">👨‍🎓</span> Мои студенты</a>
+        <a href="homeworks.html"><span class="icon">📝</span> Проверка ДЗ</a>
+        <a href="lessons.html"><span class="icon">🗓️</span> Уроки</a>
+        <a href="attendance.html" class="active"><span class="icon">✅</span> Посещаемость</a>
+    </nav>
+    <div class="sidebar-bottom">
+        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+        <a href="../settings.html"><span class="icon">⚙️</span> Настройки</a>
+        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+    </div>
+</aside>
+
+<div class="main-content">
+    <div class="top-bar">
+        <h1>✅ Посещаемость</h1>
+        <div class="top-bar-right">
+            <div class="admin-badge" style="background:linear-gradient(135deg,#3B82F6,#6366F1);">👩‍🏫 TEACHER</div>
+        </div>
+    </div>
+
+    <div class="page-content">
+        <!-- Group selector -->
+        <div class="panel" style="margin-bottom:24px;">
+            <div class="panel-header">
+                <h2>👥 Выберите группу</h2>
+            </div>
+            <div class="panel-body">
+                <div class="group-selector" id="groupSelector">
+                    <div style="color:var(--muted);font-size:14px;">Загрузка групп...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendance panel (shown when group selected) -->
+        <div id="attendancePanel" style="display:none;">
+            <!-- Summary -->
+            <div class="summary-cards" id="summaryCards"></div>
+
+            <!-- Tabs -->
+            <div class="tab-bar">
+                <button class="tab-btn active" onclick="switchTab('mark', this)">📋 Отметить посещение</button>
+                <button class="tab-btn" onclick="switchTab('overview', this)">📊 Сводная таблица</button>
+            </div>
+
+            <!-- Mark attendance tab -->
+            <div id="tabMark">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>📋 Отметить посещение урока</h2>
+                    </div>
+                    <div class="panel-body">
+                        <div class="lesson-select-wrap">
+                            <label style="font-size:14px;font-weight:600;">Урок:</label>
+                            <select class="lesson-select" id="lessonSelect" onchange="loadLessonAttendance()">
+                                <option value="">Выберите урок...</option>
+                            </select>
+                            <button class="btn btn-outline btn-sm" onclick="markAllPresent()">✅ Все присутствуют</button>
+                            <button class="btn btn-outline btn-sm" onclick="markAllAbsent()">❌ Все отсутствуют</button>
+                        </div>
+
+                        <div id="markTable">
+                            <div style="text-align:center;color:var(--muted);padding:40px;">
+                                Выберите урок для отметки посещаемости
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Save bar -->
+                <div class="save-bar" id="saveBar" style="display:none;">
+                    <span class="unsaved-count has-changes" id="unsavedMsg">Есть несохранённые изменения</span>
+                    <div style="display:flex;gap:10px;">
+                        <button class="btn btn-outline" onclick="resetChanges()">Отмена</button>
+                        <button class="btn btn-primary" id="saveBtn" onclick="saveAttendance()">💾 Сохранить посещаемость</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Overview tab -->
+            <div id="tabOverview" style="display:none;">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>📊 Сводная таблица посещаемости</h2>
+                    </div>
+                    <div class="panel-body attendance-table-wrap" id="overviewTable">
+                        <div style="text-align:center;color:var(--muted);padding:40px;">Загрузка...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API = '';
+    const token = localStorage.getItem('access_token');
+    const role = localStorage.getItem('user_role');
+    if (!token || (role !== 'teacher' && role !== 'admin')) window.location.href = '../login.html';
+    document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../login.html'; };
+    function authH(json=false) {
+        const h = { 'Authorization': `Bearer ${token}` };
+        if (json) h['Content-Type'] = 'application/json';
+        return h;
+    }
+
+    let selectedGroupId = null;
+    let groupData = null;
+    let allGroups = [];
+    let currentAttendance = {}; // student_id → bool
+    let savedAttendance = {};
+
+    // ─── Groups ───
+    async function loadGroups() {
+        try {
+            const res = await fetch(`${API}/api/groups`, { headers: authH() });
+            if (!res.ok) return;
+            allGroups = await res.json();
+            renderGroupSelector(allGroups);
+        } catch(e) { console.error(e); }
+    }
+
+    function renderGroupSelector(groups) {
+        const sel = document.getElementById('groupSelector');
+        if (!groups.length) {
+            sel.innerHTML = '<div style="color:var(--muted);font-size:14px;">Нет доступных групп</div>';
+            return;
+        }
+        sel.innerHTML = groups.map(g => `
+            <button class="group-btn" onclick="selectGroup(${g.id}, this)">${g.name}</button>
+        `).join('');
+    }
+
+    async function selectGroup(groupId, btn) {
+        document.querySelectorAll('.group-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedGroupId = groupId;
+        document.getElementById('attendancePanel').style.display = 'block';
+        await loadGroupAttendance();
+    }
+
+    async function loadGroupAttendance() {
+        if (!selectedGroupId) return;
+        try {
+            const res = await fetch(`${API}/api/groups/${selectedGroupId}/attendance`, { headers: authH() });
+            if (!res.ok) return;
+            groupData = await res.json();
+            renderSummaryCards(groupData);
+            renderLessonSelect(groupData.lessons);
+            renderOverviewTable(groupData);
+        } catch(e) { console.error(e); }
+    }
+
+    function renderSummaryCards(data) {
+        const students = data.students || [];
+        const lessons = data.lessons || [];
+        const totalAtt = students.reduce((s, st) => s + st.attended_count, 0);
+        const possible = students.length * lessons.length;
+        const rate = possible > 0 ? Math.round(totalAtt / possible * 100) : 0;
+        
+        const absentStudents = students.filter(st => {
+            const rate = lessons.length > 0 ? st.attended_count / lessons.length : 1;
+            return rate < 0.5;
+        }).length;
+
+        document.getElementById('summaryCards').innerHTML = `
+            <div class="summary-card"><div class="num">${students.length}</div><div class="lbl">Студентов</div></div>
+            <div class="summary-card"><div class="num">${lessons.length}</div><div class="lbl">Уроков</div></div>
+            <div class="summary-card"><div class="num" style="color:${rate>=70?'#10B981':rate>=50?'#F59E0B':'#EF4444'}">${rate}%</div><div class="lbl">Посещаемость</div></div>
+            <div class="summary-card"><div class="num" style="color:${absentStudents>0?'#EF4444':'#10B981'}">${absentStudents}</div><div class="lbl">Прогульщиков</div></div>
+        `;
+    }
+
+    function renderLessonSelect(lessons) {
+        const sel = document.getElementById('lessonSelect');
+        sel.innerHTML = '<option value="">Выберите урок...</option>' +
+            lessons.map(l => `<option value="${l.id}">${l.topic || 'Урок'} — ${l.date}</option>`).join('');
+    }
+
+    async function loadLessonAttendance() {
+        const lessonId = parseInt(document.getElementById('lessonSelect').value);
+        if (!lessonId || !groupData) {
+            document.getElementById('markTable').innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px;">Выберите урок</div>';
+            document.getElementById('saveBar').style.display = 'none';
+            return;
+        }
+
+        // Build current attendance from groupData
+        currentAttendance = {};
+        savedAttendance = {};
+        groupData.students.forEach(st => {
+            const attended = st.attendance[lessonId] || false;
+            currentAttendance[st.student_id] = attended;
+            savedAttendance[st.student_id] = attended;
+        });
+
+        renderMarkTable(lessonId);
+        document.getElementById('saveBar').style.display = 'flex';
+    }
+
+    function renderMarkTable(lessonId) {
+        const students = groupData?.students || [];
+        if (!students.length) {
+            document.getElementById('markTable').innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px;">Нет студентов в группе</div>';
+            return;
+        }
+        
+        document.getElementById('markTable').innerHTML = `
+            <table class="attendance-table">
+                <thead>
+                    <tr>
+                        <th style="width:40px;">#</th>
+                        <th>Студент</th>
+                        <th style="text-align:center;">Присутствие</th>
+                        <th style="text-align:center;">Посещаемость (всего)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${students.map((st, i) => {
+                        const isPresent = currentAttendance[st.student_id];
+                        const rate = groupData.lessons.length > 0 
+                            ? Math.round(st.attended_count / groupData.lessons.length * 100) 
+                            : 0;
+                        const barClass = rate >= 70 ? 'high' : rate >= 50 ? 'medium' : 'low';
+                        return `
+                            <tr>
+                                <td style="color:var(--muted);">${i+1}</td>
+                                <td><strong>${st.name}</strong></td>
+                                <td class="att-cell">
+                                    <div class="att-checkbox ${isPresent ? 'present' : 'absent'}" 
+                                         id="att-${st.student_id}"
+                                         onclick="toggleAttendance(${st.student_id})">
+                                        ${isPresent ? '✓' : '✗'}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="att-progress">
+                                        <div class="att-bar">
+                                            <div class="att-bar-fill ${barClass}" style="width:${rate}%;"></div>
+                                        </div>
+                                        <span style="font-size:13px;font-weight:600;min-width:40px;">${rate}%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    function toggleAttendance(studentId) {
+        currentAttendance[studentId] = !currentAttendance[studentId];
+        const el = document.getElementById(`att-${studentId}`);
+        if (currentAttendance[studentId]) {
+            el.className = 'att-checkbox present';
+            el.textContent = '✓';
+        } else {
+            el.className = 'att-checkbox absent';
+            el.textContent = '✗';
+        }
+        checkChanges();
+    }
+
+    function checkChanges() {
+        const hasChanges = Object.keys(currentAttendance).some(id => 
+            currentAttendance[id] !== savedAttendance[id]
+        );
+        const msg = document.getElementById('unsavedMsg');
+        msg.className = 'unsaved-count' + (hasChanges ? ' has-changes' : '');
+        msg.textContent = hasChanges ? 'Есть несохранённые изменения' : 'Все изменения сохранены';
+    }
+
+    function markAllPresent() {
+        Object.keys(currentAttendance).forEach(id => { currentAttendance[parseInt(id)] = true; });
+        const lessonId = parseInt(document.getElementById('lessonSelect').value);
+        if (lessonId) renderMarkTable(lessonId);
+        checkChanges();
+    }
+
+    function markAllAbsent() {
+        Object.keys(currentAttendance).forEach(id => { currentAttendance[parseInt(id)] = false; });
+        const lessonId = parseInt(document.getElementById('lessonSelect').value);
+        if (lessonId) renderMarkTable(lessonId);
+        checkChanges();
+    }
+
+    function resetChanges() {
+        currentAttendance = {...savedAttendance};
+        const lessonId = parseInt(document.getElementById('lessonSelect').value);
+        if (lessonId) renderMarkTable(lessonId);
+        checkChanges();
+    }
+
+    async function saveAttendance() {
+        const lessonId = parseInt(document.getElementById('lessonSelect').value);
+        if (!lessonId) return;
+        
+        const btn = document.getElementById('saveBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Сохранение...';
+
+        const records = Object.entries(currentAttendance).map(([studentId, attended]) => ({
+            student_id: parseInt(studentId),
+            attended
+        }));
+
+        try {
+            const res = await fetch(`${API}/api/groups/${selectedGroupId}/attendance`, {
+                method: 'POST',
+                headers: authH(true),
+                body: JSON.stringify({ lesson_id: lessonId, records })
+            });
+            if (res.ok) {
+                savedAttendance = {...currentAttendance};
+                checkChanges();
+                // Refresh group data for updated stats
+                await loadGroupAttendance();
+                const lessonSel = document.getElementById('lessonSelect');
+                lessonSel.value = lessonId;
+                renderMarkTable(lessonId);
+                btn.textContent = '✅ Сохранено!';
+                setTimeout(() => { btn.textContent = '💾 Сохранить посещаемость'; btn.disabled = false; }, 2000);
+            } else {
+                alert('Ошибка сохранения');
+                btn.disabled = false;
+                btn.textContent = '💾 Сохранить посещаемость';
+            }
+        } catch(e) {
+            alert('Ошибка сети');
+            btn.disabled = false;
+            btn.textContent = '💾 Сохранить посещаемость';
+        }
+    }
+
+    // Overview tab
+    function renderOverviewTable(data) {
+        const { students, lessons } = data;
+        if (!students.length || !lessons.length) {
+            document.getElementById('overviewTable').innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px;">Нет данных</div>';
+            return;
+        }
+        document.getElementById('overviewTable').innerHTML = `
+            <table class="attendance-table">
+                <thead>
+                    <tr>
+                        <th>Студент</th>
+                        ${lessons.map(l => `<th class="lesson-th" title="${l.topic} — ${l.date}">
+                            <div class="lesson-header-wrap">
+                                <span style="font-size:11px;">${l.date}</span>
+                            </div>
+                        </th>`).join('')}
+                        <th style="text-align:center;">Итого</th>
+                        <th style="text-align:center;">%</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${students.map(st => {
+                        const rate = lessons.length > 0 ? Math.round(st.attended_count / lessons.length * 100) : 0;
+                        const color = rate >= 70 ? '#10B981' : rate >= 50 ? '#F59E0B' : '#EF4444';
+                        return `<tr>
+                            <td><strong>${st.name}</strong></td>
+                            ${lessons.map(l => `<td class="att-cell">
+                                <span style="font-size:18px;">${st.attendance[l.id] ? '✅' : '❌'}</span>
+                            </td>`).join('')}
+                            <td style="text-align:center;font-weight:700;">${st.attended_count}/${lessons.length}</td>
+                            <td style="text-align:center;font-weight:800;color:${color};">${rate}%</td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    function switchTab(tab, btn) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tabMark').style.display = tab === 'mark' ? 'block' : 'none';
+        document.getElementById('tabOverview').style.display = tab === 'overview' ? 'block' : 'none';
+    }
+
+    loadGroups();
+</script>
+<script src="../auth-utils.js"></script>
+</body>
+</html>

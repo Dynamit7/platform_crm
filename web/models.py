@@ -1,0 +1,255 @@
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Float, Boolean, JSON
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+from database import Base
+
+
+class Course(Base):
+    __tablename__ = "courses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, index=True)
+    description = Column(Text)
+    duration = Column(String)
+    price = Column(Float)
+    image_url = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+
+    leads = relationship("Lead", back_populates="course")
+    groups = relationship("Group", back_populates="course")
+
+
+class Teacher(Base):
+    __tablename__ = "teachers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    bio = Column(Text)
+    photo_url = Column(String, nullable=True)
+    subjects = Column(String)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    user = relationship("User", foreign_keys=[user_id])
+    groups = relationship("Group", back_populates="teacher")
+
+
+class Review(Base):
+    __tablename__ = "reviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_name = Column(String)
+    text = Column(Text)
+    rating = Column(Integer)
+
+
+class Lead(Base):
+    __tablename__ = "leads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String)
+    phone = Column(String)
+    email = Column(String, nullable=True)
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=True)
+    status = Column(String, default="new")  # new, contacted, enrolled, lost
+    notes = Column(Text, nullable=True)
+    source = Column(String, default="manual")  # manual, web, telegram
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    course = relationship("Course", back_populates="leads")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    telegram_id = Column(Integer, unique=True, index=True, nullable=True)
+    name = Column(String)
+    email = Column(String, unique=True, index=True)
+    phone = Column(String, nullable=True)
+    password_hash = Column(String, nullable=True)
+    role = Column(String, default="student")  # student, teacher, admin
+    is_active = Column(Boolean, default=True)
+    avatar_url = Column(String, nullable=True)
+    registration_source = Column(String, default="web")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    enrollments = relationship("Enrollment", back_populates="student")
+    submissions = relationship("HomeworkSubmission", back_populates="student")
+    notifications = relationship("Notification", back_populates="user")
+    payments = relationship("Payment", back_populates="student")
+    sent_messages = relationship("Message", foreign_keys="Message.sender_id", back_populates="sender")
+    received_messages = relationship("Message", foreign_keys="Message.receiver_id", back_populates="receiver")
+    vocabulary = relationship("VocabularyWord", back_populates="student")
+    achievements = relationship("Achievement", back_populates="student")
+
+
+class Group(Base):
+    __tablename__ = "groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    course_id = Column(Integer, ForeignKey("courses.id"))
+    teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=True)
+    max_students = Column(Integer, default=8)
+    schedule_json = Column(JSON, nullable=True)  # [{"day": "Mon", "time": "18:00"}, ...]
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    course = relationship("Course", back_populates="groups")
+    teacher = relationship("Teacher", back_populates="groups")
+    lessons = relationship("Lesson", back_populates="group")
+    enrollments = relationship("Enrollment", back_populates="group")
+
+
+class Enrollment(Base):
+    __tablename__ = "enrollments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("users.id"))
+    course_id = Column(Integer, ForeignKey("courses.id"))
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
+    progress = Column(Integer, default=0)
+    xp = Column(Integer, default=0)
+    enrolled_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    student = relationship("User", back_populates="enrollments")
+    course = relationship("Course")
+    group = relationship("Group", back_populates="enrollments")
+
+
+class Lesson(Base):
+    __tablename__ = "lessons"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id"))
+    topic = Column(String)
+    description = Column(Text, nullable=True)
+    scheduled_at = Column(DateTime(timezone=True))
+    zoom_link = Column(String, nullable=True)
+    is_recorded = Column(Boolean, default=False)
+    recording_url = Column(String, nullable=True)
+    is_completed = Column(Boolean, default=False)
+
+    group = relationship("Group", back_populates="lessons")
+    attendance = relationship("LessonAttendance", back_populates="lesson")
+
+
+class LessonAttendance(Base):
+    __tablename__ = "lesson_attendance"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lesson_id = Column(Integer, ForeignKey("lessons.id"))
+    student_id = Column(Integer, ForeignKey("users.id"))
+    attended = Column(Boolean, default=False)
+
+    lesson = relationship("Lesson", back_populates="attendance")
+
+
+class Homework(Base):
+    __tablename__ = "homeworks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("courses.id"))
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
+    title = Column(String)
+    description = Column(Text)
+    due_date = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    course = relationship("Course")
+    submissions = relationship("HomeworkSubmission", back_populates="homework")
+
+
+class HomeworkSubmission(Base):
+    __tablename__ = "homework_submissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    homework_id = Column(Integer, ForeignKey("homeworks.id"))
+    student_id = Column(Integer, ForeignKey("users.id"))
+    content = Column(Text)
+    grade = Column(String, nullable=True)
+    feedback = Column(Text, nullable=True)
+    status = Column(String, default="submitted")  # submitted, graded, returned
+    submitted_at = Column(DateTime(timezone=True), server_default=func.now())
+    graded_at = Column(DateTime(timezone=True), nullable=True)
+
+    homework = relationship("Homework", back_populates="submissions")
+    student = relationship("User", back_populates="submissions")
+
+
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("users.id"))
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=True)
+    amount = Column(Float)
+    currency = Column(String, default="UZS")
+    method = Column(String, default="cash")  # cash, card, online, transfer
+    status = Column(String, default="paid")  # paid, pending, failed, refunded
+    description = Column(String, nullable=True)
+    period_month = Column(Integer, nullable=True)
+    period_year = Column(Integer, nullable=True)
+    bot_payment_id = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    student = relationship("User", back_populates="payments")
+    course = relationship("Course")
+
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"))
+    receiver_id = Column(Integer, ForeignKey("users.id"))
+    content = Column(Text)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    sender = relationship("User", foreign_keys=[sender_id], back_populates="sent_messages")
+    receiver = relationship("User", foreign_keys=[receiver_id], back_populates="received_messages")
+
+
+class VocabularyWord(Base):
+    __tablename__ = "vocabulary_words"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("users.id"))
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=True)
+    word = Column(String)
+    translation = Column(String)
+    progress = Column(Integer, default=0)  # 0-100
+    times_reviewed = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    student = relationship("User", back_populates="vocabulary")
+
+
+class Achievement(Base):
+    __tablename__ = "achievements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("users.id"))
+    achievement_type = Column(String)  # first_hw, streak_5, club_10, etc.
+    title = Column(String)
+    description = Column(Text, nullable=True)
+    xp_reward = Column(Integer, default=0)
+    earned_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    student = relationship("User", back_populates="achievements")
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    title = Column(String)
+    message = Column(Text)
+    notification_type = Column(String, default="info")  # info, warning, success, error
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="notifications")

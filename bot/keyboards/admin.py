@@ -13,6 +13,9 @@ def get_admin_main_kb() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="👨‍🏫 Учителя", callback_data="admin:teachers"),
             InlineKeyboardButton(text="🏫 Группы", callback_data="admin:groups"),
         ],
+        [
+            InlineKeyboardButton(text="🔍 Управление / Поиск", callback_data="admin:users"),
+        ],
         # --- Учеба ---
         [
             InlineKeyboardButton(text="🎓 Курсы", callback_data="admin:courses"),

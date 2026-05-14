@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Личный кабинет | TIL USER</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="app.css">
+    <style>
+        /* Extra premium touches */
+        .sidebar a:hover {
+            transform: translateX(5px);
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            transition: 0.3s;
+        }
+        .pulse {
+            animation: pulse-animation 2s infinite;
+        }
+        @keyframes pulse-animation {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        /* Notifications Dropdown */
+        .notifications-wrapper { position: relative; }
+        .notifications-dropdown {
+            display: none;
+            position: absolute;
+            top: 40px;
+            right: 0;
+            width: 300px;
+            background: white;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            z-index: 100;
+            padding: 10px 0;
+        }
+        .notifications-dropdown.active { display: block; animation: dropdownFade 0.2s ease-out; }
+        @keyframes dropdownFade { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .notification-item {
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .notification-item:last-child { border-bottom: none; }
+        .notification-item:hover { background: var(--bg-color); }
+        .notification-item h4 { font-size: 14px; margin-bottom: 3px; }
+        .notification-item p { font-size: 12px; color: var(--text-muted); }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 24px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+            animation: modalSlide 0.3s ease-out;
+        }
+        @keyframes modalSlide {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .close-modal {
+            font-size: 28px;
+            cursor: pointer;
+            color: var(--text-muted);
+            line-height: 1;
+        }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 600; }
+        .form-group textarea {
+            width: 100%;
+            height: 150px;
+            padding: 15px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        /* Vocabulary Flashcard */
+        .flashcard {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        .flashcard .word-lg { font-size: 60px; font-weight: 800; color: var(--primary); margin-bottom: 20px; }
+        .flashcard .translation-lg { font-size: 24px; color: var(--text-muted); margin-bottom: 40px; display: none; }
+        .flashcard.flipped .translation-lg { display: block; }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <img src="logo.png" alt="TIL USER Logo" style="height:32px; width:auto; border-radius:4px; margin-right:10px;">
+                TIL <span>USER</span>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html" class="active"><span class="icon">📊</span> Дашборд</a>
+                <a href="courses.html"><span class="icon">📚</span> Мои курсы</a>
+                <a href="schedule.html"><span class="icon">🗓️</span> Расписание</a>
+                <a href="homeworks.html"><span class="icon">📝</span> Домашние задания <span class="badge">0</span></a>
+                <a href="chat.html"><span class="icon">💬</span> Чат <span class="chat-badge"></span></a>
+                <a href="achievements.html"><span class="icon">🏆</span> Достижения</a>
+            </nav>
+            <div class="sidebar-bottom">
+                <a href="index.html"><span class="icon">🌐</span> На сайт</a>
+                <a href="settings.html"><span class="icon">⚙️</span> Настройки</a>
+                <a href="login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <div class="welcome-text">
+                    <h1>Загрузка... 👋</h1>
+                    <p>Твой прогресс в обучении — наша главная цель. Рады видеть тебя снова!</p>
+                </div>
+                <div class="user-profile">
+                    <div class="notifications-wrapper">
+                        <div class="notifications" id="notifBtn">🔔</div>
+                        <div class="notifications-dropdown" id="notifDropdown">
+                            <div style="padding: 10px 20px; font-weight: 800; border-bottom: 1px solid var(--border);">Уведомления</div>
+                            <div id="notifList">
+                                <div class="notification-item"><p>Нет новых уведомлений</p></div>
+                            </div>
+                        </div>
+                    <div class="profile-dropdown-wrapper" style="position: relative; cursor: pointer;">
+                        <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80" alt="Avatar" class="avatar" id="profileBtn" onclick="toggleProfileDropdown()">
+                        <div class="notifications-dropdown" id="profileDropdown" style="width: 200px; padding: 10px;">
+                            <div style="padding: 10px; border-bottom: 1px solid var(--border);">
+                                <strong id="headerUserName">Студент</strong><br>
+                                <span style="font-size: 12px; color: var(--text-muted);">student@til.uz</span>
+                            </div>
+                            <a href="settings.html" style="display: block; padding: 10px; color: var(--text); text-decoration: none; transition: 0.2s;" onmouseover="this.style.background='var(--bg-color)'" onmouseout="this.style.background='none'">👤 Мой профиль</a>
+                            <a href="#" onclick="localStorage.clear(); window.location.href='login.html';" style="display: block; padding: 10px; color: var(--danger); text-decoration: none; transition: 0.2s;" onmouseover="this.style.background='var(--bg-color)'" onmouseout="this.style.background='none'">🚪 Выйти</a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <script>
+                function toggleProfileDropdown() {
+                    const dropdown = document.getElementById('profileDropdown');
+                    dropdown.classList.toggle('active');
+                    const userName = localStorage.getItem('user_name') || 'Студент';
+                    const userEmail = localStorage.getItem('user_email') || 'student@til.uz';
+                    document.getElementById('headerUserName').textContent = userName;
+                    document.getElementById('headerUserName').nextElementSibling.nextElementSibling.textContent = userEmail;
+                }
+                
+                // Close dropdowns if clicked outside
+                window.addEventListener('click', function(e) {
+                    if (!document.getElementById('profileBtn').contains(e.target) && !document.getElementById('profileDropdown').contains(e.target)) {
+                        document.getElementById('profileDropdown').classList.remove('active');
+                    }
+                });
+            </script>
+
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">📈</div>
+                    <div class="stat-info">
+                        <h3>Текущий уровень</h3>
+                        <p>---</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🎯</div>
+                    <div class="stat-info">
+                        <h3>Пройдено уроков</h3>
+                        <p>---</p>
+                    </div>
+                    <div class="progress-bar-mini"><div class="progress-fill" style="width: 0%;"></div></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">⚡</div>
+                    <div class="stat-info">
+                        <h3>Очки опыта (XP)</h3>
+                        <p>--- XP</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- My Courses (Dynamic Buttons) -->
+            <div class="my-courses-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 style="font-size: 22px;">Мои курсы</h2>
+                    <a href="courses.html" class="view-all">Все курсы</a>
+                </div>
+                <div class="courses-list">
+                    <!-- Dynamic Content -->
+                </div>
+            </div>
+
+            <div class="content-grid">
+                <!-- Next Lesson -->
+                <div class="card next-lesson">
+                    <div class="card-header">
+                        <h2>Следующее занятие</h2>
+                        <span class="tag live">Live</span>
+                    </div>
+                    <div class="lesson-details">
+                        <div class="lesson-time">
+                            <span class="time">--:--</span>
+                            <span class="date">---</span>
+                        </div>
+                        <div class="lesson-info">
+                            <h3>---</h3>
+                            <p>Загрузка...</p>
+                        </div>
+                    </div>
+                    <button class="btn-primary w-100 zoom-btn">🎥 Подключиться к Zoom</button>
+                </div>
+
+                <!-- Homeworks -->
+                <div class="card homeworks">
+                    <div class="card-header">
+                        <h2>Домашние задания</h2>
+                        <a href="homeworks.html" class="view-all">Все</a>
+                    </div>
+                    <div class="hw-list">
+                        <p style="color: var(--text-muted); text-align: center; padding: 20px;">Загрузка заданий...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-grid" style="margin-top: 20px;">
+                <!-- Vocabulary -->
+                <div class="card vocabulary">
+                    <div class="card-header">
+                        <h2>📖 Твой словарь</h2>
+                        <a href="#" class="view-all">Учить слова</a>
+                    </div>
+                    <div class="vocab-grid">
+                        <!-- Dynamic Content -->
+                    </div>
+                </div>
+
+                <!-- Calendar -->
+                <div class="card schedule">
+                    <div class="card-header">
+                        <h2>📅 Расписание на неделю</h2>
+                    </div>
+                    <div class="calendar-widget">
+                        <!-- Dynamic Content -->
+                    </div>
+                    <div class="upcoming-alert">
+                        След. урок: загрузка...
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Homework Submission Modal -->
+    <div id="hwModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalHwTitle">Сдать домашнее задание</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <form id="hwForm">
+                <input type="hidden" id="hwId">
+                <div class="form-group">
+                    <label for="hwAnswer">Ваш ответ или ссылка на работу:</label>
+                    <textarea id="hwAnswer" placeholder="Напишите здесь свой ответ или вставьте ссылку на Google Doc / GitHub..." required></textarea>
+                </div>
+                <button type="submit" class="btn-primary w-100" id="hwSubmitBtn">Отправить на проверку</button>
+            </form>
+            <div id="hwSuccessMsg" style="display: none; text-align: center; padding: 20px;">
+                <div style="font-size: 40px; margin-bottom: 10px;">✅</div>
+                <h3>Задание отправлено!</h3>
+                <p>Преподаватель скоро проверит вашу работу.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vocabulary Flashcard Modal -->
+    <div id="vocabModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Повторение слов</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="flashcard" id="flashcard">
+                <div class="word-lg" id="vocabWord">学校</div>
+                <div class="translation-lg" id="vocabTrans">Школа</div>
+                <button class="btn-outline w-100" id="flipBtn">Показать перевод</button>
+                <div id="vocabActions" style="display: none; gap: 10px; margin-top: 20px;">
+                    <button class="btn-primary w-100" id="knowBtn">Знаю ✅</button>
+                    <button class="btn-outline w-100" id="dontKnowBtn">Еще поучить ❌</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+<script src="auth-utils.js"></script>
+</body>
+</html>

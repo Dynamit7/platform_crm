@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мои студенты | TIL USER</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../app.css">
+    <style>
+        .student-card { background:#fff;border:1px solid var(--border);border-radius:16px;padding:20px;display:flex;gap:16px;align-items:flex-start;transition:0.2s;cursor:pointer; }
+        .student-card:hover { box-shadow:0 4px 20px rgba(4,30,66,0.1);transform:translateY(-2px); }
+        .s-avatar { width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#3B82F6,#6366F1);color:#fff;font-weight:800;font-size:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+        .s-info { flex:1; }
+        .s-name { font-weight:700;font-size:15px;margin-bottom:4px; }
+        .s-email { font-size:12px;color:var(--muted);margin-bottom:10px; }
+        .progress-bar { background:#EFF6FF;border-radius:99px;height:6px;overflow:hidden;margin-bottom:4px; }
+        .progress-fill { height:100%;background:linear-gradient(90deg,#3B82F6,#6366F1);border-radius:99px;transition:width 0.5s ease; }
+        .s-stats { display:flex;gap:16px;margin-top:10px; }
+        .s-stat { font-size:12px;color:var(--muted); }
+        .s-stat strong { color:var(--text);display:block; }
+        .cards-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px; }
+        .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px); }
+        .modal-overlay.open { display:flex; }
+        .modal { background:#fff;border-radius:20px;width:640px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,0.2);animation:slideUp 0.25s ease; }
+        @keyframes slideUp { from{transform:translateY(24px);opacity:0} to{transform:translateY(0);opacity:1} }
+        .modal-header { padding:24px 28px 0;display:flex;justify-content:space-between;align-items:center; }
+        .modal-close { background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1; }
+        .modal-body { padding:20px 28px 28px; }
+        .tabs { display:flex;gap:4px;border-bottom:2px solid var(--border);margin-bottom:20px; }
+        .tab-btn { padding:10px 18px;border:none;background:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;transition:0.2s; }
+        .tab-btn.active { color:#3B82F6;border-bottom-color:#3B82F6;font-weight:700; }
+        .tab-panel { display:none; }
+        .tab-panel.active { display:block; }
+        .stat-row { display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px; }
+        .stat-row:last-child { border-bottom:none; }
+        .stat-row span:first-child { color:var(--muted); }
+        .stat-row strong { font-weight:600; }
+        .hw-item { padding:12px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:14px; }
+        .hw-item:last-child { border-bottom:none; }
+        .empty-msg { text-align:center;padding:30px;color:var(--muted);font-size:14px; }
+        .kpi-mini { display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px; }
+        .kpi-mini-card { background:#F8FAFC;border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center; }
+        .kpi-mini-val { font-size:22px;font-weight:800;color:#3B82F6;font-family:'Outfit',sans-serif; }
+        .kpi-mini-lbl { font-size:11px;color:var(--muted);margin-top:4px; }
+    </style>
+</head>
+<body>
+<aside class="sidebar">
+    <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>TEACHER</small></div>
+    <nav class="sidebar-nav">
+        <a href="dashboard.html"><span class="icon">📊</span> Мой кабинет</a>
+        <a href="students.html" class="active"><span class="icon">👨‍🎓</span> Мои студенты</a>
+        <a href="homeworks.html"><span class="icon">📝</span> Проверка ДЗ</a>
+        <a href="../chat.html"><span class="icon">💬</span> Чат <span class="chat-badge"></span></a>
+        <a href="lessons.html"><span class="icon">🗓️</span> Уроки</a>
+        <a href="attendance.html"><span class="icon">✅</span> Посещаемость</a>
+    </nav>
+    <div class="sidebar-bottom">
+        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+        <a href="../settings.html"><span class="icon">⚙️</span> Настройки</a>
+        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+    </div>
+</aside>
+
+<div class="main-content">
+    <div class="top-bar">
+        <h1>👨‍🎓 Мои студенты</h1>
+        <div class="top-bar-right">
+            <div class="admin-badge" style="background:linear-gradient(135deg,#3B82F6,#6366F1);">👩‍🏫 TEACHER</div>
+        </div>
+    </div>
+    <div class="page-content">
+        <!-- KPI mini -->
+        <div class="kpi-mini" id="kpiMini">
+            <div class="kpi-mini-card"><div class="kpi-mini-val" id="kpiTotal">—</div><div class="kpi-mini-lbl">Всего студентов</div></div>
+            <div class="kpi-mini-card"><div class="kpi-mini-val" id="kpiPending">—</div><div class="kpi-mini-lbl">ДЗ на проверке</div></div>
+            <div class="kpi-mini-card"><div class="kpi-mini-val" id="kpiAvgProgress">—</div><div class="kpi-mini-lbl">Средний прогресс</div></div>
+        </div>
+
+        <div class="filters-bar" style="gap:12px;">
+            <input type="text" class="search-input" id="searchInput" placeholder="🔍 Поиск студента...">
+            <select class="filter-select" id="groupFilter" style="min-width:180px;">
+                <option value="">— Все группы —</option>
+            </select>
+        </div>
+
+        <div class="cards-grid" id="studentCards">
+            <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted);">Загрузка...</div>
+        </div>
+    </div>
+</div>
+
+<!-- STUDENT PROFILE MODAL -->
+<div class="modal-overlay" id="profileModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 id="profileTitle">👤 Профиль студента</h2>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body" id="profileBody">
+            <div class="empty-msg">Загрузка...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API = '';
+    const token = localStorage.getItem('access_token');
+    const myId = parseInt(localStorage.getItem('user_id'));
+    const role = localStorage.getItem('user_role');
+    if (!token || (role !== 'teacher' && role !== 'admin')) window.location.href = '../login.html';
+    document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../login.html'; };
+    function authH() { return { 'Authorization': `Bearer ${token}` }; }
+
+    let allStudents = [], pendingCount = 0, groupsMap = {};
+
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function renderCards(students) {
+        const grid = document.getElementById('studentCards');
+        if (!students.length) {
+            grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted);">Студентов не найдено</div>';
+            return;
+        }
+        grid.innerHTML = students.map(s => {
+            const initials = s.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+            const progress = s._progress || 0;
+            const hwGraded = s._graded || 0;
+            const hwPending = s._pending || 0;
+            const groupName = s._group || '—';
+            const tgBadge = s.telegram_id ? `<span style="font-size:11px;background:#E8F5E9;color:#2E7D32;padding:2px 8px;border-radius:20px;">🤖 Telegram</span>` : '';
+            return `
+            <div class="student-card" onclick="viewProfile(${s.id})">
+                <div class="s-avatar">${initials}</div>
+                <div class="s-info">
+                    <div class="s-name">${esc(s.name)} ${tgBadge}</div>
+                    <div class="s-email">${esc(s.email || '—')} · ${esc(groupName)}</div>
+                    <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Прогресс</div>
+                    <div class="progress-bar"><div class="progress-fill" style="width:${progress}%"></div></div>
+                    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:10px;">
+                        <span>${progress}%</span>
+                    </div>
+                    <div class="s-stats">
+                        <div class="s-stat"><strong>${hwGraded}</strong>ДЗ проверено</div>
+                        <div class="s-stat"><strong style="color:${hwPending>0?'#F59E0B':'#10B981'}">${hwPending}</strong>На проверке</div>
+                        <div class="s-stat"><strong>${s.phone || '—'}</strong>Телефон</div>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // ── Group filter ──
+    function populateGroupFilter(groups) {
+        const sel = document.getElementById('groupFilter');
+        groups.forEach(g => {
+            const o = new Option(`${g.name}`, g.id);
+            sel.appendChild(o);
+        });
+        sel.onchange = () => {
+            const gid = parseInt(sel.value) || null;
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            let list = allStudents;
+            if (gid) list = list.filter(s => s._group_id === gid);
+            if (q) list = list.filter(s => s.name.toLowerCase().includes(q) || (s.email||'').toLowerCase().includes(q));
+            renderCards(list);
+        };
+    }
+
+    document.getElementById('searchInput').addEventListener('input', e => {
+        const q = e.target.value.toLowerCase();
+        const gid = parseInt(document.getElementById('groupFilter').value) || null;
+        let list = allStudents;
+        if (gid) list = list.filter(s => s._group_id === gid);
+        if (q) list = list.filter(s => s.name.toLowerCase().includes(q) || (s.email||'').toLowerCase().includes(q));
+        renderCards(list);
+    });
+
+    async function load() {
+        try {
+            // Step 1: get teacher's groups
+            const groupsUrl = role === 'admin'
+                ? `${API}/api/groups`
+                : `${API}/api/teacher/groups/${myId}`;
+            const groupsRes = await fetch(groupsUrl, { headers: authH() });
+            const groups = groupsRes.ok ? await groupsRes.json() : [];
+            groups.forEach(g => { groupsMap[g.id] = g.name; });
+            populateGroupFilter(groups);
+
+            // Step 2: fetch all students + enrollments per group in parallel
+            const groupIds = groups.map(g => g.id);
+
+            const [studRes, pendRes, ...enrollResults] = await Promise.all([
+                fetch(`${API}/api/admin/students`, { headers: authH() }),
+                fetch(`${API}/api/homework/pending`, { headers: authH() }),
+                ...groupIds.map(gid => fetch(`${API}/api/groups/${gid}/students`, { headers: authH() }).catch(() => null))
+            ]);
+
+            const students = studRes.ok ? await studRes.json() : [];
+            const pending = pendRes.ok ? await pendRes.json() : [];
+
+            // Build student→group and student→progress maps from enrollments
+            const studentGroupMap = {};  // studentId → groupId
+            const studentProgressMap = {}; // studentId → progress%
+
+            for (let i = 0; i < groupIds.length; i++) {
+                const res = enrollResults[i];
+                if (!res || !res.ok) continue;
+                const data = await res.json();
+                const enrolled = Array.isArray(data) ? data : (data.students || []);
+                enrolled.forEach(e => {
+                    const sid = e.student_id || e.id;
+                    if (sid) {
+                        studentGroupMap[sid] = groupIds[i];
+                        // Use real progress from enrollment if available
+                        if (e.progress !== undefined) studentProgressMap[sid] = e.progress;
+                    }
+                });
+            }
+
+            // Filter students to only those in teacher's groups (unless admin)
+            const myStudentIds = new Set(Object.keys(studentGroupMap).map(Number));
+            const filtered = role === 'admin' ? students : students.filter(s => myStudentIds.has(s.id));
+
+            const pendMap = {};
+            pending.forEach(p => { pendMap[p.student_id] = (pendMap[p.student_id] || 0) + 1; });
+
+            allStudents = filtered.map(s => ({
+                ...s,
+                _progress: studentProgressMap[s.id] ?? 0,
+                _pending: pendMap[s.id] || 0,
+                _graded: 0,
+                _group_id: studentGroupMap[s.id] || null,
+                _group: groupsMap[studentGroupMap[s.id]] || '—',
+            }));
+
+            pendingCount = pending.length;
+            document.getElementById('kpiTotal').textContent = allStudents.length;
+            document.getElementById('kpiPending').textContent = pendingCount;
+            const avgP = allStudents.length
+                ? Math.round(allStudents.reduce((a,s) => a + s._progress, 0) / allStudents.length)
+                : 0;
+            document.getElementById('kpiAvgProgress').textContent = avgP + '%';
+
+            renderCards(allStudents);
+        } catch(e) { console.error(e); }
+    }
+
+    // ─── Profile Modal ───
+    function openModal() { document.getElementById('profileModal').style.display = 'flex'; }
+    function closeModal() { document.getElementById('profileModal').style.display = 'none'; }
+    document.getElementById('profileModal').addEventListener('click', e => {
+        if (e.target === document.getElementById('profileModal')) closeModal();
+    });
+
+    async function viewProfile(id) {
+        openModal();
+        const s = allStudents.find(x => x.id === id);
+        const initials = s ? s.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) : '?';
+        document.getElementById('profileBody').innerHTML = '<div class="empty-msg">Загрузка...</div>';
+
+        try {
+            // Load real homework data for this student
+            const hwRes = await fetch(`${API}/api/student/${id}/homeworks`, { headers: authH() });
+            const allHW = hwRes.ok ? await hwRes.json() : [];
+            const studentPending = allHW.filter(h => !h.is_submitted);
+            const studentGraded = allHW.filter(h => h.status === 'graded');
+
+            const progress = s ? (s._progress || 0) : 0;
+            const groupName = s?._group || '—';
+
+            document.getElementById('profileTitle').textContent = `👤 ${s ? esc(s.name) : 'Профиль'}`;
+            document.getElementById('profileBody').innerHTML = `
+                <div style="display:flex;gap:16px;align-items:center;margin-bottom:20px;">
+                    <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#3B82F6,#6366F1);color:#fff;font-size:22px;font-weight:800;display:flex;align-items:center;justify-content:center;">${initials}</div>
+                    <div>
+                        <h3 style="margin:0 0 4px;">${esc(s?.name||'—')}</h3>
+                        <div style="font-size:13px;color:var(--muted);">${esc(s?.email||'—')} · ${esc(groupName)}</div>
+                        ${s?.telegram_id ? '<div style="font-size:12px;color:#2E7D32;margin-top:3px;">🤖 Telegram привязан</div>' : ''}
+                    </div>
+                    <a href="../chat.html" onclick="localStorage.setItem('chat_with',${id})"
+                       class="btn btn-primary" style="margin-left:auto;text-decoration:none;">💬 Написать</a>
+                </div>
+
+                <div style="margin-bottom:20px;">
+                    <div style="font-size:13px;color:var(--muted);margin-bottom:8px;font-weight:600;">Прогресс обучения</div>
+                    <div class="progress-bar" style="height:10px;"><div class="progress-fill" style="width:${progress}%"></div></div>
+                    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px;">
+                        <span>Выполнено</span><span>${progress}%</span>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;">
+                    <div style="background:#F0FDF4;border-radius:10px;padding:12px;text-align:center;">
+                        <div style="font-size:20px;font-weight:800;color:#10B981;">${studentGraded.length}</div>
+                        <div style="font-size:11px;color:#065F46;">ДЗ проверено</div>
+                    </div>
+                    <div style="background:#FFF7ED;border-radius:10px;padding:12px;text-align:center;">
+                        <div style="font-size:20px;font-weight:800;color:#F59E0B;">${studentPending.length}</div>
+                        <div style="font-size:11px;color:#92400E;">Ожидает сдачи</div>
+                    </div>
+                    <div style="background:#EFF6FF;border-radius:10px;padding:12px;text-align:center;">
+                        <div style="font-size:20px;font-weight:800;color:#3B82F6;">${allHW.length}</div>
+                        <div style="font-size:11px;color:#1E40AF;">Всего заданий</div>
+                    </div>
+                </div>
+
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="switchTab(this,'tInfo')">ℹ️ Данные</button>
+                    <button class="tab-btn" onclick="switchTab(this,'tHW')">📝 ДЗ (${allHW.length})</button>
+                </div>
+
+                <div class="tab-panel active" id="tInfo">
+                    <div class="stat-row"><span>Телефон</span><strong>${esc(s?.phone||'—')}</strong></div>
+                    <div class="stat-row"><span>Email</span><strong>${esc(s?.email||'—')}</strong></div>
+                    <div class="stat-row"><span>Группа</span><strong>${esc(groupName)}</strong></div>
+                    <div class="stat-row"><span>Дата регистрации</span><strong>${s?.created_at ? new Date(s.created_at).toLocaleDateString('ru-RU') : '—'}</strong></div>
+                    <div class="stat-row"><span>Telegram</span><strong>${s?.telegram_id ? '✅ @TG: '+s.telegram_id : '❌ Не привязан'}</strong></div>
+                </div>
+
+                <div class="tab-panel" id="tHW">
+                    ${!allHW.length
+                        ? '<div class="empty-msg">📭 Заданий нет</div>'
+                        : allHW.map(hw => {
+                            const statusIcon = hw.status === 'graded' ? '✅' : hw.is_submitted ? '📤' : hw.is_overdue ? '🔴' : '⚠️';
+                            const statusLbl = hw.status === 'graded' ? 'Проверено' : hw.is_submitted ? 'На проверке' : hw.is_overdue ? 'Просрочено' : 'Не сдано';
+                            const gradeStr = hw.grade != null ? ` · Оценка: <strong>${hw.grade}</strong>` : '';
+                            return `<div class="hw-item">
+                                <div>
+                                    <div style="font-weight:600;">${statusIcon} ${esc(hw.title)}</div>
+                                    <div style="font-size:12px;color:var(--muted);">${statusLbl}${gradeStr} · Срок: ${hw.due_date || '—'}</div>
+                                </div>
+                                ${!hw.is_submitted ? `<a href="homeworks.html" class="btn btn-accent btn-sm" style="text-decoration:none;flex-shrink:0;">Проверить</a>` : ''}
+                            </div>`;
+                        }).join('')
+                    }
+                </div>
+            `;
+        } catch(e) {
+            document.getElementById('profileBody').innerHTML = '<div class="empty-msg" style="color:var(--danger);">Ошибка загрузки данных</div>';
+        }
+    }
+
+    function switchTab(btn, tabId) {
+        document.querySelectorAll('#profileBody .tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('#profileBody .tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(tabId).classList.add('active');
+    }
+
+    load();
+</script>
+
+
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function renderCards(students) {
+        const grid = document.getElementById('studentCards');
+        if (!students.length) {
+            grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted);">Студентов не найдено</div>';
+            return;
+        }
+        grid.innerHTML = students.map(s => {
+            const initials = s.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+            const progress = s._progress || 0;
+            const hwGraded = s._graded || 0;
+            const hwPending = s._pending || 0;
+            return `
+            <div class="student-card" onclick="viewProfile(${s.id})">
+                <div class="s-avatar">${initials}</div>
+                <div class="s-info">
+                    <div class="s-name">${esc(s.name)}</div>
+                    <div class="s-email">${esc(s.email)}</div>
+                    <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Прогресс</div>
+                    <div class="progress-bar"><div class="progress-fill" style="width:${progress}%"></div></div>
+                    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:10px;">
+                        <span>${progress}%</span>
+                    </div>
+                    <div class="s-stats">
+                        <div class="s-stat"><strong>${hwGraded}</strong>ДЗ проверено</div>
+                        <div class="s-stat"><strong style="color:${hwPending>0?'#F59E0B':'#10B981'}">${hwPending}</strong>На проверке</div>
+                        <div class="s-stat"><strong>${s.phone || '—'}</strong>Телефон</div>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    document.getElementById('searchInput').addEventListener('input', e => {
+        const q = e.target.value.toLowerCase();
+        renderCards(allStudents.filter(s =>
+            s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q)
+        ));
+    });
+
+    async function load() {
+        try {
+            const [studRes, pendRes] = await Promise.all([
+                fetch(`${API}/api/admin/students`, { headers: authH() }),
+                fetch(`${API}/api/homework/pending`, { headers: authH() })
+            ]);
+            const students = studRes.ok ? await studRes.json() : [];
+            const pending = pendRes.ok ? await pendRes.json() : [];
+
+            // map pending by student_id
+            const pendMap = {};
+            pending.forEach(p => { pendMap[p.student_id] = (pendMap[p.student_id] || 0) + 1; });
+
+            allStudents = students.map(s => ({
+                ...s,
+                _progress: Math.floor(Math.random() * 60 + 20), // placeholder until enrollment API
+                _pending: pendMap[s.id] || 0,
+                _graded: 0
+            }));
+
+            pendingCount = pending.length;
+            document.getElementById('kpiTotal').textContent = students.length;
+            document.getElementById('kpiPending').textContent = pendingCount;
+            const avgP = allStudents.length
+                ? Math.round(allStudents.reduce((a,s) => a + s._progress, 0) / allStudents.length)
+                : 0;
+            document.getElementById('kpiAvgProgress').textContent = avgP + '%';
+
+            renderCards(allStudents);
+        } catch(e) { console.error(e); }
+    }
+
+    // ─── Profile Modal ───
+    function openModal() { document.getElementById('profileModal').style.display = 'flex'; }
+    function closeModal() { document.getElementById('profileModal').style.display = 'none'; }
+    document.getElementById('profileModal').addEventListener('click', e => {
+        if (e.target === document.getElementById('profileModal')) closeModal();
+    });
+
+    async function viewProfile(id) {
+        openModal();
+        const s = allStudents.find(x => x.id === id);
+        const initials = s ? s.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) : '?';
+        document.getElementById('profileBody').innerHTML = '<div class="empty-msg">Загрузка...</div>';
+
+        try {
+            // Get submissions for this student
+            const pendRes = await fetch(`${API}/api/homework/pending`, { headers: authH() });
+            const allPending = pendRes.ok ? await pendRes.json() : [];
+            const studentPending = allPending.filter(p => p.student_id === id);
+
+            const progress = s ? (s._progress || 0) : 0;
+
+            document.getElementById('profileTitle').textContent = `👤 ${s ? esc(s.name) : 'Профиль'}`;
+            document.getElementById('profileBody').innerHTML = `
+                <div style="display:flex;gap:16px;align-items:center;margin-bottom:20px;">
+                    <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#3B82F6,#6366F1);color:#fff;font-size:22px;font-weight:800;display:flex;align-items:center;justify-content:center;">${initials}</div>
+                    <div>
+                        <h3 style="margin:0 0 4px;">${esc(s?.name||'—')}</h3>
+                        <div style="font-size:13px;color:var(--muted);">${esc(s?.email||'—')}</div>
+                    </div>
+                    <a href="../chat.html" onclick="localStorage.setItem('chat_with',${id})"
+                       class="btn btn-primary" style="margin-left:auto;text-decoration:none;">💬 Написать</a>
+                </div>
+
+                <div style="margin-bottom:20px;">
+                    <div style="font-size:13px;color:var(--muted);margin-bottom:8px;font-weight:600;">Прогресс обучения</div>
+                    <div class="progress-bar" style="height:10px;"><div class="progress-fill" style="width:${progress}%"></div></div>
+                    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px;">
+                        <span>Выполнено</span><span>${progress}%</span>
+                    </div>
+                </div>
+
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="switchTab(this,'tInfo')">ℹ️ Данные</button>
+                    <button class="tab-btn" onclick="switchTab(this,'tHW')">📝 ДЗ (${studentPending.length} на проверке)</button>
+                </div>
+
+                <div class="tab-panel active" id="tInfo">
+                    <div class="stat-row"><span>Телефон</span><strong>${esc(s?.phone||'—')}</strong></div>
+                    <div class="stat-row"><span>Email</span><strong>${esc(s?.email||'—')}</strong></div>
+                    <div class="stat-row"><span>Дата регистрации</span><strong>${s?.created_at ? new Date(s.created_at).toLocaleDateString('ru-RU') : '—'}</strong></div>
+                    <div class="stat-row"><span>ДЗ ожидает проверки</span><strong style="color:${studentPending.length>0?'#F59E0B':'#10B981'}">${studentPending.length}</strong></div>
+                </div>
+
+                <div class="tab-panel" id="tHW">
+                    ${studentPending.length
+                        ? studentPending.map(sub => `
+                            <div class="hw-item">
+                                <div>
+                                    <div style="font-weight:600;">ДЗ #${sub.homework_id}</div>
+                                    <div style="font-size:12px;color:var(--muted);">${sub.submitted_at ? new Date(sub.submitted_at).toLocaleString('ru-RU') : '—'}</div>
+                                    <div style="font-size:13px;margin-top:6px;color:var(--text);">${esc((sub.content||'').slice(0,80))}${(sub.content||'').length > 80 ? '...' : ''}</div>
+                                </div>
+                                <a href="homeworks.html?id=${sub.id}" class="btn btn-accent btn-sm" style="text-decoration:none;flex-shrink:0;">Проверить</a>
+                            </div>`).join('')
+                        : '<div class="empty-msg">🎉 Все работы проверены!</div>'
+                    }
+                </div>
+            `;
+        } catch(e) {
+            document.getElementById('profileBody').innerHTML = '<div class="empty-msg" style="color:var(--danger);">Ошибка загрузки данных</div>';
+        }
+    }
+
+    function switchTab(btn, tabId) {
+        document.querySelectorAll('#profileBody .tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('#profileBody .tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(tabId).classList.add('active');
+    }
+
+    load();
+</script>
+<script src="../auth-utils.js"></script>
+</body>
+</html>

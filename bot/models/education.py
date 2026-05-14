@@ -65,6 +65,7 @@ class StudentGroup(Base):
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True)
     status: Mapped[str] = mapped_column(String(50), default="active", index=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), init=False)
     __table_args__ = (UniqueConstraint("student_id", "group_id"),)
     student: Mapped["Student"] = relationship(back_populates="student_groups", init=False)
     group: Mapped["Group"] = relationship(back_populates="student_groups", init=False)
@@ -79,6 +80,7 @@ class Lesson(Base):
     topic: Mapped[str] = mapped_column(String(255), default="Занятие по расписанию")
     lesson_time: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, default=None)
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    homework: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True, default=None)
     
     group: Mapped["Group"] = relationship(back_populates="lessons", init=False)
     attendance: Mapped[List["Attendance"]] = relationship(back_populates="lesson", default_factory=list)
@@ -150,8 +152,8 @@ class StudentProgress(Base):
     __tablename__ = "student_progress"
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
-    course_id: Mapped[Optional[int]] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True)
-    lesson_id: Mapped[Optional[int]] = mapped_column(ForeignKey("lessons.id", ondelete="SET NULL"), nullable=True, index=True)
+    course_id: Mapped[Optional[int]] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True, default=None)
+    lesson_id: Mapped[Optional[int]] = mapped_column(ForeignKey("lessons.id", ondelete="SET NULL"), nullable=True, index=True, default=None)
     grade: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
     comment: Mapped[Optional[str]] = mapped_column(String(500), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), init=False)
@@ -165,6 +167,7 @@ class HomeworkSubmission(Base):
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
     lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id", ondelete="CASCADE"), index=True)
     file_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, default=None)
+    file_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, default=None)
     text: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True, default=None)
     status: Mapped[str] = mapped_column(String(50), default="pending", index=True)  # pending, accepted, rejected
     grade: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)

@@ -94,6 +94,14 @@ async def approve_application(callback: types.CallbackQuery, session: AsyncSessi
         )
         await callback.answer(f"✅ Ученик {user.full_name} активирован!\nКод: {student.student_code}", show_alert=True)
         
+        # Уведомляем канал
+        await notifier.notify_channel_action(
+            f"✅ *ЗАЯВКА ОДОБРЕНА*\n\n"
+            f"Ученик: {user.full_name}\n"
+            f"ID студента: `{student.student_code}`\n\n"
+            f"Активация проведена администратором."
+        )
+        
     except Exception as e:
         logger.error(f"Approval failed: {e}")
         await callback.answer(f"❌ Ошибка при одобрении: {e}", show_alert=True)
@@ -110,6 +118,13 @@ async def reject_application(callback: types.CallbackQuery, session: AsyncSessio
         user.is_active = False
         await session.commit()
         await callback.answer(f"❌ Заявка {user.full_name} отклонена", show_alert=True)
+        
+        notifier = NotificationService(callback.bot)
+        await notifier.notify_channel_action(
+            f"❌ *ЗАЯВКА ОТКЛОНЕНА*\n\n"
+            f"Ученик: {user.full_name}\n"
+            f"Заявка была отклонена администратором."
+        )
     
     await list_pending_applications(callback, session)
 

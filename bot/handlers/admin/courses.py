@@ -24,9 +24,9 @@ async def list_courses(callback: types.CallbackQuery, session: AsyncSession):
     else:
         for c in courses:
             text += f"\n🔹 *{c.name}* — {c.price_group or 'Не указана'} сум"
+            text += f"\n🔹 *{c.name}* — {c.price_group or 'Не указана'} сум"
             buttons.append([
-                types.InlineKeyboardButton(text=f"✏️ Цена", callback_data=f"course_edit_price:{c.id}"),
-                types.InlineKeyboardButton(text=f"❌ Удалить", callback_data=f"course_delete:{c.id}")
+                types.InlineKeyboardButton(text=f"⚙️ Управление: {c.name}", callback_data=f"course_manage:{c.id}")
             ])
 
     buttons.append([types.InlineKeyboardButton(text="➕ Добавить новый курс", callback_data="course_create:start")])
@@ -117,43 +117,90 @@ async def delete_course(callback: types.CallbackQuery, session: AsyncSession):
     
     await list_courses(callback, session)
 
-@router.callback_query(F.data.startswith("course_edit_price:"))
-async def edit_course_price_start(callback: types.CallbackQuery, state: FSMContext, session: AsyncSession):
+@router.callback_query(F.data.startswith("course_manage:"))
+async def manage_course_card(callback: types.CallbackQuery, session: AsyncSession):
     course_id = int(callback.data.split(":")[1])
     stmt = select(Course).where(Course.id == course_id)
     course = (await session.execute(stmt)).scalar_one_or_none()
     
     if not course:
-        await callback.answer("Курс не найден", show_alert=True)
-        return
+        return await callback.answer("Курс не найден", show_alert=True)
         
-    await state.update_data(edit_course_id=course_id)
+    text = (
+        f"📖 *Управление курсом*\n\n"
+        f"Название: `{course.name}`\n"
+        f"Описание: _{course.description or 'Нет описания'}_\n"
+        f"Цена (в группе): `{course.price_group}` сум\n"
+        f"Цена (инд.): `{course.price_individual or 0}` сум\n"
+        f"Срок: `{course.duration_months}` мес.\n\n"
+        f"Выберите что хотите изменить:"
+    )
+    
+    kb = types.InlineKeyboardMarkup(inline_keyboard=[
+        [
+            types.InlineKeyboardButton(text="✏️ Имя", callback_data=f"course_edit:name:{course.id}"),
+            types.InlineKeyboardButton(text="✏️ Описание", callback_data=f"course_edit:desc:{course.id}")
+        ],
+        [
+            types.InlineKeyboardButton(text="✏️ Цена (Группа)", callback_data=f"course_edit:price_g:{course.id}"),
+            types.InlineKeyboardButton(text="✏️ Цена (Инд)", callback_data=f"course_edit:price_i:{course.id}")
+        ],
+        [types.InlineKeyboardButton(text="❌ Удалить курс", callback_data=f"course_delete:{course.id}")],
+        [types.InlineKeyboardButton(text="⬅️ К списку курсов", callback_data="admin:courses")]
+    ])
+    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=kb)
+
+@router.callback_query(F.data.startswith("course_edit:"))
+async def edit_course_field_start(callback: types.CallbackQuery, state: FSMContext):
+    parts = callback.data.split(":")
+    field = parts[1]
+    course_id = int(parts[2])
+    
+    await state.update_data(edit_course_id=course_id, edit_course_field=field)
+    
+    field_names = {
+        "name": "название курса",
+        "desc": "описание курса",
+        "price_g": "стоимость группового занятия",
+        "price_i": "стоимость индивидуального занятия"
+    }
+    
     await callback.message.edit_text(
-        f"✏️ *Изменение цены*\n\nКурс: `{course.name}`\nТекущая цена: `{course.price_group}` сум\n\nВведите новую цену цифрами:",
+        f"✏️ *Изменение курса*\n\nВведите новое {field_names[field]}:",
         parse_mode="Markdown",
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
-            [types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin:courses")]
+            [types.InlineKeyboardButton(text="❌ Отмена", callback_data=f"course_manage:{course_id}")]
         ])
     )
     await state.set_state(AdminCourseCreateStates.waiting_for_new_price)
     await callback.answer()
 
 @router.message(StateFilter(AdminCourseCreateStates.waiting_for_new_price))
-async def edit_course_price_finish(message: types.Message, state: FSMContext, session: AsyncSession):
-    if not message.text.isdigit():
-        await message.answer("❌ Пожалуйста, введите корректное число (только цифры).")
-        return
-        
+async def edit_course_field_finish(message: types.Message, state: FSMContext, session: AsyncSession):
     data = await state.get_data()
     course_id = data.get("edit_course_id")
-    new_price = int(message.text)
+    field = data.get("edit_course_field")
     
     stmt = select(Course).where(Course.id == course_id)
     course = (await session.execute(stmt)).scalar_one_or_none()
     
-    if course:
-        course.price_group = new_price
-        await session.commit()
-        await message.answer(f"✅ Цена курса *{course.name}* успешно изменена на `{new_price}` сум!", parse_mode="Markdown", reply_markup=get_admin_main_kb())
+    if not course:
+        await state.clear()
+        return
+
+    val = message.text
+    if field in ["price_g", "price_i"]:
+        if not val.isdigit():
+            return await message.answer("❌ Введите число.")
+        if field == "price_g":
+            course.price_group = int(val)
+        else:
+            course.price_individual = int(val)
+    elif field == "name":
+        course.name = val
+    elif field == "desc":
+        course.description = val
         
+    await session.commit()
+    await message.answer(f"✅ Данные курса *{course.name}* обновлены!", parse_mode="Markdown", reply_markup=get_admin_main_kb())
     await state.clear()

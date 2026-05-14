@@ -1,0 +1,266 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Платежи | TIL USER Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../app.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<aside class="sidebar">
+    <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>ADMIN CRM</small></div>
+    <nav class="sidebar-nav">
+        <div class="section-label">Главное</div>
+        <a href="dashboard.html"><span class="icon">📊</span> Дашборд</a>
+        <a href="leads.html"><span class="icon">🎯</span> Заявки (Kanban)</a>
+        <div class="section-label">Управление</div>
+        <a href="students.html"><span class="icon">👨‍🎓</span> Студенты</a>
+        <a href="teachers.html"><span class="icon">👩‍🏫</span> Преподаватели</a>
+        <a href="groups.html"><span class="icon">👥</span> Группы</a>
+        <a href="courses.html"><span class="icon">📚</span> Курсы</a>
+        <div class="section-label">Финансы</div>
+        <a href="payments.html" class="active"><span class="icon">💳</span> Платежи</a>
+        <a href="reports.html"><span class="icon">📈</span> Отчёты</a>
+    </nav>
+    <div class="sidebar-bottom">
+        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+    </div>
+</aside>
+
+<div class="main-content">
+    <div class="top-bar">
+        <h1>💳 Финансы и платежи</h1>
+        <div class="top-bar-right">
+            <button class="btn btn-accent" id="addPaymentBtn">+ Добавить платёж</button>
+            <div class="admin-badge">👑 ADMIN</div>
+        </div>
+    </div>
+
+    <div class="page-content">
+        <!-- Revenue Summary -->
+        <div class="kpi-grid" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="kpi-card">
+                <div class="kpi-icon green">💰</div>
+                <div class="kpi-info">
+                    <h3>Доход в этом месяце</h3>
+                    <div class="kpi-value" id="monthRevenue">—</div>
+                    <div class="kpi-trend up">UZS</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon blue">💹</div>
+                <div class="kpi-info">
+                    <h3>Всего получено</h3>
+                    <div class="kpi-value" id="totalRevenue">—</div>
+                    <div class="kpi-trend up">UZS за всё время</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon yellow">📊</div>
+                <div class="kpi-info">
+                    <h3>Транзакций</h3>
+                    <div class="kpi-value" id="totalTx">—</div>
+                    <div class="kpi-trend">Всего платежей</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payments Table -->
+        <div class="panel">
+            <div class="panel-header">
+                <h2>История платежей</h2>
+                <input type="text" class="search-input" id="searchPayment" placeholder="Поиск..." style="width:220px; margin:0;">
+            </div>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Студент</th>
+                        <th>Сумма</th>
+                        <th>Метод</th>
+                        <th>Описание</th>
+                        <th>Статус</th>
+                        <th>Дата</th>
+                    </tr>
+                </thead>
+                <tbody id="paymentsTable">
+                    <tr><td colspan="6" style="text-align:center;padding:30px;color:var(--muted)">Загрузка...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add Payment Modal -->
+<div id="payModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); backdrop-filter:blur(5px); z-index:999; align-items:center; justify-content:center;">
+    <div style="background:white; border-radius:24px; padding:36px; width:90%; max-width:480px; box-shadow:0 25px 60px rgba(0,0,0,0.15);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+            <h2>+ Новый платёж</h2>
+            <button onclick="closePayModal()" style="font-size:24px; background:none; border:none; cursor:pointer; color:#666;">×</button>
+        </div>
+        <form id="payForm">
+            <div style="margin-bottom:16px;">
+                <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Студент</label>
+                <select id="payStudentId" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;" required>
+                    <option value="">— Выберите студента —</option>
+                </select>
+            </div>
+            <div style="margin-bottom:16px;">
+                <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Курс (необязательно)</label>
+                <select id="payCourseId" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;">
+                    <option value="">— Без привязки к курсу —</option>
+                </select>
+            </div>
+            <div style="margin-bottom:16px;">
+                <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Сумма (UZS)</label>
+                <input type="number" id="payAmount" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;" placeholder="400000" required>
+            </div>
+            <div style="margin-bottom:16px;">
+                <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Метод оплаты</label>
+                <select id="payMethod" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;">
+                    <option value="cash">💵 Наличные</option>
+                    <option value="card">💳 Карта</option>
+                    <option value="transfer">🏦 Перевод</option>
+                    <option value="online">🌐 Онлайн</option>
+                </select>
+            </div>
+            <div style="margin-bottom:20px;">
+                <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Описание (необязательно)</label>
+                <input type="text" id="payDesc" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;" placeholder="Оплата за октябрь, Японский N4">
+            </div>
+            <div id="payError" style="display:none;color:var(--danger);font-size:13px;margin-bottom:12px;"></div>
+            <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">Записать платёж</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    const API = '';
+    const token = localStorage.getItem('access_token');
+    if (!token) window.location.href = '../login.html';
+    document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../login.html'; };
+    function authHeaders() { return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }; }
+
+    let allPayments = [];
+
+    const METHODS = { cash: '💵 Наличные', card: '💳 Карта', transfer: '🏦 Перевод', online: '🌐 Онлайн' };
+
+    function renderTable(payments) {
+        document.getElementById('totalTx').textContent = payments.length;
+        const tbody = document.getElementById('paymentsTable');
+        if (!payments.length) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--muted)">Платежей пока нет</td></tr>';
+            return;
+        }
+        let total = 0, monthTotal = 0;
+        const thisMonth = new Date().getMonth();
+        payments.forEach(p => {
+            total += p.amount;
+            if (p.created_at && new Date(p.created_at).getMonth() === thisMonth) monthTotal += p.amount;
+        });
+        document.getElementById('totalRevenue').textContent = total.toLocaleString();
+        document.getElementById('monthRevenue').textContent = monthTotal.toLocaleString();
+
+        tbody.innerHTML = payments.map(p => {
+            const date = p.created_at ? new Date(p.created_at).toLocaleDateString('ru-RU') : '—';
+            const name = p.student ? p.student.name : `ID ${p.student_id}`;
+            return `
+                <tr>
+                    <td><strong>${name}</strong></td>
+                    <td><strong>${p.amount.toLocaleString()} ${p.currency}</strong></td>
+                    <td>${METHODS[p.method] || p.method}</td>
+                    <td>${p.description || '—'}</td>
+                    <td><span class="badge-status ${p.status}">${p.status === 'paid' ? '✅ Оплачено' : p.status}</span></td>
+                    <td>${date}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    document.getElementById('searchPayment').addEventListener('input', (e) => {
+        const q = e.target.value.toLowerCase();
+        renderTable(allPayments.filter(p =>
+            (p.student?.name || '').toLowerCase().includes(q) ||
+            (p.description || '').toLowerCase().includes(q)
+        ));
+    });
+
+    document.getElementById('addPaymentBtn').onclick = () => {
+        document.getElementById('payModal').style.display = 'flex';
+    };
+    function closePayModal() {
+        document.getElementById('payModal').style.display = 'none';
+        document.getElementById('payForm').reset();
+    }
+
+    // Populate students & courses selects
+    async function populateSelects() {
+        try {
+            const [studentsRes, coursesRes] = await Promise.all([
+                fetch(`${API}/api/admin/students`, { headers: authHeaders() }),
+                fetch(`${API}/api/courses`, { headers: authHeaders() })
+            ]);
+            if (studentsRes.ok) {
+                const students = await studentsRes.json();
+                const sel = document.getElementById('payStudentId');
+                students.forEach(s => {
+                    const o = document.createElement('option');
+                    o.value = s.id;
+                    o.textContent = `${s.name} (${s.email})`;
+                    sel.appendChild(o);
+                });
+            }
+            if (coursesRes.ok) {
+                const courses = await coursesRes.json();
+                const sel = document.getElementById('payCourseId');
+                courses.forEach(c => {
+                    const o = document.createElement('option');
+                    o.value = c.id;
+                    o.textContent = c.title;
+                    sel.appendChild(o);
+                });
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    document.getElementById('payForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const errEl = document.getElementById('payError');
+        errEl.style.display = 'none';
+        const courseVal = document.getElementById('payCourseId').value;
+        try {
+            const res = await fetch(`${API}/api/payments`, {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify({
+                    student_id: parseInt(document.getElementById('payStudentId').value),
+                    course_id: courseVal ? parseInt(courseVal) : null,
+                    amount: parseFloat(document.getElementById('payAmount').value),
+                    method: document.getElementById('payMethod').value,
+                    description: document.getElementById('payDesc').value || null,
+                    currency: 'UZS'
+                })
+            });
+            if (res.ok) { closePayModal(); loadPayments(); }
+            else { const d = await res.json(); errEl.textContent = d.detail || 'Ошибка'; errEl.style.display = 'block'; }
+        } catch(e) { errEl.textContent = 'Ошибка соединения'; errEl.style.display = 'block'; }
+    };
+
+    async function loadPayments() {
+        try {
+            const res = await fetch(`${API}/api/payments`, { headers: authHeaders() });
+            if (!res.ok) return;
+            allPayments = await res.json();
+            renderTable(allPayments);
+        } catch(e) { console.error(e); }
+    }
+
+    populateSelects();
+    loadPayments();
+</script>
+<script src="../auth-utils.js"></script>
+</body>
+</html>

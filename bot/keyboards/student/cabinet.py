@@ -5,8 +5,8 @@ def get_cabinet_inline_kb() -> InlineKeyboardMarkup:
     """Dashboard contextual buttons."""
     buttons = [
         [InlineKeyboardButton(text="📖 Подробнее о следующем уроке", callback_data="st_next_lesson_info")],
-        [InlineKeyboardButton(text="📈 Детальный прогресс", callback_data="st_progress_details")],
         [InlineKeyboardButton(text="💎 Мои достижения", callback_data="st_achievements")],
+        [InlineKeyboardButton(text="🏆 Топ-5 Учеников", callback_data="st_leaderboard")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 

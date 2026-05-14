@@ -8,7 +8,7 @@ from bot.keyboards.teacher.schedule import get_week_navigation_kb, get_lessons_l
 router = Router(name="teacher_schedule")
 
 @router.message(F.text == "📅 Моё расписание")
-@router.callback_query(F.data == "teacher_schedule_today")
+@router.callback_query(F.data.in_(["teacher_schedule_today", "teacher:schedule"]))
 async def show_schedule_today(event: types.TelegramObject, session: AsyncSession, db_user: User):
     target_date = date.today()
     await show_schedule_for_date(event, session, db_user, target_date)

@@ -6,10 +6,13 @@ from bot.config import config
 engine = create_async_engine(
     config.DATABASE_URL,
     echo=False,  # Set to True for debugging SQL queries
-    future=True
+    future=True,
+    connect_args={"timeout": 15}
 )
 
 # Create async session factory (Renamed for consistency)
+
+
 async_session_factory = async_sessionmaker(
     engine, 
     class_=AsyncSession, 

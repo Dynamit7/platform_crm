@@ -1,11 +1,15 @@
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from bot.payments.models import Finance
 from bot.payments.yookassa import YookassaGateway
 from bot.notifications.service import NotificationService
 from bot.notifications.types import NotificationType
+import aiohttp
+from bot.config import config
+
 
 log = structlog.get_logger()
 
@@ -54,7 +58,7 @@ class PaymentService:
         
         log.info("Processing payment webhook", payment_id=payment_id, status=status)
 
-        stmt = select(Finance).where(Finance.yookassa_id == payment_id)
+        stmt = select(Finance).where(Finance.yookassa_id == payment_id).options(selectinload(Finance.user))
         result = await self.session.execute(stmt)
         payment_record = result.scalar_one_or_none()
 
@@ -80,5 +84,20 @@ class PaymentService:
                     notification_type=NotificationType.SYSTEM_ALERT, # Use a generic one or add PAYMENT_SUCCESS
                     text=f"✅ *Оплата получена!*\nСумма: {payment_record.amount} RUB\nСпасибо, что вы с нами!"
                 )
+                
+            # Sync with CRM
+            try:
+                async with aiohttp.ClientSession() as http_session:
+                    payload = {
+                        "telegram_id": payment_record.user.telegram_id,
+                        "amount": float(payment_record.amount),
+                        "currency": "RUB",
+                        "method": "yookassa",
+                        "description": payment_record.description or "Автоматическая оплата ЮKassa",
+                        "course_id": student_id  # Just passing it if needed, we might not have course_id in the hook.
+                    }
+                    await http_session.post(f"{config.API_URL}/sync-payment", json=payload, timeout=3)
+            except Exception as e:
+                log.error("Failed to sync webhook payment to CRM", error=str(e))
         
         await self.session.commit()

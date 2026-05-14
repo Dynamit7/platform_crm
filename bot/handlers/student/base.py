@@ -4,8 +4,8 @@ from bot.models.user import User, UserRole
 from bot.keyboards.student.main import get_student_main_menu
 
 from .cabinet import router as cabinet_router
-from .lessons import router as lessons_router
 from .homework import router as homework_router
+
 from .progress import router as progress_router
 from .materials import router as materials_router
 from .payments import router as payments_router
@@ -36,7 +36,6 @@ async def cmd_start(message: types.Message, db_user: User):
 student_main_router = Router(name="student_main")
 student_main_router.include_router(router)
 student_main_router.include_router(cabinet_router)
-student_main_router.include_router(lessons_router)
 student_main_router.include_router(homework_router)
 student_main_router.include_router(progress_router)
 student_main_router.include_router(materials_router)

@@ -131,7 +131,17 @@ async def change_user_role(callback: types.CallbackQuery, session: AsyncSession)
         # Используем существующий надежный сервис для всех проверок и создания ученика
         from bot.services.registration_service import RegistrationService
         reg_service = RegistrationService(session)
-        await reg_service.approve_application(user_id)
+        student = await reg_service.approve_application(user_id)
+        # Уведомляем ученика
+        from bot.notifications.service import NotificationService
+        from aiogram import Bot
+        notifier = NotificationService(callback.bot)
+        await notifier.notify_user_status_change(
+            user.telegram_id, 
+            f"🎉 *Ваш аккаунт получил статус Ученика!*\n\n"
+            f"🆔 Ваш код: `{student.student_code}`\n\n"
+            f"Теперь вам доступен Личный Кабинет ученика. Нажмите /cabinet или перезапустите бота."
+        )
     elif new_role == "teacher":
         from sqlalchemy import select
         from bot.models.user import Teacher
@@ -141,10 +151,17 @@ async def change_user_role(callback: types.CallbackQuery, session: AsyncSession)
         if not teacher_exists:
             session.add(Teacher(user_id=user.id, is_active=True))
         await session.commit()
+        # Уведомляем учителя
+        from bot.notifications.service import NotificationService
+        notifier = NotificationService(callback.bot)
+        await notifier.notify_user_status_change(
+            user.telegram_id, 
+            f"🎓 *Ваш аккаунт получил статус Преподавателя!*\n\n"
+            f"Теперь вам доступна Панель Учителя. Нажмите /cabinet чтобы войти."
+        )
 
     await callback.answer(f"✅ Успешно назначен: {new_role.upper()}", show_alert=True)
     # Перерисовываем карточку
-    callback.data = f"user_manage:{user_id}"
     await manage_user_profile(callback, session)
 
 @router.callback_query(F.data.startswith("user_toggle:"))
@@ -157,5 +174,4 @@ async def toggle_user_status(callback: types.CallbackQuery, session: AsyncSessio
         await session.commit()
         await callback.answer("✅ Статус аккаунта изменен")
     
-    callback.data = f"user_manage:{user_id}"
     await manage_user_profile(callback, session)

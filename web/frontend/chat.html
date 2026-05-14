@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Чат | TIL USER</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="app.css">
+    <style>
+        body { overflow: hidden; }
+        .chat-wrap { display: flex; height: 100vh; }
+        .chat-sidebar { width: 300px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--surface); flex-shrink: 0; }
+        .chat-sidebar-hdr { padding: 20px; border-bottom: 1px solid var(--border); font-weight: 700; font-size: 16px; }
+        .contact-list { flex: 1; overflow-y: auto; }
+        .contact-item { display: flex; align-items: center; gap: 12px; padding: 14px 20px; cursor: pointer; border-bottom: 1px solid var(--border); transition: 0.2s; }
+        .contact-item:hover, .contact-item.active { background: rgba(4,30,66,0.05); }
+        .c-av { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .c-info { flex: 1; min-width: 0; }
+        .c-name { font-weight: 600; font-size: 14px; }
+        .c-last { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .c-badge { background: var(--danger); color: white; border-radius: 50%; min-width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+        .chat-main { flex: 1; display: flex; flex-direction: column; }
+        .chat-hdr { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; gap: 14px; }
+        .chat-hdr h3 { font-size: 15px; margin: 0 0 2px; }
+        .chat-hdr p { font-size: 12px; color: var(--muted); margin: 0; }
+        .msgs { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; background: var(--bg-color); }
+        .msg-row { display: flex; gap: 8px; }
+        .msg-row.mine { flex-direction: row-reverse; }
+        .m-av { width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: white; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; align-self: flex-end; flex-shrink: 0; }
+        .bubble { max-width: 60%; padding: 9px 13px; border-radius: 16px; font-size: 14px; line-height: 1.5; word-break: break-word; }
+        .msg-row:not(.mine) .bubble { background: white; border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+        .msg-row.mine .bubble { background: var(--primary); color: white; border-bottom-right-radius: 4px; }
+        .m-time { font-size: 10px; opacity: 0.55; margin-top: 3px; }
+        .msg-row.mine .m-time { text-align: right; }
+        .chat-input-row { background: var(--surface); border-top: 1px solid var(--border); padding: 14px 20px; display: flex; gap: 10px; align-items: center; }
+        .chat-input { flex: 1; padding: 11px 16px; border: 1.5px solid var(--border); border-radius: 24px; font-size: 14px; font-family: inherit; outline: none; transition: 0.2s; }
+        .chat-input:focus { border-color: var(--primary); }
+        .send-btn { width: 42px; height: 42px; border-radius: 50%; background: var(--primary); color: white; border: none; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+        .send-btn:hover { opacity: 0.85; transform: scale(1.05); }
+        .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); gap: 12px; }
+    </style>
+</head>
+<body>
+<div class="dashboard-layout">
+    <aside class="sidebar">
+        <div class="sidebar-logo">TIL <span>USER</span></div>
+        <nav class="sidebar-nav">
+            <a href="dashboard.html"><span class="icon">📊</span> Дашборд</a>
+            <a href="courses.html"><span class="icon">📚</span> Мои курсы</a>
+            <a href="homeworks.html"><span class="icon">📝</span> Домашние задания <span class="chat-badge" style="display:none;"></span></a>
+            <a href="chat.html" class="active"><span class="icon">💬</span> Чат <span class="chat-badge" style="display:none;"></span></a>
+            <a href="achievements.html"><span class="icon">🏆</span> Достижения</a>
+        </nav>
+        <div class="sidebar-bottom">
+            <a href="login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+        </div>
+    </aside>
+
+    <div class="main-content" style="padding:0;display:flex;flex-direction:column;">
+        <div class="chat-wrap">
+            <div class="chat-sidebar">
+                <div class="chat-sidebar-hdr">💬 Сообщения</div>
+                <div class="contact-list" id="contactList">
+                    <div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">Загрузка...</div>
+                </div>
+            </div>
+            <div class="chat-main" id="chatMain">
+                <div class="empty-state">
+                    <div style="font-size:56px;">💬</div>
+                    <h3>Выберите собеседника</h3>
+                    <p>Выберите контакт слева для начала переписки</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="auth-utils.js"></script>
+<script>
+    // API: относительный URL — работает на любом хосте
+    const API = '';
+    // WebSocket: автоопределяем ws:// или wss:// по текущему протоколу
+    const WS_BASE = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host;
+    const token = localStorage.getItem('access_token');
+    const myId  = parseInt(localStorage.getItem('user_id'));
+    const myName = localStorage.getItem('user_name') || 'Я';
+    if (!token || !myId) window.location.href = 'login.html';
+    document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = 'login.html'; };
+
+    let ws = null, currentContact = null;
+
+    function connectWS() {
+        // Передаём токен как query-параметр для аутентификации
+        ws = new WebSocket(`${WS_BASE}/ws/chat/${myId}?token=${encodeURIComponent(token)}`);
+        ws.onmessage = e => {
+            const msg = JSON.parse(e.data);
+            if (currentContact && (msg.sender_id === currentContact || msg.receiver_id === currentContact)) appendMsg(msg);
+            else loadContacts();
+        };
+        ws.onclose = () => setTimeout(connectWS, 3000);
+    }
+
+    async function loadContacts() {
+        try {
+            const res = await fetch(`${API}/api/messages/contacts/${myId}`, { headers: { Authorization: `Bearer ${token}` } });
+            if (!res.ok) return;
+            const contacts = await res.json();
+            const el = document.getElementById('contactList');
+            if (!contacts.length) { el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">Нет диалогов</div>'; return; }
+            el.innerHTML = contacts.map(c => `
+                <div class="contact-item ${currentContact === c.user_id ? 'active' : ''}" onclick="openChat(${c.user_id},'${esc(c.name)}','${c.role}')">
+                    <div class="c-av">${c.name[0].toUpperCase()}</div>
+                    <div class="c-info"><div class="c-name">${esc(c.name)}</div><div class="c-last">${esc(c.last_message)}</div></div>
+                    ${c.unread > 0 ? `<div class="c-badge">${c.unread}</div>` : ''}
+                </div>`).join('');
+        } catch(e) {}
+    }
+
+    async function openChat(userId, name, role) {
+        currentContact = userId;
+        loadContacts();
+        const roleL = role === 'teacher' ? '👩‍🏫 Преподаватель' : role === 'admin' ? '👑 Администратор' : '👨‍🎓 Студент';
+        document.getElementById('chatMain').innerHTML = `
+            <div class="chat-hdr">
+                <div class="c-av">${name[0].toUpperCase()}</div>
+                <div><h3>${esc(name)}</h3><p>${roleL}</p></div>
+            </div>
+            <div class="msgs" id="msgArea"></div>
+            <div class="chat-input-row">
+                <input class="chat-input" id="msgInput" placeholder="Написать сообщение..." onkeydown="if(event.key==='Enter')sendMsg()">
+                <button class="send-btn" onclick="sendMsg()">➤</button>
+            </div>`;
+        try {
+            const res = await fetch(`${API}/api/messages/${myId}?with_user=${userId}`, { headers: { Authorization: `Bearer ${token}` } });
+            if (res.ok) { const msgs = await res.json(); msgs.forEach(m => appendMsg(m, false)); scrollBot(); }
+        } catch(e) {}
+    }
+
+    function appendMsg(msg, scroll = true) {
+        const area = document.getElementById('msgArea');
+        if (!area) return;
+        const isMine = msg.sender_id === myId;
+        const init = (isMine ? myName : msg.sender_name || '?')[0].toUpperCase();
+        const d = document.createElement('div');
+        d.className = `msg-row ${isMine ? 'mine' : ''}`;
+        d.innerHTML = `<div class="m-av">${init}</div><div><div class="bubble">${esc(msg.content)}</div><div class="m-time">${(msg.created_at||'').slice(11,16)}</div></div>`;
+        area.appendChild(d);
+        if (scroll) scrollBot();
+    }
+
+    function scrollBot() { const a = document.getElementById('msgArea'); if(a) a.scrollTop = a.scrollHeight; }
+    function sendMsg() {
+        const inp = document.getElementById('msgInput');
+        if (!inp || !ws || ws.readyState !== 1 || !currentContact) return;
+        const content = inp.value.trim();
+        if (!content) return;
+        ws.send(JSON.stringify({ receiver_id: currentContact, content }));
+        inp.value = '';
+    }
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    async function initChat() {
+        connectWS();
+        await loadContacts();
+        
+        const chatWith = localStorage.getItem('chat_with');
+        if (chatWith) {
+            localStorage.removeItem('chat_with');
+            const userId = parseInt(chatWith);
+            const contact = Array.from(document.querySelectorAll('.contact-item'))
+                                 .find(el => el.onclick.toString().includes(userId));
+            if (contact) {
+                contact.click();
+            } else {
+                // If not in contacts, fetch minimal user info and open
+                try {
+                    const res = await fetch(`${API}/api/users/minimal/${userId}`, { headers: { Authorization: `Bearer ${token}` } });
+                    if (res.ok) {
+                        const u = await res.json();
+                        openChat(u.id, u.name, u.role);
+                    }
+                } catch(e) {}
+            }
+        }
+    }
+
+    initChat();
+    setInterval(loadContacts, 30000);
+</script>
+</body>
+</html>

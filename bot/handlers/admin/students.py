@@ -66,8 +66,12 @@ async def list_all_students(callback: types.CallbackQuery, session: AsyncSession
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=builder.as_markup())
 
 @router.callback_query(F.data.startswith("student_view:"))
-async def view_student_details(callback: types.CallbackQuery, session: AsyncSession):
-    user_id = int(callback.data.split(":")[1])
+async def view_student_details(callback: types.CallbackQuery, session: AsyncSession, override_user_id: int = None):
+    if override_user_id is not None:
+        user_id = override_user_id
+    else:
+        user_id = int(callback.data.split(":")[1])
+        
     stmt = select(User).where(User.id == user_id).options(selectinload(User.student))
     user = (await session.execute(stmt)).scalar_one()
     student = user.student
@@ -110,6 +114,13 @@ async def view_student_details(callback: types.CallbackQuery, session: AsyncSess
         
     builder.row(types.InlineKeyboardButton(text="⬅️ К списку учеников", callback_data="admin:students:1"))
     builder.row(types.InlineKeyboardButton(text="🏠 Главное меню", callback_data="admin:main"))
+    
+    # Кнопка умного перевода (показываем, если есть активные группы)
+    from bot.models.education import StudentGroup
+    stmt_sg = select(StudentGroup).where(StudentGroup.student_id == student.id, StudentGroup.status == "active")
+    active_sgs = (await session.execute(stmt_sg)).scalars().all()
+    if active_sgs:
+        builder.row(types.InlineKeyboardButton(text="🔁 Умный перевод в др. группу", callback_data=f"st_transfer_start:{student.id}"))
     
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=builder.as_markup())
 
@@ -168,20 +179,34 @@ async def select_group_for_student(callback: types.CallbackQuery, session: Async
         mark = "✅" if avail > 0 else "❌"
         builder.row(types.InlineKeyboardButton(
             text=f"{mark} {g.name} ({course_name}) | Свободно: {avail}",
-            callback_data=f"st_gr_add:{student_id}:{g.id}" if avail > 0 else "dummy"
+            callback_data=f"st_gr_prep:{student_id}:{g.id}" if avail > 0 else "dummy"
         ))
     
     builder.row(types.InlineKeyboardButton(text="⬅️ Отмена", callback_data="admin:students:1"))
     
     await callback.message.edit_text("🏫 *Выберите группу для записи ученика:*", parse_mode="Markdown", reply_markup=builder.as_markup())
 
+@router.callback_query(F.data.startswith("st_gr_prep:"))
+async def prepare_group_assignment(callback: types.CallbackQuery):
+    parts = callback.data.split(":")
+    student_id = int(parts[1])
+    group_id = int(parts[2])
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(types.InlineKeyboardButton(text="✅ Основной состав", callback_data=f"st_gr_add:{student_id}:{group_id}:active"))
+    builder.row(types.InlineKeyboardButton(text="⏳ На пробный урок", callback_data=f"st_gr_add:{student_id}:{group_id}:trial"))
+    builder.row(types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"student_enroll_group:{student_id}"))
+    
+    await callback.message.edit_text("Выберите формат зачисления:", parse_mode="Markdown", reply_markup=builder.as_markup())
+
 @router.callback_query(F.data.startswith("st_gr_add:"))
 async def execute_group_assignment(callback: types.CallbackQuery, session: AsyncSession):
     parts = callback.data.split(":")
     student_id = int(parts[1])
     group_id = int(parts[2])
+    status_type = parts[3] if len(parts) > 3 else "active"
     
-    from bot.models.education import StudentGroup, Group
+    from bot.models.education import StudentGroup, Group, StudentProgress
     from bot.models.user import Student, User
     
     # 1. Проверяем, может он уже там
@@ -189,11 +214,14 @@ async def execute_group_assignment(callback: types.CallbackQuery, session: Async
     exists = (await session.execute(stmt_check)).scalar_one_or_none()
     
     if exists:
-        await callback.answer("Ученик уже состоит в этой группе!", show_alert=True)
-        return
+        if exists.status != status_type:
+            exists.status = status_type
+            await session.commit()
+            return await callback.answer(f"Статус изменен на {status_type}", show_alert=True)
+        return await callback.answer("Ученик уже состоит в этой группе!", show_alert=True)
         
     # 2. Создаем запись
-    sg = StudentGroup(student_id=student_id, group_id=group_id, status="active")
+    sg = StudentGroup(student_id=student_id, group_id=group_id, status=status_type)
     session.add(sg)
     
     # 3. Обновляем счетчик
@@ -201,12 +229,88 @@ async def execute_group_assignment(callback: types.CallbackQuery, session: Async
     group = (await session.execute(stmt_gr)).scalar_one()
     group.current_students += 1
     
+    # 4. Создаем трекер прогресса, чтобы студент видел предмет
+    stmt_prog = select(StudentProgress).where(StudentProgress.student_id == student_id, StudentProgress.course_id == group.course_id)
+    prog = (await session.execute(stmt_prog)).scalar_one_or_none()
+    if not prog:
+        new_prog = StudentProgress(student_id=student_id, course_id=group.course_id)
+        session.add(new_prog)
+    
     await session.commit()
     
-    await callback.answer("✅ Ученик успешно добавлен в учебную группу!", show_alert=True)
+    msg = "✅ Ученик успешно добавлен в учебную группу!" if status_type == "active" else "⏳ Ученик зачислен на пробный период!"
+    await callback.answer(msg, show_alert=True)
     
-    # Возвращаемся в Главное меню студентов
-    await list_all_students(callback, session)
+    student_record = (await session.execute(select(Student).where(Student.id == student_id))).scalar_one()
+    await view_student_details(callback, session, override_user_id=student_record.user_id)
+
+@router.callback_query(F.data.startswith("st_transfer_start:"))
+async def smart_transfer_step1(callback: types.CallbackQuery, session: AsyncSession):
+    student_id = int(callback.data.split(":")[1])
+    
+    from bot.models.education import StudentGroup, Group
+    from sqlalchemy.orm import joinedload
+    
+    stmt_sg = select(StudentGroup).where(StudentGroup.student_id == student_id, StudentGroup.status == "active").options(joinedload(StudentGroup.group))
+    sgs = (await session.execute(stmt_sg)).scalars().all()
+    
+    if not sgs: return await callback.answer("Ученик нигде не учится", show_alert=True)
+    
+    builder = InlineKeyboardBuilder()
+    for sg in sgs:
+        builder.row(types.InlineKeyboardButton(text=f"Из {sg.group.name}", callback_data=f"st_transfer_from:{student_id}:{sg.group.id}"))
+    builder.row(types.InlineKeyboardButton(text="Отмена", callback_data=f"student_view:{student_id}"))
+    
+    await callback.message.edit_text("🔁 *Умный перевод*\n\nИз какой группы будем переводить ученика?", parse_mode="Markdown", reply_markup=builder.as_markup())
+
+@router.callback_query(F.data.startswith("st_transfer_from:"))
+async def smart_transfer_step2(callback: types.CallbackQuery, session: AsyncSession):
+    student_id = int(callback.data.split(":")[1])
+    old_group_id = int(callback.data.split(":")[2])
+    
+    from bot.models.education import Group
+    stmt = select(Group).where(Group.is_active == True, Group.id != old_group_id)
+    groups = (await session.execute(stmt)).scalars().all()
+    
+    builder = InlineKeyboardBuilder()
+    for g in groups:
+        avail = g.max_students - g.current_students
+        if avail > 0:
+            builder.row(types.InlineKeyboardButton(text=f"В {g.name} (своб: {avail})", callback_data=f"st_transfer_exec:{student_id}:{old_group_id}:{g.id}"))
+    builder.row(types.InlineKeyboardButton(text="Отмена", callback_data=f"student_view:{student_id}"))
+    
+    await callback.message.edit_text("🔁 *В какую группу перевести?*", parse_mode="Markdown", reply_markup=builder.as_markup())
+
+@router.callback_query(F.data.startswith("st_transfer_exec:"))
+async def smart_transfer_execute(callback: types.CallbackQuery, session: AsyncSession):
+    parts = callback.data.split(":")
+    student_id = int(parts[1])
+    old_group_id = int(parts[2])
+    new_group_id = int(parts[3])
+    
+    from bot.models.education import StudentGroup, Group
+    
+    # 1. Закрываем старую
+    stmt_old = select(StudentGroup).where(StudentGroup.student_id == student_id, StudentGroup.group_id == old_group_id)
+    old_sg = (await session.execute(stmt_old)).scalar_one_or_none()
+    if old_sg:
+        old_sg.status = "transferred"
+        
+        o_g = (await session.execute(select(Group).where(Group.id == old_group_id))).scalar_one()
+        o_g.current_students = max(0, o_g.current_students - 1)
+        
+    # 2. Создаем новую
+    new_sg = StudentGroup(student_id=student_id, group_id=new_group_id, status="active")
+    session.add(new_sg)
+    
+    n_g = (await session.execute(select(Group).where(Group.id == new_group_id))).scalar_one()
+    n_g.current_students += 1
+    
+    await session.commit()
+    await callback.answer("✅ Ученик успешно переведен!", show_alert=True)
+    
+    student_record = (await session.execute(select(Student).where(Student.id == student_id))).scalar_one()
+    await view_student_details(callback, session, override_user_id=student_record.user_id)
 
 @router.callback_query(F.data.startswith("student_toggle:"))
 async def toggle_student_status(callback: types.CallbackQuery, session: AsyncSession):

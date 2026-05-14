@@ -22,6 +22,7 @@ def get_group_manage_kb(group_id: int) -> InlineKeyboardMarkup:
     """Действия внутри группы."""
     buttons = [
         [InlineKeyboardButton(text="📖 Учебный журнал", callback_data=f"t_journal:{group_id}")],
+        [InlineKeyboardButton(text="📢 Рассылка группе", callback_data=f"t_broadcast_start:{group_id}")],
         [InlineKeyboardButton(text="📅 Управление уроками", callback_data=f"t_lessons_manage:{group_id}")],
         [InlineKeyboardButton(text="📝 Перекличка", callback_data=f"t_att_lessons:{group_id}")],
         [InlineKeyboardButton(text="⬅️ К группам", callback_data="teacher:groups")]

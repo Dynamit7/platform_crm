@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Заявки — Kanban | TIL USER Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../app.css">
+</head>
+<body>
+
+<aside class="sidebar">
+    <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>ADMIN CRM</small></div>
+    <nav class="sidebar-nav">
+        <div class="section-label">Главное</div>
+        <a href="dashboard.html"><span class="icon">📊</span> Дашборд</a>
+        <a href="leads.html" class="active"><span class="icon">🎯</span> Заявки (Kanban)</a>
+        <div class="section-label">Управление</div>
+        <a href="students.html"><span class="icon">👨‍🎓</span> Студенты</a>
+        <a href="teachers.html"><span class="icon">👩‍🏫</span> Преподаватели</a>
+        <a href="groups.html"><span class="icon">👥</span> Группы</a>
+        <a href="courses.html"><span class="icon">📚</span> Курсы</a>
+        <div class="section-label">Финансы</div>
+        <a href="payments.html"><span class="icon">💳</span> Платежи</a>
+        <a href="reports.html"><span class="icon">📈</span> Отчёты</a>
+        <div class="section-label">Коммуникация</div>
+        <a href="../chat.html"><span class="icon">💬</span> Чат</a>
+        <a href="broadcast.html"><span class="icon">📢</span> Рассылка</a>
+        <a href="pending-users.html"><span class="icon">⏳</span> Новые заявки</a>
+    </nav>
+    <div class="sidebar-bottom">
+        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+    </div>
+</aside>
+
+<div class="main-content">
+    <div class="top-bar">
+        <h1>🎯 Воронка заявок</h1>
+        <div class="top-bar-right">
+            <span id="totalLeadsCount" style="font-size: 13px; color: var(--muted);">Загрузка...</span>
+            <div class="admin-badge">👑 ADMIN</div>
+        </div>
+    </div>
+
+    <!-- Search & Filter Bar -->
+    <div style="padding:0 24px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+        <input type="text" id="leadSearch" placeholder="🔍 Поиск по имени, телефону..." class="search-input" style="max-width:300px;" oninput="filterLeads()">
+        <select id="leadCourseFilter" class="filter-select" onchange="filterLeads()" style="min-width:180px;">
+            <option value="">Все курсы</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="loadLeads()">🔄 Обновить</button>
+        <button class="btn btn-accent btn-sm" onclick="openAddModal()">+ Новая заявка</button>
+    </div>
+
+    <div class="kanban-board" id="kanbanBoard">
+        <!-- Columns rendered by JS -->
+    </div>
+</div>
+
+<!-- Edit Lead Modal -->
+<div id="leadModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); backdrop-filter:blur(5px); z-index:999; align-items:center; justify-content:center;">
+    <div style="background:white; border-radius:24px; padding:36px; width:90%; max-width:480px; box-shadow:0 25px 60px rgba(0,0,0,0.15); animation: fadeUp 0.3s ease-out;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+            <h2 id="modalLeadName" style="font-size:20px;">Заявка</h2>
+            <button onclick="closeLeadModal()" style="font-size:24px; background:none; border:none; cursor:pointer; color:#666;">×</button>
+        </div>
+        <div id="modalLeadInfo" style="margin-bottom:20px; padding: 16px; background: var(--bg); border-radius: 12px;"></div>
+        <label style="font-size:13px; font-weight:600; display:block; margin-bottom:8px;">Статус</label>
+        <select id="modalStatus" style="width:100%; padding:12px; border:1.5px solid var(--border); border-radius:12px; font-family:inherit; margin-bottom:16px;">
+            <option value="new">🔵 Новый</option>
+            <option value="contacted">🟡 Contacted</option>
+            <option value="enrolled">🟢 Enrolled (записан)</option>
+            <option value="lost">🔴 Lost (потерян)</option>
+        </select>
+        <label style="font-size:13px; font-weight:600; display:block; margin-bottom:8px;">Заметки</label>
+        <textarea id="modalNotes" style="width:100%; height:80px; padding:12px; border:1.5px solid var(--border); border-radius:12px; font-family:inherit; resize:vertical; margin-bottom:16px;" placeholder="Добавить заметку..."></textarea>
+        <div id="convertBlock" style="display:none;background:#ECFDF5;border:1px solid #A7F3D0;border-radius:12px;padding:14px;margin-bottom:16px;">
+            <div style="font-size:13px;font-weight:700;color:#065F46;margin-bottom:10px;">🎓 Конвертировать в студента</div>
+            <select id="convertGroupId" style="width:100%;padding:10px;border:1.5px solid #A7F3D0;border-radius:10px;font-family:inherit;margin-bottom:10px;">
+                <option value="">— Выберите группу —</option>
+            </select>
+            <button class="btn btn-success" style="width:100%;justify-content:center;" onclick="convertToStudent()">✅ Записать в группу</button>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-primary" style="flex:1;" onclick="saveLeadStatus()">Сохранить</button>
+            <button class="btn btn-outline" onclick="closeLeadModal()">Отмена</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteLead()" title="Удалить заявку">🗑</button>
+        </div>
+    </div>
+</div>
+
+<style>
+@keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+.modal-overlay.active { display: flex !important; }
+</style>
+
+<script>
+    const API = '';
+    const token = localStorage.getItem('access_token');
+    if (!token) window.location.href = '../login.html';
+    document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../login.html'; };
+
+    function authHeaders() { return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }; }
+
+    const COLUMNS = [
+        { key: 'new', label: '🔵 Новые', class: 'new' },
+        { key: 'contacted', label: '🟡 Contacted', class: 'contacted' },
+        { key: 'enrolled', label: '🟢 Enrolled', class: 'enrolled' },
+        { key: 'lost', label: '🔴 Lost', class: 'lost' }
+    ];
+
+    let allLeads = [];
+    let currentEditId = null;
+    let allGroups = [];
+    let allCourses = [];
+
+    function filterLeads() {
+        const q = document.getElementById('leadSearch').value.toLowerCase();
+        const course = document.getElementById('leadCourseFilter').value;
+        const filtered = allLeads.filter(l => {
+            const matchQ = !q || l.name.toLowerCase().includes(q) || (l.phone||'').includes(q);
+            const matchC = !course || String(l.course_id) === course;
+            return matchQ && matchC;
+        });
+        renderKanban(filtered);
+    }
+
+    function renderKanban(leads) {
+        const board = document.getElementById('kanbanBoard');
+        board.innerHTML = '';
+
+        COLUMNS.forEach(col => {
+            const colLeads = leads.filter(l => l.status === col.key);
+            const colEl = document.createElement('div');
+            colEl.className = 'kanban-col';
+            colEl.dataset.status = col.key;
+            colEl.innerHTML = `
+                <div class="kanban-col-header ${col.class}">
+                    <span>${col.label}</span>
+                    <span style="background:rgba(0,0,0,0.1);padding:2px 10px;border-radius:10px;">${colLeads.length}</span>
+                </div>
+                <div class="kanban-col-body" id="col-${col.key}" 
+                     ondragover="onDragOver(event)" ondrop="onDrop(event, '${col.key}')">
+                    ${colLeads.map(lead => renderCard(lead)).join('')}
+                </div>
+            `;
+            board.appendChild(colEl);
+        });
+
+        document.getElementById('totalLeadsCount').textContent = `Всего заявок: ${leads.length}`;
+    }
+
+    function renderCard(lead) {
+        const date = lead.created_at ? new Date(lead.created_at).toLocaleDateString('ru-RU') : '—';
+        const srcIcon = lead.source === 'telegram' ? '🤖' : lead.source === 'web' ? '🌐' : '📋';
+        const srcTitle = lead.source === 'telegram' ? 'Telegram' : lead.source === 'web' ? 'Сайт' : 'Вручную';
+        return `
+            <div class="lead-card" draggable="true"
+                 ondragstart="onDragStart(event, ${lead.id})"
+                 onclick="openLeadModal(${lead.id})">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                    <div class="lead-card-name">${lead.name}</div>
+                    <span title="${srcTitle}" style="font-size:14px;">${srcIcon}</span>
+                </div>
+                <div class="lead-card-phone">📞 ${lead.phone}</div>
+                ${lead.course ? `<div class="lead-card-course">📚 ${lead.course.title}</div>` : ''}
+                ${lead.notes ? `<div style="font-size:11px;color:var(--muted);margin-top:5px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;">${lead.notes}</div>` : ''}
+                <div class="lead-card-date">📅 ${date}</div>
+            </div>
+        `;
+    }
+
+    // ── Drag & Drop ──
+    let draggedId = null;
+    function onDragStart(event, id) {
+        draggedId = id;
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', id);
+    }
+    function onDragOver(event) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+    }
+    async function onDrop(event, newStatus) {
+        event.preventDefault();
+        if (!draggedId) return;
+        try {
+            const res = await fetch(`${API}/api/leads/${draggedId}`, {
+                method: 'PATCH',
+                headers: authHeaders(),
+                body: JSON.stringify({ status: newStatus })
+            });
+            if (res.ok) {
+                allLeads = allLeads.map(l => l.id === draggedId ? {...l, status: newStatus} : l);
+                renderKanban(allLeads);
+            }
+        } catch(e) { console.error(e); }
+        draggedId = null;
+    }
+
+    // ── Lead Modal ──
+    function openLeadModal(id) {
+        const lead = allLeads.find(l => l.id === id);
+        if (!lead) return;
+        currentEditId = id;
+        document.getElementById('modalLeadName').textContent = `${lead.name}`;
+        document.getElementById('modalLeadInfo').innerHTML = `
+            <div style="display:flex;flex-direction:column;gap:6px;font-size:14px;">
+                <div>📞 <strong>${lead.phone}</strong></div>
+                ${lead.course ? `<div>📚 Курс: <strong>${lead.course.title}</strong></div>` : ''}
+                ${lead.email ? `<div>📧 ${lead.email}</div>` : ''}
+                <div style="font-size:12px;color:var(--muted);">📅 ${lead.created_at ? new Date(lead.created_at).toLocaleString('ru-RU') : '—'}</div>
+            </div>
+        `;
+        document.getElementById('modalStatus').value = lead.status;
+        document.getElementById('modalNotes').value = lead.notes || '';
+        // Show convert block for contacted/new leads
+        const convertBlock = document.getElementById('convertBlock');
+        convertBlock.style.display = (lead.status !== 'lost') ? 'block' : 'none';
+        document.getElementById('leadModal').style.display = 'flex';
+    }
+
+    function closeLeadModal() {
+        document.getElementById('leadModal').style.display = 'none';
+        currentEditId = null;
+    }
+
+    async function saveLeadStatus() {
+        if (!currentEditId) return;
+        const status = document.getElementById('modalStatus').value;
+        const notes = document.getElementById('modalNotes').value;
+        try {
+            const res = await fetch(`${API}/api/leads/${currentEditId}`, {
+                method: 'PATCH',
+                headers: authHeaders(),
+                body: JSON.stringify({ status, notes })
+            });
+            if (res.ok) {
+                allLeads = allLeads.map(l => l.id === currentEditId ? {...l, status, notes} : l);
+                renderKanban(allLeads);
+                closeLeadModal();
+            }
+        } catch(e) { alert('Ошибка сохранения'); }
+    }
+
+    async function convertToStudent() {
+        const groupId = document.getElementById('convertGroupId').value;
+        if (!groupId) { alert('Выберите группу'); return; }
+        const lead = allLeads.find(l => l.id === currentEditId);
+        if (!lead) return;
+        try {
+            const res = await fetch(`${API}/api/leads/${currentEditId}/convert`, {
+                method: 'POST', headers: authHeaders(),
+                body: JSON.stringify({ group_id: parseInt(groupId) })
+            });
+            if (res.ok) {
+                allLeads = allLeads.map(l => l.id === currentEditId ? {...l, status: 'enrolled'} : l);
+                renderKanban(allLeads);
+                closeLeadModal();
+                alert(`✅ ${lead.name} успешно конвертирован в студента!`);
+            } else {
+                const e = await res.json();
+                alert('Ошибка: ' + (e.detail || 'Неизвестная ошибка'));
+            }
+        } catch(e) { alert('Ошибка сети'); }
+    }
+
+    async function deleteLead() {
+        if (!currentEditId) return;
+        const lead = allLeads.find(l => l.id === currentEditId);
+        if (!confirm(`Удалить заявку от "${lead?.name}"?`)) return;
+        const res = await fetch(`${API}/api/leads/${currentEditId}`, { method: 'DELETE', headers: authHeaders() });
+        if (res.ok) { allLeads = allLeads.filter(l => l.id !== currentEditId); closeLeadModal(); renderKanban(allLeads); }
+    }
+
+    function openAddModal() {
+        const name = prompt('Имя клиента:');
+        if (!name) return;
+        const phone = prompt('Телефон:');
+        if (!phone) return;
+        fetch(`${API}/api/leads`, {
+            method: 'POST', headers: authHeaders(),
+            body: JSON.stringify({ name, phone, status: 'new', source: 'manual' })
+        }).then(r => r.ok && loadLeads());
+    }
+
+    async function loadLeads() {
+        try {
+            const res = await fetch(`${API}/api/leads`, { headers: authHeaders() });
+            if (!res.ok) return;
+            allLeads = await res.json();
+
+            // Populate course filter
+            const courses = [...new Map(allLeads.filter(l=>l.course).map(l=>[l.course_id, l.course])).values()];
+            const sel = document.getElementById('leadCourseFilter');
+            sel.innerHTML = '<option value="">Все курсы</option>' +
+                courses.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
+
+            // Load groups for convert dropdown
+            const gr = await fetch(`${API}/api/groups`, { headers: authHeaders() });
+            if (gr.ok) {
+                allGroups = await gr.json();
+                document.getElementById('convertGroupId').innerHTML =
+                    '<option value="">— Выберите группу —</option>' +
+                    allGroups.filter(g=>g.is_active).map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+            }
+
+            renderKanban(allLeads);
+        } catch(e) { console.error(e); }
+    }
+
+    loadLeads();
+</script>
+<script src="../auth-utils.js"></script>
+</body>
+</html>

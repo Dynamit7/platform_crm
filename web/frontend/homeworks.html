@@ -1,0 +1,181 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Домашние задания | TIL USER</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="app.css">
+    <style>
+        .hw-tabs { display:flex; gap:5px; margin-bottom:25px; background:var(--bg-color); padding:5px; border-radius:14px; width:fit-content; }
+        .hw-tab { padding:10px 18px; cursor:pointer; color:var(--text-muted); font-weight:600; border-radius:10px; transition:0.2s; font-size:13px; }
+        .hw-tab.active { background:white; color:var(--primary); box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+        .hw-table { width:100%; background:white; border-radius:20px; border:1px solid var(--border); overflow:hidden; border-collapse:collapse; }
+        .hw-table th { text-align:left; padding:14px 18px; background:#F8FAFC; color:var(--muted); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid var(--border); }
+        .hw-table td { padding:16px 18px; border-bottom:1px solid var(--border); font-size:14px; vertical-align:middle; }
+        .hw-table tr:last-child td { border-bottom:none; }
+        .hw-table tr:hover td { background:#F8FAFC; }
+        .hw-status-badge { padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600; }
+        .status-pending { background:rgba(245,158,11,0.1); color:#92400E; }
+        .status-graded { background:rgba(16,185,129,0.1); color:#065F46; }
+        .status-overdue { background:rgba(239,68,68,0.1); color:#991B1B; }
+        .status-review { background:rgba(59,130,246,0.1); color:#1E40AF; }
+        .hw-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); backdrop-filter:blur(5px); z-index:1000; align-items:center; justify-content:center; }
+        .hw-modal.active { display:flex; }
+        .hw-modal-box { background:white; border-radius:24px; padding:35px; width:90%; max-width:500px; animation:fadeUp 0.3s ease; }
+        @keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+        .hw-modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+        .hw-modal-close { font-size:28px; cursor:pointer; color:var(--text-muted); }
+        .form-group { margin-bottom:16px; }
+        .form-group label { display:block; margin-bottom:6px; font-weight:600; font-size:14px; }
+        .form-group textarea { width:100%; height:130px; padding:12px; border:1.5px solid var(--border); border-radius:12px; font-family:inherit; resize:vertical; }
+        .form-group textarea:focus { outline:none; border-color:var(--primary); }
+    </style>
+</head>
+<body>
+<div class="dashboard-layout">
+    <aside class="sidebar">
+        <div class="sidebar-logo">TIL <span>USER</span></div>
+        <nav class="sidebar-nav">
+            <a href="dashboard.html"><span class="icon">📊</span> Дашборд</a>
+            <a href="courses.html"><span class="icon">📚</span> Мои курсы</a>
+            <a href="schedule.html"><span class="icon">🗓️</span> Расписание</a>
+            <a href="homeworks.html" class="active"><span class="icon">📝</span> Домашние задания</a>
+            <a href="achievements.html"><span class="icon">🏆</span> Достижения</a>
+        </nav>
+        <div class="sidebar-bottom">
+            <a href="settings.html"><span class="icon">⚙️</span> Настройки</a>
+            <a href="#" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+        </div>
+    </aside>
+    <main class="main-content">
+        <header class="top-header">
+            <div class="welcome-text">
+                <h1>Домашние задания 📝</h1>
+                <p>Следи за успехами и не пропускай дедлайны.</p>
+            </div>
+        </header>
+        <div class="hw-tabs">
+            <div class="hw-tab active" data-filter="all">Все</div>
+            <div class="hw-tab" data-filter="pending">Нужно сдать</div>
+            <div class="hw-tab" data-filter="submitted">На проверке</div>
+            <div class="hw-tab" data-filter="graded">Проверено</div>
+        </div>
+        <table class="hw-table">
+            <thead><tr><th>Название</th><th>Срок</th><th>Статус</th><th>Оценка</th><th></th></tr></thead>
+            <tbody id="hwBody"><tr><td colspan="5" style="text-align:center;padding:40px;color:var(--muted)">Загрузка...</td></tr></tbody>
+        </table>
+    </main>
+</div>
+
+<div class="hw-modal" id="submitModal">
+    <div class="hw-modal-box">
+        <div class="hw-modal-header">
+            <h2 id="modalHwTitle">Сдать задание</h2>
+            <span class="hw-modal-close" id="closeModal">&times;</span>
+        </div>
+        <form id="hwSubmitForm">
+            <input type="hidden" id="modalHwId">
+            <div class="form-group">
+                <label>Ваш ответ или ссылка на работу</label>
+                <textarea id="hwAnswer" placeholder="Напишите ответ или вставьте ссылку на Google Doc..." required></textarea>
+            </div>
+            <button type="submit" class="btn-primary w-100" id="hwSubmitBtn">📤 Отправить на проверку</button>
+        </form>
+        <div id="hwSuccessBox" style="display:none;text-align:center;padding:20px;">
+            <div style="font-size:48px;margin-bottom:10px;">✅</div>
+            <h3>Задание отправлено!</h3>
+            <p style="color:var(--muted);margin-top:8px;">Преподаватель скоро проверит работу.</p>
+        </div>
+    </div>
+</div>
+
+<script>
+const API = '';
+const token = localStorage.getItem('access_token');
+const userId = localStorage.getItem('user_id');
+if (!token) window.location.href = 'login.html';
+
+document.getElementById('logoutBtn').onclick = (e) => { e.preventDefault(); localStorage.clear(); window.location.href = 'login.html'; };
+
+let allHW = [];
+
+function statusInfo(hw) {
+    if (hw.is_graded) return { cls: 'status-graded', label: '✅ Проверено' };
+    if (hw.is_submitted) return { cls: 'status-review', label: '⏳ На проверке' };
+    const due = hw.due_date ? new Date(hw.due_date) : null;
+    if (due && due < new Date()) return { cls: 'status-overdue', label: '🔴 Просрочено' };
+    return { cls: 'status-pending', label: '⚡ Нужно сдать' };
+}
+
+function renderTable(list) {
+    const tbody = document.getElementById('hwBody');
+    if (!list.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--muted)">Нет заданий в этой категории 🎉</td></tr>'; return; }
+    tbody.innerHTML = list.map(hw => {
+        const st = statusInfo(hw);
+        const dueStr = hw.due_date ? new Date(hw.due_date).toLocaleDateString('ru-RU') : '—';
+        const grade = hw.grade != null ? `<strong>${hw.grade}</strong>` : '—';
+        const icon = hw.is_graded ? '✅' : hw.is_submitted ? '📨' : '⚠️';
+        const btn = (!hw.is_submitted && !hw.is_graded)
+            ? `<button class="btn btn-primary btn-sm" onclick="openSubmit(${hw.id},'${hw.title.replace(/'/g,"&#39;")}')">Сдать</button>`
+            : `<button class="btn btn-outline btn-sm" disabled>Сдано</button>`;
+        return `<tr><td><strong>${icon} ${hw.title}</strong></td><td>${dueStr}</td><td><span class="hw-status-badge ${st.cls}">${st.label}</span></td><td>${grade}</td><td>${btn}</td></tr>`;
+    }).join('');
+}
+
+document.querySelectorAll('.hw-tab').forEach(tab => {
+    tab.onclick = () => {
+        document.querySelectorAll('.hw-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const f = tab.dataset.filter;
+        let list = allHW;
+        if (f === 'pending') list = allHW.filter(h => !h.is_submitted && !h.is_graded);
+        else if (f === 'submitted') list = allHW.filter(h => h.is_submitted && !h.is_graded);
+        else if (f === 'graded') list = allHW.filter(h => h.is_graded);
+        renderTable(list);
+    };
+});
+
+async function loadHW() {
+    try {
+        const res = await fetch(`${API}/api/dashboard/${userId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!res.ok) { window.location.href = 'login.html'; return; }
+        const data = await res.json();
+        allHW = data.homeworks || [];
+        renderTable(allHW);
+    } catch { document.getElementById('hwBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--danger)">Ошибка загрузки.</td></tr>'; }
+}
+
+function openSubmit(id, title) {
+    document.getElementById('modalHwId').value = id;
+    document.getElementById('modalHwTitle').textContent = title;
+    document.getElementById('hwSubmitForm').style.display = 'block';
+    document.getElementById('hwSuccessBox').style.display = 'none';
+    document.getElementById('hwAnswer').value = '';
+    document.getElementById('submitModal').classList.add('active');
+}
+document.getElementById('closeModal').onclick = () => document.getElementById('submitModal').classList.remove('active');
+document.getElementById('submitModal').onclick = (e) => { if (e.target.id === 'submitModal') document.getElementById('submitModal').classList.remove('active'); };
+document.getElementById('hwSubmitForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('hwSubmitBtn');
+    btn.textContent = 'Отправка...'; btn.disabled = true;
+    try {
+        const res = await fetch(`${API}/api/homework/submit`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ homework_id: parseInt(document.getElementById('modalHwId').value), student_id: parseInt(userId), content: document.getElementById('hwAnswer').value })
+        });
+        if (res.ok) {
+            document.getElementById('hwSubmitForm').style.display = 'none';
+            document.getElementById('hwSuccessBox').style.display = 'block';
+            setTimeout(() => { document.getElementById('submitModal').classList.remove('active'); loadHW(); }, 2000);
+        } else { alert('Ошибка при отправке'); }
+    } catch { alert('Нет соединения'); }
+    finally { btn.textContent = '📤 Отправить'; btn.disabled = false; }
+};
+loadHW();
+</script>
+<script src="auth-utils.js"></script>
+</body>
+</html>

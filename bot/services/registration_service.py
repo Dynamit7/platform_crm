@@ -13,14 +13,24 @@ class RegistrationService:
         self.session = session
 
     async def create_new_application(self, telegram_id: int, full_name: str, phone: str, course_interest: str, trial_time: str) -> User:
-        """Создает нового пользователя со статусом PENDING и запись о регистрации."""
-        user = User(
-            telegram_id=telegram_id,
-            full_name=full_name,
-            phone=phone,
-            role=UserRole.PENDING
-        )
-        self.session.add(user)
+        """Создает нового пользователя со статусом PENDING или обновляет существующего, и создает запись о регистрации."""
+        stmt = select(User).where(User.telegram_id == telegram_id)
+        user = (await self.session.execute(stmt)).scalar_one_or_none()
+        
+        if not user:
+            user = User(
+                telegram_id=telegram_id,
+                full_name=full_name,
+                phone=phone,
+                role=UserRole.PENDING
+            )
+            self.session.add(user)
+        else:
+            user.full_name = full_name
+            user.phone = phone
+            if user.role != UserRole.STUDENT:
+                user.role = UserRole.PENDING
+                
         await self.session.flush() # Получаем ID
 
         new_reg = Registration(

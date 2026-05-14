@@ -69,3 +69,8 @@ class NotificationService:
     async def notify_user_status_change(self, user_telegram_id: int, status_text: str):
         # Здесь текст уже может содержать Markdown от администратора, используем safe_send напрямую
         await safe_send_message(self.bot, user_telegram_id, status_text, parse_mode="Markdown")
+
+    async def notify_channel_action(self, action_text: str):
+        """Отправка уведомления в лог-канал (например, для админов/менеджеров)."""
+        if self.notify_channel and self.channel_id:
+            await safe_send_message(self.bot, self.channel_id, action_text, parse_mode="Markdown")

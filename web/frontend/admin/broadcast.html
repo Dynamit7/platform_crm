@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Рассылка | TIL USER Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../app.css">
+    <style>
+        .broadcast-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 24px;
+        }
+        .audience-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .audience-card {
+            border: 2px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .audience-card:hover { border-color: var(--primary); background: rgba(4,30,66,0.02); }
+        .audience-card.selected { border-color: var(--primary); background: rgba(4,30,66,0.05); box-shadow: 0 0 0 3px rgba(4,30,66,0.1); }
+        .audience-card .icon { font-size: 32px; margin-bottom: 10px; }
+        .audience-card h3 { font-size: 15px; margin-bottom: 4px; }
+        .audience-card p { font-size: 12px; color: var(--muted); }
+        .msg-editor {
+            width: 100%;
+            min-height: 200px;
+            border: 2px solid var(--border);
+            border-radius: 16px;
+            padding: 16px;
+            font-family: inherit;
+            font-size: 15px;
+            resize: vertical;
+            transition: border-color 0.2s;
+            line-height: 1.6;
+        }
+        .msg-editor:focus { outline: none; border-color: var(--primary); }
+        .char-counter {
+            font-size: 12px;
+            color: var(--muted);
+            text-align: right;
+            margin-top: 6px;
+        }
+        .char-counter.warn { color: #F59E0B; }
+        .char-counter.danger { color: var(--danger); }
+        .format-btns {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .fmt-btn {
+            padding: 6px 12px;
+            border: 1.5px solid var(--border);
+            border-radius: 8px;
+            background: none;
+            cursor: pointer;
+            font-size: 13px;
+            font-family: inherit;
+            transition: 0.15s;
+        }
+        .fmt-btn:hover { border-color: var(--primary); background: rgba(4,30,66,0.04); }
+        .history-item {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .history-item:last-child { border-bottom: none; }
+        .history-item .head { display: flex; justify-content: space-between; margin-bottom: 6px; }
+        .history-item .msg-preview { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stat-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .stat-pill.success { background: #DCFCE7; color: #166534; }
+        .stat-pill.fail { background: #FEE2E2; color: #991B1B; }
+        .preview-box {
+            background: linear-gradient(135deg, #041E42 0%, #0a3875 100%);
+            border-radius: 20px;
+            padding: 24px;
+            color: white;
+            position: relative;
+        }
+        .preview-box .tg-bubble {
+            background: rgba(255,255,255,0.15);
+            border-radius: 14px 14px 14px 4px;
+            padding: 14px 18px;
+            font-size: 14px;
+            line-height: 1.6;
+            backdrop-filter: blur(10px);
+        }
+        .preview-box .tg-name {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .preview-box .tg-time {
+            font-size: 11px;
+            opacity: 0.5;
+            text-align: right;
+            margin-top: 8px;
+        }
+        .send-result {
+            display: none;
+            background: linear-gradient(135deg, #DCFCE7, #D1FAE5);
+            border: 1px solid #A7F3D0;
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn { from { opacity:0; transform: scale(0.95); } to { opacity:1; transform:scale(1); } }
+        .send-result .big-check { font-size: 48px; margin-bottom: 12px; }
+        .pending-badge {
+            background: #FEF3C7;
+            color: #92400E;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+
+<aside class="sidebar">
+    <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>ADMIN CRM</small></div>
+    <nav class="sidebar-nav">
+        <div class="section-label">Главное</div>
+        <a href="dashboard.html"><span class="icon">📊</span> Дашборд</a>
+        <a href="leads.html"><span class="icon">🎯</span> Заявки (Kanban)</a>
+        <div class="section-label">Управление</div>
+        <a href="students.html"><span class="icon">👨‍🎓</span> Студенты</a>
+        <a href="teachers.html"><span class="icon">👩‍🏫</span> Преподаватели</a>
+        <a href="groups.html"><span class="icon">👥</span> Группы</a>
+        <a href="courses.html"><span class="icon">📚</span> Курсы</a>
+        <div class="section-label">Финансы</div>
+        <a href="payments.html"><span class="icon">💳</span> Платежи</a>
+        <a href="reports.html"><span class="icon">📈</span> Отчёты</a>
+        <div class="section-label">Коммуникация</div>
+        <a href="../chat.html"><span class="icon">💬</span> Чат</a>
+        <a href="broadcast.html" class="active"><span class="icon">📢</span> Рассылка</a>
+        <a href="pending-users.html"><span class="icon">⏳</span> Новые заявки <span id="sidebarPendingCount" class="pending-badge" style="display:none;"></span></a>
+    </nav>
+    <div class="sidebar-bottom">
+        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+    </div>
+</aside>
+
+<div class="main-content">
+    <div class="top-bar">
+        <h1>📢 Telegram Рассылка</h1>
+        <div class="top-bar-right">
+            <div class="admin-badge">👑 ADMIN</div>
+        </div>
+    </div>
+
+    <div class="page-content">
+        <div class="broadcast-grid">
+            <!-- Left: Compose -->
+            <div>
+                <!-- Audience -->
+                <div class="panel" style="margin-bottom:24px;">
+                    <div class="panel-header">
+                        <h2>👥 Аудитория</h2>
+                    </div>
+                    <div class="panel-body">
+                        <div class="audience-cards">
+                            <div class="audience-card selected" onclick="selectAudience('all', this)">
+                                <div class="icon">🌍</div>
+                                <h3>Все</h3>
+                                <p id="countAll">Загрузка...</p>
+                            </div>
+                            <div class="audience-card" onclick="selectAudience('student', this)">
+                                <div class="icon">👨‍🎓</div>
+                                <h3>Студенты</h3>
+                                <p id="countStudents">Загрузка...</p>
+                            </div>
+                            <div class="audience-card" onclick="selectAudience('teacher', this)">
+                                <div class="icon">👩‍🏫</div>
+                                <h3>Преподаватели</h3>
+                                <p id="countTeachers">Загрузка...</p>
+                            </div>
+                        </div>
+                        <p style="font-size:13px;color:var(--muted);">⚠️ Рассылка отправляется только пользователям с привязанным Telegram.</p>
+                    </div>
+                </div>
+
+                <!-- Message Composer -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>✍️ Сообщение</h2>
+                    </div>
+                    <div class="panel-body">
+                        <div class="format-btns">
+                            <button class="fmt-btn" onclick="insertFormat('**', '**')"><b>B</b> Жирный</button>
+                            <button class="fmt-btn" onclick="insertFormat('_', '_')"><i>I</i> Курсив</button>
+                            <button class="fmt-btn" onclick="insertFormat('`', '`')">Code</button>
+                            <button class="fmt-btn" onclick="insertFormat('\n\n✅ ', '')">✅ Отметка</button>
+                            <button class="fmt-btn" onclick="insertFormat('\n\n⚠️ ', '')">⚠️ Предупреждение</button>
+                            <button class="fmt-btn" onclick="insertTemplate('payment')">💳 Шаблон оплаты</button>
+                            <button class="fmt-btn" onclick="insertTemplate('homework')">📝 Шаблон ДЗ</button>
+                        </div>
+                        <textarea class="msg-editor" id="msgEditor" 
+                                  placeholder="Введите текст сообщения. Поддерживается Markdown: *жирный*, _курсив_, `код`..."
+                                  oninput="updatePreview(); updateCounter()"></textarea>
+                        <div class="char-counter" id="charCounter">0 / 4096 символов</div>
+                        
+                        <div id="sendResult" class="send-result">
+                            <div class="big-check">✅</div>
+                            <h3 style="color:#166534;">Рассылка отправлена!</h3>
+                            <p style="color:#166534;" id="resultText">Доставлено: 0 пользователей</p>
+                        </div>
+                        
+                        <div style="display:flex;gap:12px;margin-top:20px;">
+                            <button class="btn btn-primary" id="sendBtn" onclick="sendBroadcast()" style="flex:1;">
+                                <span id="sendBtnIcon">📤</span> Отправить рассылку
+                            </button>
+                            <button class="btn btn-outline" onclick="clearEditor()">🗑 Очистить</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Preview + History -->
+            <div>
+                <!-- Telegram Preview -->
+                <div class="panel" style="margin-bottom:24px;">
+                    <div class="panel-header"><h2>👁 Превью в Telegram</h2></div>
+                    <div class="panel-body">
+                        <div class="preview-box">
+                            <div class="tg-name">🤖 TIL USER Bot</div>
+                            <div class="tg-bubble" id="previewBubble">
+                                <span style="opacity:0.5;font-style:italic;">Начните вводить сообщение...</span>
+                            </div>
+                            <div class="tg-time" id="previewTime">сейчас</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Remind Debts Quick Action -->
+                <div class="panel" style="margin-bottom:24px;">
+                    <div class="panel-header"><h2>⚡ Быстрые действия</h2></div>
+                    <div class="panel-body" style="display:flex;flex-direction:column;gap:10px;">
+                        <button class="btn btn-outline" onclick="remindDebts()" id="remindBtn">
+                            🔔 Напомнить о долгах
+                        </button>
+                        <button class="btn btn-outline" onclick="insertTemplate('welcome')">
+                            👋 Приветственное сообщение
+                        </button>
+                        <button class="btn btn-outline" onclick="insertTemplate('schedule')">
+                            🗓️ Напомнить о расписании
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Broadcast History (simulated) -->
+                <div class="panel">
+                    <div class="panel-header"><h2>📋 История рассылок</h2></div>
+                    <div id="historyList">
+                        <div style="text-align:center;color:var(--muted);padding:30px;font-size:14px;">
+                            История рассылок пока не ведётся в этой сессии
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API = '';
+    const token = localStorage.getItem('access_token');
+    if (!token) window.location.href = '../login.html';
+    document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../login.html'; };
+    function authH(json=false) {
+        const h = { 'Authorization': `Bearer ${token}` };
+        if (json) h['Content-Type'] = 'application/json';
+        return h;
+    }
+
+    let selectedAudience = 'all';
+    let audienceCounts = { all: 0, student: 0, teacher: 0 };
+    const historyItems = [];
+
+    // Load audience counts
+    async function loadCounts() {
+        try {
+            const [studRes, teachRes] = await Promise.all([
+                fetch(`${API}/api/admin/students`, { headers: authH() }),
+                fetch(`${API}/api/admin/teachers`, { headers: authH() })
+            ]);
+            const students = studRes.ok ? await studRes.json() : [];
+            const teachers = teachRes.ok ? await teachRes.json() : [];
+            const tgStudents = students.filter(s => s.telegram_id).length;
+            const tgTeachers = teachers.filter(t => t.telegram_id).length;
+            audienceCounts = { all: tgStudents + tgTeachers, student: tgStudents, teacher: tgTeachers };
+            document.getElementById('countAll').textContent = `${tgStudents + tgTeachers} получателей`;
+            document.getElementById('countStudents').textContent = `${tgStudents} получателей`;
+            document.getElementById('countTeachers').textContent = `${tgTeachers} получателей`;
+
+            // Pending users count
+            const pendingRes = await fetch(`${API}/api/admin/pending-users`, { headers: authH() });
+            if (pendingRes.ok) {
+                const pending = await pendingRes.json();
+                if (pending.length > 0) {
+                    const badge = document.getElementById('sidebarPendingCount');
+                    badge.textContent = pending.length;
+                    badge.style.display = '';
+                }
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    function selectAudience(aud, el) {
+        selectedAudience = aud;
+        document.querySelectorAll('.audience-card').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+    }
+
+    // Message editor
+    function updateCounter() {
+        const len = document.getElementById('msgEditor').value.length;
+        const counter = document.getElementById('charCounter');
+        counter.textContent = `${len} / 4096 символов`;
+        counter.className = 'char-counter' + (len > 4000 ? ' danger' : len > 3500 ? ' warn' : '');
+    }
+
+    function updatePreview() {
+        const text = document.getElementById('msgEditor').value || '';
+        const preview = document.getElementById('previewBubble');
+        if (!text.trim()) {
+            preview.innerHTML = '<span style="opacity:0.5;font-style:italic;">Начните вводить сообщение...</span>';
+            return;
+        }
+        // Simple markdown-like preview
+        let html = text
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/_(.*?)_/g, '<em>$1</em>')
+            .replace(/`(.*?)`/g, '<code style="background:rgba(255,255,255,0.2);padding:2px 6px;border-radius:4px;">$1</code>')
+            .replace(/\n/g, '<br>');
+        preview.innerHTML = html;
+
+        const now = new Date();
+        document.getElementById('previewTime').textContent = now.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'});
+    }
+
+    function insertFormat(before, after) {
+        const ta = document.getElementById('msgEditor');
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        const selected = ta.value.substring(start, end);
+        ta.value = ta.value.substring(0, start) + before + selected + after + ta.value.substring(end);
+        ta.focus();
+        ta.setSelectionRange(start + before.length, end + before.length);
+        updatePreview();
+        updateCounter();
+    }
+
+    const templates = {
+        payment: `⚠️ *Напоминание об оплате*\n\nДорогой студент, подошёл срок оплаты за обучение в этом месяце.\n\n💰 Пожалуйста, произведите оплату до конца текущего месяца.\n\nСпасибо за понимание! 🙏`,
+        homework: `📝 *Задание ждёт вас!*\n\nНапоминаем, что у вас есть непроверенные домашние задания.\n\nЗайдите в личный кабинет и сдайте работу вовремя!\n\n✅ Успехов в учёбе!`,
+        welcome: `👋 *Добро пожаловать в TIL USER!*\n\nМы рады приветствовать вас в нашем центре. Начните своё обучение уже сегодня!\n\n📚 Ваши курсы уже ждут вас в личном кабинете.`,
+        schedule: `🗓️ *Напоминание о расписании*\n\nНе забудьте про занятия на этой неделе!\n\nПосмотрите актуальное расписание в личном кабинете или через бота командой /schedule`,
+    };
+
+    function insertTemplate(type) {
+        document.getElementById('msgEditor').value = templates[type] || '';
+        updatePreview();
+        updateCounter();
+    }
+
+    function clearEditor() {
+        document.getElementById('msgEditor').value = '';
+        updatePreview();
+        updateCounter();
+        document.getElementById('sendResult').style.display = 'none';
+    }
+
+    async function sendBroadcast() {
+        const message = document.getElementById('msgEditor').value.trim();
+        if (!message) { alert('Введите текст сообщения'); return; }
+        
+        const count = audienceCounts[selectedAudience];
+        if (count === 0) {
+            alert('Нет получателей с привязанным Telegram в выбранной аудитории');
+            return;
+        }
+        
+        const audLabels = { all: 'всем', student: 'студентам', teacher: 'преподавателям' };
+        if (!confirm(`Отправить рассылку ${audLabels[selectedAudience]}? Получателей: ~${count}`)) return;
+
+        const btn = document.getElementById('sendBtn');
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Отправка...';
+
+        try {
+            const res = await fetch(`${API}/api/admin/broadcast`, {
+                method: 'POST',
+                headers: authH(true),
+                body: JSON.stringify({ message, audience: selectedAudience, parse_mode: 'Markdown' })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const resultEl = document.getElementById('sendResult');
+                document.getElementById('resultText').textContent = `Доставлено: ${data.sent} | Ошибок: ${data.failed} | Всего: ${data.total}`;
+                resultEl.style.display = 'block';
+                
+                // Add to history
+                addToHistory(message, selectedAudience, data.sent, data.failed);
+            } else {
+                const err = await res.json();
+                alert('Ошибка: ' + (err.detail || 'Неизвестная ошибка'));
+            }
+        } catch(e) { alert('Ошибка сети'); }
+        
+        btn.disabled = false;
+        btn.innerHTML = '<span>📤</span> Отправить рассылку';
+    }
+
+    function addToHistory(msg, audience, sent, failed) {
+        const now = new Date().toLocaleString('ru-RU');
+        historyItems.unshift({ msg, audience, sent, failed, time: now });
+        renderHistory();
+    }
+
+    function renderHistory() {
+        const list = document.getElementById('historyList');
+        if (!historyItems.length) {
+            list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:30px;font-size:14px;">История пуста</div>';
+            return;
+        }
+        const audLabel = { all: '🌍 Все', student: '👨‍🎓 Студенты', teacher: '👩‍🏫 Препод.' };
+        list.innerHTML = historyItems.map(item => `
+            <div class="history-item">
+                <div class="head">
+                    <span style="font-size:12px;font-weight:600;">${audLabel[item.audience] || item.audience}</span>
+                    <span style="font-size:11px;color:var(--muted);">${item.time}</span>
+                </div>
+                <div class="msg-preview">${item.msg.replace(/[*_`]/g, '').substring(0, 80)}${item.msg.length > 80 ? '...' : ''}</div>
+                <div style="margin-top:8px;display:flex;gap:6px;">
+                    <span class="stat-pill success">✅ ${item.sent} доставлено</span>
+                    ${item.failed > 0 ? `<span class="stat-pill fail">❌ ${item.failed} ошибок</span>` : ''}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function remindDebts() {
+        if (!confirm('Отправить напоминания всем студентам без оплаты за последние 30 дней?')) return;
+        const btn = document.getElementById('remindBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Отправка...';
+        try {
+            const res = await fetch(`${API}/api/admin/remind-debts`, { method: 'POST', headers: authH() });
+            if (res.ok) {
+                const data = await res.json();
+                alert(`Напоминания отправлены: ${data.reminded} пользователей`);
+                addToHistory('Напоминание о долгах (авто)', 'student', data.reminded, 0);
+            } else {
+                alert('Ошибка отправки');
+            }
+        } catch(e) { alert('Ошибка сети'); }
+        btn.disabled = false;
+        btn.textContent = '🔔 Напомнить о долгах';
+    }
+
+    renderHistory();
+    loadCounts();
+</script>
+<script src="../auth-utils.js"></script>
+</body>
+</html>

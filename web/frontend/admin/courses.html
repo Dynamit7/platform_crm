@@ -1,0 +1,150 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Курсы | TIL USER Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../app.css">
+</head>
+<body>
+<aside class="sidebar">
+    <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>ADMIN CRM</small></div>
+    <nav class="sidebar-nav">
+        <div class="section-label">Главное</div>
+        <a href="dashboard.html"><span class="icon">📊</span> Дашборд</a>
+        <a href="leads.html"><span class="icon">🎯</span> Заявки (Kanban)</a>
+        <div class="section-label">Управление</div>
+        <a href="students.html"><span class="icon">👨‍🎓</span> Студенты</a>
+        <a href="teachers.html"><span class="icon">👩‍🏫</span> Преподаватели</a>
+        <a href="groups.html"><span class="icon">👥</span> Группы</a>
+        <a href="courses.html" class="active"><span class="icon">📚</span> Курсы</a>
+        <div class="section-label">Финансы</div>
+        <a href="payments.html"><span class="icon">💳</span> Платежи</a>
+        <a href="reports.html"><span class="icon">📈</span> Отчёты</a>
+    </nav>
+    <div class="sidebar-bottom">
+        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+    </div>
+</aside>
+
+<div class="main-content">
+    <div class="top-bar">
+        <h1>📚 Курсы</h1>
+        <div class="top-bar-right">
+            <button class="btn btn-accent" id="addCourseBtn">+ Создать курс</button>
+            <div class="admin-badge">👑 ADMIN</div>
+        </div>
+    </div>
+    <div class="page-content">
+        <div id="coursesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px;">
+            <div style="text-align:center;color:var(--muted);padding:40px;grid-column:1/-1;">Загрузка...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Course Modal -->
+<div id="courseModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); backdrop-filter:blur(5px); z-index:999; align-items:center; justify-content:center;">
+    <div style="background:white; border-radius:24px; padding:36px; width:90%; max-width:520px; box-shadow:0 25px 60px rgba(0,0,0,0.15); max-height:90vh; overflow-y:auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+            <h2>+ Новый курс</h2>
+            <button onclick="closeModal()" style="font-size:24px;background:none;border:none;cursor:pointer;color:#666;">×</button>
+        </div>
+        <form id="courseForm">
+            <div style="margin-bottom:16px;">
+                <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Название курса</label>
+                <input type="text" id="cTitle" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;" placeholder="Японский язык N4" required>
+            </div>
+            <div style="margin-bottom:16px;">
+                <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Описание</label>
+                <textarea id="cDesc" style="width:100%;height:90px;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;resize:vertical;" placeholder="Интенсивная подготовка к JLPT..."></textarea>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+                <div>
+                    <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Цена (UZS/мес)</label>
+                    <input type="number" id="cPrice" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;" placeholder="400000" required>
+                </div>
+                <div>
+                    <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Длительность</label>
+                    <input type="text" id="cDuration" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;" placeholder="3 месяца" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:14px;">Создать курс</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    const API = '';
+    const token = localStorage.getItem('access_token');
+    if (!token) window.location.href = '../login.html';
+    document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../login.html'; };
+    function authHeaders() { return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }; }
+
+    const FLAGS = { 'японский': '🇯🇵', 'английский': '🇬🇧', 'корейский': '🇰🇷', 'русский': '🇷🇺' };
+    function getFlag(title) {
+        const t = title.toLowerCase();
+        for (const [key, flag] of Object.entries(FLAGS)) if (t.includes(key)) return flag;
+        return '📚';
+    }
+
+    function renderCourses(courses) {
+        const grid = document.getElementById('coursesGrid');
+        if (!courses.length) {
+            grid.innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px;grid-column:1/-1;">Курсов пока нет. Создайте первый!</div>';
+            return;
+        }
+        grid.innerHTML = courses.map(c => `
+            <div class="panel">
+                <div class="panel-header" style="background:linear-gradient(135deg,var(--primary),#0A3266);color:white;border-radius:20px 20px 0 0;">
+                    <div>
+                        <div style="font-size:30px;margin-bottom:8px;">${getFlag(c.title)}</div>
+                        <h2 style="color:white;font-size:18px;">${c.title}</h2>
+                    </div>
+                    <span style="background:var(--accent);color:var(--primary);padding:6px 14px;border-radius:20px;font-size:13px;font-weight:700;">
+                        ${(c.price/1000).toFixed(0)}K UZS
+                    </span>
+                </div>
+                <div class="panel-body">
+                    <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.6;">${c.description || '—'}</p>
+                    <div style="display:flex;gap:10px;font-size:13px;color:var(--muted);">
+                        <span>⏱ ${c.duration}</span>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    document.getElementById('addCourseBtn').onclick = () => { document.getElementById('courseModal').style.display = 'flex'; };
+    function closeModal() { document.getElementById('courseModal').style.display = 'none'; }
+
+    document.getElementById('courseForm').onsubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const res = await fetch(`${API}/api/courses`, {
+                method: 'POST', headers: authHeaders(),
+                body: JSON.stringify({
+                    title: document.getElementById('cTitle').value,
+                    description: document.getElementById('cDesc').value,
+                    price: parseFloat(document.getElementById('cPrice').value),
+                    duration: document.getElementById('cDuration').value
+                })
+            });
+            if (res.ok) { closeModal(); loadCourses(); }
+            else { const d = await res.json(); alert(d.detail || 'Ошибка'); }
+        } catch(e) { alert('Ошибка соединения'); }
+    };
+
+    async function loadCourses() {
+        try {
+            const res = await fetch(`${API}/api/courses`, { headers: authHeaders() });
+            if (!res.ok) return;
+            renderCourses(await res.json());
+        } catch(e) { console.error(e); }
+    }
+    loadCourses();
+</script>
+<script src="../auth-utils.js"></script>
+</body>
+</html>

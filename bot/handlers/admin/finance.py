@@ -214,3 +214,50 @@ async def remind_debts(callback: types.CallbackQuery, session: AsyncSession, bot
             
     await session.commit()
     await callback.answer(f"✅ Напоминания успешно отправлены {sent_count} должникам!", show_alert=True)
+
+@router.callback_query(F.data.startswith("admin_pay_ok:"))
+async def approve_payment_receipt(callback: types.CallbackQuery, session: AsyncSession, bot: Bot):
+    fin_id = int(callback.data.split(":")[1])
+    stmt = select(Finance).where(Finance.id == fin_id).options(selectinload(Finance.user))
+    fin = (await session.execute(stmt)).scalar_one_or_none()
+    
+    if not fin:
+        return await callback.answer("Транзакция не найдена", show_alert=True)
+        
+    fin.status = "succeeded"
+    await session.commit()
+    
+    await callback.message.edit_caption(caption=callback.message.caption + "\n\n✅ *Принято администратором*")
+    
+    notifier = NotificationService(bot)
+    await notifier.notify_user_status_change(
+        fin.user.telegram_id,
+        f"✅ *Оплата подтверждена!*\n\nВаш чек на сумму `{fin.amount:,.0f}` сум успешно проверен.\nСпасибо, что вы с нами!"
+    )
+    await callback.answer("Оплата подтверждена")
+
+@router.callback_query(F.data.startswith("admin_pay_fail:"))
+async def reject_payment_receipt(callback: types.CallbackQuery, session: AsyncSession, bot: Bot):
+    from sqlalchemy import delete
+    fin_id = int(callback.data.split(":")[1])
+    
+    stmt = select(Finance).where(Finance.id == fin_id).options(selectinload(Finance.user))
+    fin = (await session.execute(stmt)).scalar_one_or_none()
+    
+    if not fin:
+        return await callback.answer("Транзакция не найдена", show_alert=True)
+        
+    user_id = fin.user.telegram_id
+    
+    del_stmt = delete(Finance).where(Finance.id == fin_id)
+    await session.execute(del_stmt)
+    await session.commit()
+    
+    await callback.message.edit_caption(caption=callback.message.caption + "\n\n❌ *Отклонено администратором*")
+    
+    notifier = NotificationService(bot)
+    await notifier.notify_user_status_change(
+        user_id,
+        f"❌ *Ваша последняя оплата отклонена.*\n\nПожалуйста, убедитесь, что вы загрузили корректный чек, или свяжитесь с администрацией."
+    )
+    await callback.answer("Оплата отклонена")
