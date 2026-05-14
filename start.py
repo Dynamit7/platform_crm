@@ -3,10 +3,10 @@ start.py — единая точка запуска SmartEdu
 Запускает: веб-сервер (FastAPI) + Telegram-бот одновременно.
 
 Использование:
-    .venv\Scripts\python.exe start.py            # оба сервиса
-    .venv\Scripts\python.exe start.py --web      # только веб
-    .venv\Scripts\python.exe start.py --bot      # только бот
-    .venv\Scripts\python.exe start.py --sync     # только синхронизация БД
+    .venv\\Scripts\\python.exe start.py            # оба сервиса
+    .venv\\Scripts\\python.exe start.py --web      # только веб
+    .venv\\Scripts\\python.exe start.py --bot      # только бот
+    .venv\\Scripts\\python.exe start.py --sync     # только синхронизация БД
 """
 
 import subprocess
@@ -16,6 +16,9 @@ import time
 import threading
 import signal
 from pathlib import Path
+
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 ROOT = Path(__file__).parent
 VENV_PYTHON = ROOT / ".venv" / "Scripts" / "python.exe"

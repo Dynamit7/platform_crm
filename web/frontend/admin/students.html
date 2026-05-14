@@ -39,26 +39,39 @@
         .tag-role-student { background:#DBEAFE;color:#1E40AF;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600; }
         .tag-role-teacher { background:#EDE9FE;color:#5B21B6;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600; }
         .tag-role-admin { background:#FEE2E2;color:#991B1B;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600; }
+        .mgmt-panel { display:flex;flex-wrap:wrap;gap:8px;margin:16px 0;padding:14px;background:rgba(4,30,66,0.03);border-radius:12px;border:1px solid var(--border); }
+        .mgmt-panel .btn-sm { font-size:12px;padding:6px 12px; }
+        .freeze-grid { display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px; }
+        .freeze-opt { border:2px solid var(--border);border-radius:10px;padding:12px;text-align:center;cursor:pointer;transition:0.2s; }
+        .freeze-opt:hover { border-color:var(--primary);background:rgba(4,30,66,0.04); }
+        .freeze-opt strong { display:block;font-size:16px;font-weight:700; }
+        .freeze-opt small { color:var(--muted);font-size:11px; }
     </style>
 </head>
 <body>
 
 <aside class="sidebar">
     <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>ADMIN CRM</small></div>
-    <nav class="sidebar-nav">
+        <nav class="sidebar-nav">
         <div class="section-label">Главное</div>
-        <a href="dashboard.html"><span class="icon">📊</span> Дашборд</a>
-        <a href="leads.html"><span class="icon">🎯</span> Заявки (Kanban)</a>
+        <a href="dashboard.html" ><span class="icon">📊</span> Дашборд</a>
+        <a href="leads.html" ><span class="icon">🎯</span> Заявки (Kanban)</a>
+
         <div class="section-label">Управление</div>
         <a href="students.html" class="active"><span class="icon">👨‍🎓</span> Студенты</a>
-        <a href="teachers.html"><span class="icon">👩‍🏫</span> Преподаватели</a>
-        <a href="groups.html"><span class="icon">👥</span> Группы</a>
-        <a href="courses.html"><span class="icon">📚</span> Курсы</a>
+        <a href="teachers.html" ><span class="icon">👩‍🏫</span> Преподаватели</a>
+        <a href="groups.html" ><span class="icon">👥</span> Группы</a>
+        <a href="courses.html" ><span class="icon">📚</span> Курсы</a>
+
         <div class="section-label">Финансы</div>
-        <a href="payments.html"><span class="icon">💳</span> Платежи</a>
-        <a href="reports.html"><span class="icon">📈</span> Отчёты</a>
+        <a href="payments.html" ><span class="icon">💳</span> Платежи</a>
+        <a href="reports.html" ><span class="icon">📈</span> Отчёты</a>
+
         <div class="section-label">Коммуникация</div>
-        <a href="../chat.html"><span class="icon">💬</span> Чат <span class="chat-badge"></span></a>
+        <a href="../chat.html"><span class="icon">💬</span> Чат</a>
+        <a href="broadcast.html" ><span class="icon">📢</span> Рассылка</a>
+        <a href="pending-users.html" ><span class="icon">⏳</span> Новые заявки <span id="pendingBadge" class="chat-badge" style="display:none;"></span></a>
+        <a href="reviews.html" ><span class="icon">⭐</span> Отзывы</a>
     </nav>
     <div class="sidebar-bottom">
         <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
@@ -201,6 +214,63 @@
             <div style="display:flex;gap:12px;justify-content:flex-end;">
                 <button class="btn btn-outline" onclick="closeModal('deleteModal')">Отмена</button>
                 <button class="btn btn-danger" id="confirmDeleteBtn">Удалить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- FREEZE MODAL -->
+<div class="modal-overlay" id="freezeModal">
+    <div class="modal" style="max-width:420px;">
+        <div class="modal-header">
+            <h2>❄️ Заморозка профиля</h2>
+            <button class="modal-close" onclick="closeModal('freezeModal')">✕</button>
+        </div>
+        <div class="modal-body">
+            <p style="color:var(--muted);font-size:14px;margin-bottom:16px;">Выберите срок заморозки. Студент получит уведомление в Telegram.</p>
+            <div class="freeze-grid">
+                <div class="freeze-opt" onclick="confirmFreeze(7)">
+                    <strong>7</strong><small>дней</small>
+                </div>
+                <div class="freeze-opt" onclick="confirmFreeze(14)">
+                    <strong>14</strong><small>дней</small>
+                </div>
+                <div class="freeze-opt" onclick="confirmFreeze(30)">
+                    <strong>30</strong><small>дней</small>
+                </div>
+            </div>
+            <div style="margin-top:16px;">
+                <label style="font-size:13px;font-weight:600;">Другой срок (дней):</label>
+                <div style="display:flex;gap:8px;margin-top:6px;">
+                    <input type="number" id="freezeDaysInput" min="1" max="365" value="14"
+                        style="flex:1;padding:10px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;">
+                    <button class="btn btn-primary" onclick="confirmFreeze(parseInt(document.getElementById('freezeDaysInput').value))" style="width:auto;">Заморозить</button>
+                </div>
+            </div>
+            <button class="btn btn-outline" style="margin-top:12px;width:100%;" onclick="closeModal('freezeModal')">Отмена</button>
+        </div>
+    </div>
+</div>
+
+<!-- TRANSFER MODAL -->
+<div class="modal-overlay" id="transferModal">
+    <div class="modal" style="max-width:460px;">
+        <div class="modal-header">
+            <h2>🔁 Перевод в другую группу</h2>
+            <button class="modal-close" onclick="closeModal('transferModal')">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Из группы (текущая)</label>
+                <select id="transferFromGroup" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;"></select>
+            </div>
+            <div class="form-group">
+                <label>В группу</label>
+                <select id="transferToGroup" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;"></select>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+                <button class="btn btn-outline" onclick="closeModal('transferModal')" style="flex:1;">Отмена</button>
+                <button class="btn btn-primary" onclick="confirmTransfer()" style="flex:1;">Перевести</button>
             </div>
         </div>
     </div>
@@ -526,7 +596,18 @@
                 </div>
                 <div class="stat-row"><span>Телефон</span><span>${u.phone || '—'}</span></div>
                 <div class="stat-row"><span>Зарегистрирован</span><span>${u.created_at || '—'}</span></div>
-                <div style="height:20px;"></div>
+                ${u.role === 'student' ? `
+                <div class="mgmt-panel">
+                    <span style="font-size:12px;color:var(--muted);width:100%;margin-bottom:4px;">⚙️ Управление студентом</span>
+                    ${u.is_active
+                        ? `<button class="btn btn-outline btn-sm" style="border-color:#F59E0B;color:#D97706;" onclick="openFreeze(${u.id})">❄️ Заморозить</button>
+                           <button class="btn btn-danger btn-sm" onclick="toggleActive(${u.id}, false)">🚫 Отчислить</button>`
+                        : `<button class="btn btn-outline btn-sm" style="border-color:#10B981;color:#059669;" onclick="toggleActive(${u.id}, true)">✅ Восстановить</button>`
+                    }
+                    <button class="btn btn-outline btn-sm" onclick="openTransfer(${u.id})">🔁 Перевод</button>
+                    <button class="btn btn-outline btn-sm" onclick="unfreezeUser(${u.id})">🔥 Разморозить</button>
+                </div>` : ''}
+                <div style="height:4px;"></div>
                 <div class="tabs">
                     <button class="tab-btn active" onclick="switchTab(this,'tabEnroll')">📚 Курсы (${data.enrollments.length})</button>
                     <button class="tab-btn" onclick="switchTab(this,'tabPay')">💳 Платежи (${data.payments.length})</button>
@@ -544,6 +625,126 @@
         btn.closest('.modal-body').querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById(tabId).classList.add('active');
+    }
+
+    // ─── STUDENT MANAGEMENT ───
+    let freezeTargetId = null;
+    let transferTargetId = null;
+
+    function openFreeze(userId) {
+        freezeTargetId = userId;
+        closeModal('profileModal');
+        openModal('freezeModal');
+    }
+
+    async function confirmFreeze(days) {
+        if (!freezeTargetId || !days || days < 1) return;
+        try {
+            const res = await fetch(`${API}/api/admin/users/${freezeTargetId}/freeze`, {
+                method: 'POST', headers: authH(true),
+                body: JSON.stringify({ days })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                closeModal('freezeModal');
+                alert(`✅ Профиль заморожен до ${data.frozen_until}`);
+                loadUsers();
+            } else {
+                alert('Ошибка: ' + (data.detail || 'Неизвестная ошибка'));
+            }
+        } catch(e) { alert('Ошибка соединения'); }
+    }
+
+    async function unfreezeUser(userId) {
+        if (!confirm('Разморозить профиль студента?')) return;
+        try {
+            const res = await fetch(`${API}/api/admin/users/${userId}/unfreeze`, {
+                method: 'POST', headers: authH(true), body: '{}'
+            });
+            if (res.ok) {
+                closeModal('profileModal');
+                alert('✅ Профиль разморожен!');
+                loadUsers();
+            } else {
+                const d = await res.json();
+                alert('Ошибка: ' + (d.detail || ''));
+            }
+        } catch(e) { alert('Ошибка соединения'); }
+    }
+
+    async function toggleActive(userId, restore) {
+        const msg = restore
+            ? 'Восстановить студента в образовательный центр?'
+            : 'Отчислить студента? Он потеряет доступ к системе.';
+        if (!confirm(msg)) return;
+        try {
+            const res = await fetch(`${API}/api/admin/users/${userId}/toggle-active`, {
+                method: 'POST', headers: authH(true), body: '{}'
+            });
+            const data = await res.json();
+            if (res.ok) {
+                closeModal('profileModal');
+                alert(`✅ Студент ${data.action}`);
+                loadUsers();
+            } else {
+                const d = await res.json();
+                alert('Ошибка: ' + (d.detail || ''));
+            }
+        } catch(e) { alert('Ошибка соединения'); }
+    }
+
+    async function openTransfer(userId) {
+        transferTargetId = userId;
+        // Load groups
+        try {
+            const [enrollRes, groupsRes] = await Promise.all([
+                fetch(`${API}/api/admin/users/${userId}`, { headers: authH() }),
+                fetch(`${API}/api/groups`, { headers: authH() })
+            ]);
+            const userData = await enrollRes.json();
+            const allGroups = await groupsRes.json();
+
+            const currentGroupIds = userData.enrollments
+                .filter(e => e.course_id)
+                .map(e => e.group_id).filter(Boolean);
+
+            const fromSel = document.getElementById('transferFromGroup');
+            const toSel = document.getElementById('transferToGroup');
+
+            const enrolled = allGroups.filter(g => currentGroupIds.includes(g.id));
+            const available = allGroups.filter(g => g.is_active);
+
+            fromSel.innerHTML = enrolled.length
+                ? enrolled.map(g => `<option value="${g.id}">${g.name}</option>`).join('')
+                : '<option value="">Нет текущих групп</option>';
+            toSel.innerHTML = available.map(g =>
+                `<option value="${g.id}">${g.name}</option>`
+            ).join('');
+
+            closeModal('profileModal');
+            openModal('transferModal');
+        } catch(e) { alert('Ошибка загрузки групп'); }
+    }
+
+    async function confirmTransfer() {
+        const fromGroupId = parseInt(document.getElementById('transferFromGroup').value);
+        const toGroupId = parseInt(document.getElementById('transferToGroup').value);
+        if (!fromGroupId || !toGroupId) { alert('Выберите группы'); return; }
+        if (fromGroupId === toGroupId) { alert('Группы должны отличаться'); return; }
+        try {
+            const res = await fetch(`${API}/api/admin/users/${transferTargetId}/transfer-group`, {
+                method: 'POST', headers: authH(true),
+                body: JSON.stringify({ from_group_id: fromGroupId, to_group_id: toGroupId })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                closeModal('transferModal');
+                alert(`✅ Студент переведён в группу «${data.new_group}»`);
+                loadUsers();
+            } else {
+                alert('Ошибка: ' + (data.detail || ''));
+            }
+        } catch(e) { alert('Ошибка соединения'); }
     }
 
     loadUsers();

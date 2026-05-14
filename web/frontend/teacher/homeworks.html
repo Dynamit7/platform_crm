@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -107,10 +107,21 @@
         const selected = document.getElementById(`sub-${id}`);
         if (selected) selected.style.background = 'rgba(4,30,66,0.04)';
 
+        let textContent = sub.content || '(пусто)';
+        let fileLinkHtml = '';
+        const fileMatch = textContent.match(/\[Файл:\s*(.*?)\]/);
+        if (fileMatch) {
+            const fileUrl = fileMatch[1];
+            fileLinkHtml = `<div style="margin-top: 12px;"><a href="${fileUrl}" target="_blank" class="btn btn-outline" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; padding:8px 16px;">📎 Скачать прикрепленный файл</a></div>`;
+            textContent = textContent.replace(fileMatch[0], '').trim();
+        }
+        if (!textContent) textContent = '(Только файл)';
+
         document.getElementById('gradeContent').innerHTML = `
             <div style="margin-bottom:20px;padding:16px;background:var(--bg);border-radius:12px;border:1px solid var(--border);">
                 <h3 style="font-size:14px;margin-bottom:10px;color:var(--muted);">Ответ студента:</h3>
-                <p style="font-size:14px;line-height:1.6;">${sub.content || '(пусто)'}</p>
+                <p style="font-size:14px;line-height:1.6;white-space:pre-wrap;">${esc(textContent)}</p>
+                ${fileLinkHtml}
             </div>
             <form id="gradeForm">
                 <div style="margin-bottom:16px;">

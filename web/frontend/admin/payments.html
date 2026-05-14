@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -12,18 +12,26 @@
 
 <aside class="sidebar">
     <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>ADMIN CRM</small></div>
-    <nav class="sidebar-nav">
+        <nav class="sidebar-nav">
         <div class="section-label">Главное</div>
-        <a href="dashboard.html"><span class="icon">📊</span> Дашборд</a>
-        <a href="leads.html"><span class="icon">🎯</span> Заявки (Kanban)</a>
+        <a href="dashboard.html" ><span class="icon">📊</span> Дашборд</a>
+        <a href="leads.html" ><span class="icon">🎯</span> Заявки (Kanban)</a>
+
         <div class="section-label">Управление</div>
-        <a href="students.html"><span class="icon">👨‍🎓</span> Студенты</a>
-        <a href="teachers.html"><span class="icon">👩‍🏫</span> Преподаватели</a>
-        <a href="groups.html"><span class="icon">👥</span> Группы</a>
-        <a href="courses.html"><span class="icon">📚</span> Курсы</a>
+        <a href="students.html" ><span class="icon">👨‍🎓</span> Студенты</a>
+        <a href="teachers.html" ><span class="icon">👩‍🏫</span> Преподаватели</a>
+        <a href="groups.html" ><span class="icon">👥</span> Группы</a>
+        <a href="courses.html" ><span class="icon">📚</span> Курсы</a>
+
         <div class="section-label">Финансы</div>
         <a href="payments.html" class="active"><span class="icon">💳</span> Платежи</a>
-        <a href="reports.html"><span class="icon">📈</span> Отчёты</a>
+        <a href="reports.html" ><span class="icon">📈</span> Отчёты</a>
+
+        <div class="section-label">Коммуникация</div>
+        <a href="../chat.html"><span class="icon">💬</span> Чат</a>
+        <a href="broadcast.html" ><span class="icon">📢</span> Рассылка</a>
+        <a href="pending-users.html" ><span class="icon">⏳</span> Новые заявки <span id="pendingBadge" class="chat-badge" style="display:none;"></span></a>
+        <a href="reviews.html" ><span class="icon">⭐</span> Отзывы</a>
     </nav>
     <div class="sidebar-bottom">
         <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
@@ -35,7 +43,9 @@
     <div class="top-bar">
         <h1>💳 Финансы и платежи</h1>
         <div class="top-bar-right">
+            <button class="btn btn-outline" id="remindDebtsBtn" style="border-color:#F59E0B;color:#D97706;">⚠️ Напомнить должникам</button>
             <button class="btn btn-accent" id="addPaymentBtn">+ Добавить платёж</button>
+            <button class="btn btn-outline btn-sm" onclick="window.open('/api/admin/export/payments','_blank')">📊 Excel</button>
             <div class="admin-badge">👑 ADMIN</div>
         </div>
     </div>
@@ -84,6 +94,7 @@
                         <th>Описание</th>
                         <th>Статус</th>
                         <th>Дата</th>
+                        <th>Действия</th>
                     </tr>
                 </thead>
                 <tbody id="paymentsTable">
@@ -167,14 +178,28 @@
         tbody.innerHTML = payments.map(p => {
             const date = p.created_at ? new Date(p.created_at).toLocaleDateString('ru-RU') : '—';
             const name = p.student ? p.student.name : `ID ${p.student_id}`;
+            const statusBadge = p.status === 'paid'
+                ? '<span class="badge-status enrolled">✅ Оплачено</span>'
+                : p.status === 'pending'
+                ? '<span class="badge-status contacted">⏳ Ожидает</span>'
+                : p.status === 'refunded'
+                ? '<span class="badge-status lost">↩️ Возврат</span>'
+                : `<span class="badge-status">${p.status}</span>`;
+            const actions = p.status === 'pending'
+                ? `<button class="btn btn-outline btn-sm" style="border-color:#10B981;color:#059669;" onclick="changePayStatus(${p.id},'paid')">✅</button>
+                   <button class="btn btn-danger btn-sm" onclick="changePayStatus(${p.id},'failed')">❌</button>`
+                : p.status === 'paid'
+                ? `<button class="btn btn-outline btn-sm" onclick="changePayStatus(${p.id},'refunded')" title="Возврат">↩️</button>`
+                : '';
             return `
                 <tr>
                     <td><strong>${name}</strong></td>
                     <td><strong>${p.amount.toLocaleString()} ${p.currency}</strong></td>
                     <td>${METHODS[p.method] || p.method}</td>
                     <td>${p.description || '—'}</td>
-                    <td><span class="badge-status ${p.status}">${p.status === 'paid' ? '✅ Оплачено' : p.status}</span></td>
+                    <td>${statusBadge}</td>
                     <td>${date}</td>
+                    <td><div style="display:flex;gap:4px;">${actions}</div></td>
                 </tr>
             `;
         }).join('');
@@ -256,6 +281,49 @@
             allPayments = await res.json();
             renderTable(allPayments);
         } catch(e) { console.error(e); }
+    }
+
+    // ─── REMIND DEBTS ───
+    document.getElementById('remindDebtsBtn').onclick = async () => {
+        if (!confirm('Отправить напоминание об оплате всем студентам с задолженностью?')) return;
+        const btn = document.getElementById('remindDebtsBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Отправка...';
+        try {
+            const res = await fetch(`${API}/api/admin/remind-debts`, {
+                method: 'POST', headers: authHeaders(), body: '{}'
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert(`✅ Напоминания отправлены: ${data.reminded || 0} студентам`);
+            } else {
+                alert('Ошибка: ' + (data.detail || 'Неизвестная ошибка'));
+            }
+        } catch(e) {
+            alert('Ошибка соединения');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '⚠️ Напомнить должникам';
+        }
+    };
+
+    // ─── CHANGE PAYMENT STATUS ───
+    async function changePayStatus(paymentId, newStatus) {
+        const labels = { paid: 'подтвердить оплату', refunded: 'оформить возврат', failed: 'отклонить платёж' };
+        if (!confirm(`Вы уверены? Действие: ${labels[newStatus] || newStatus}`)) return;
+        try {
+            const res = await fetch(`${API}/api/payments/${paymentId}/status`, {
+                method: 'PATCH',
+                headers: authHeaders(),
+                body: JSON.stringify({ status: newStatus })
+            });
+            if (res.ok) {
+                loadPayments();
+            } else {
+                const d = await res.json();
+                alert('Ошибка: ' + (d.detail || ''));
+            }
+        } catch(e) { alert('Ошибка соединения'); }
     }
 
     populateSelects();

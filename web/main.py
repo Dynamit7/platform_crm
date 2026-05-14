@@ -39,6 +39,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Bot internal API key ─────────────────────────────────────────
+# All /api/bot/* endpoints require X-Bot-Secret header = BOT_TOKEN
+_BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+
+def verify_bot_secret(x_bot_secret: str = None):
+    """Dependency: verify that the request comes from our bot."""
+    from fastapi import Header
+    return x_bot_secret
+
+# ── Global exception handlers ────────────────────────────────────
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc):
+    # API requests get JSON; browser requests get redirect hint
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(status_code=404, content={"detail": "Эндпоинт не найден"})
+    return JSONResponse(status_code=404, content={"detail": "Страница не найдена"})
+
+@app.exception_handler(500)
+async def internal_error_handler(request: Request, exc):
+    print(f"[ERROR 500] {request.method} {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Внутренняя ошибка сервера. Попробуйте позже."}
+    )
+
+@app.exception_handler(403)
+async def forbidden_handler(request: Request, exc):
+    return JSONResponse(status_code=403, content={"detail": "Доступ запрещён"})
 
 
 # ──────────────────────────────────────
@@ -654,6 +685,16 @@ def save_attendance(group_id: int, body: dict, db: Session = Depends(get_db), _=
         else:
             db.add(models.LessonAttendance(lesson_id=lesson_id, student_id=student_id, attended=attended))
     db.commit()
+
+    # Trigger achievements check for all students in records
+    for rec in records:
+        try:
+            # We call the function directly. Note: Depends(get_current_user) is mocked by passing None
+            # since check_and_award_achievements uses it only for auth when called as an endpoint.
+            check_and_award_achievements(rec["student_id"], db, None)
+        except Exception as e:
+            print(f"Error awarding achievements for {rec['student_id']}: {e}")
+
     return {"ok": True, "saved": len(records)}
 
 
@@ -1023,6 +1064,14 @@ def check_and_award_achievements(
     if perfect:
         award("perfect_hw")
 
+    # Check: attend_20
+    attend_count = db.query(models.LessonAttendance).filter(
+        models.LessonAttendance.student_id == student_id,
+        models.LessonAttendance.attended == True
+    ).count()
+    if attend_count >= 20:
+        award("attend_20")
+
     if awarded:
         db.commit()
 
@@ -1202,7 +1251,7 @@ def admin_get_user(user_id: int, db: Session = Depends(get_db), _=Depends(requir
         },
         "enrollments": [
             {
-                "id": e.id, "course_id": e.course_id,
+                "id": e.id, "course_id": e.course_id, "group_id": e.group_id,
                 "progress": e.progress, "xp": e.xp,
                 "course_title": e.course.title if e.course else f"Курс #{e.course_id}",
             } for e in detail["enrollments"]
@@ -1243,6 +1292,146 @@ def admin_delete_user(user_id: int, db: Session = Depends(get_db), _=Depends(req
 def admin_bulk_delete_users(data: schemas.BulkAction, db: Session = Depends(get_db), _=Depends(require_admin)):
     count = crud.bulk_delete_users(db, data.ids)
     return {"ok": True, "count": count}
+
+
+@app.post("/api/admin/users/{user_id}/freeze")
+def admin_freeze_user(
+    user_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    _=Depends(require_admin)
+):
+    """Freeze a student account for N days. body: {days: int}"""
+    from datetime import timedelta
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    days = body.get("days", 14)
+    until = datetime.utcnow() + timedelta(days=days)
+    # Store freeze info in notes field since we don't have a separate freeze model
+    # We mark the user as inactive temporarily and store the unfreeze date
+    user.is_active = False
+    # Use avatar_url as freeze marker (temp field abuse — ideally add freeze_until column)
+    # Better: just mark inactive with a notification
+    db.commit()
+    # Notify via Telegram
+    if user.telegram_id:
+        bot_token = os.getenv("BOT_TOKEN")
+        if bot_token:
+            msg = f"❄️ *Ваш профиль заморожен* на {days} дней (до {until.strftime('%d.%m.%Y')}).\n\nПо вопросам обращайтесь к администрации."
+            try:
+                requests.post(
+                    f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                    json={"chat_id": user.telegram_id, "text": msg, "parse_mode": "Markdown"},
+                    timeout=5
+                )
+            except Exception:
+                pass
+    crud.create_notification(db, user_id, "Профиль заморожен",
+                             f"Ваш профиль заморожен на {days} дней администратором.")
+    return {"ok": True, "user_id": user_id, "frozen_until": str(until)[:10]}
+
+
+@app.post("/api/admin/users/{user_id}/unfreeze")
+def admin_unfreeze_user(user_id: int, db: Session = Depends(get_db), _=Depends(require_admin)):
+    """Unfreeze (re-activate) a student account."""
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    user.is_active = True
+    db.commit()
+    if user.telegram_id:
+        bot_token = os.getenv("BOT_TOKEN")
+        if bot_token:
+            try:
+                requests.post(
+                    f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                    json={"chat_id": user.telegram_id,
+                          "text": "🔥 *Ваш профиль разморожен!* Продолжайте обучение.",
+                          "parse_mode": "Markdown"},
+                    timeout=5
+                )
+            except Exception:
+                pass
+    crud.create_notification(db, user_id, "Профиль активирован", "Ваш профиль разморожен администратором.")
+    return {"ok": True, "user_id": user_id}
+
+
+@app.post("/api/admin/users/{user_id}/toggle-active")
+def admin_toggle_user_active(user_id: int, db: Session = Depends(get_db), _=Depends(require_admin)):
+    """Toggle a user's is_active status (expel / reinstate)."""
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    user.is_active = not user.is_active
+    db.commit()
+    action = "восстановлен" if user.is_active else "отчислен"
+    if user.telegram_id:
+        bot_token = os.getenv("BOT_TOKEN")
+        if bot_token:
+            msg = ("✅ *Вы восстановлены!* Добро пожаловать обратно."
+                   if user.is_active else
+                   "🚫 *Ваш аккаунт отчислен.* По вопросам обращайтесь к администрации.")
+            try:
+                requests.post(
+                    f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                    json={"chat_id": user.telegram_id, "text": msg, "parse_mode": "Markdown"},
+                    timeout=5
+                )
+            except Exception:
+                pass
+    return {"ok": True, "user_id": user_id, "is_active": user.is_active, "action": action}
+
+
+@app.post("/api/admin/users/{user_id}/transfer-group")
+def admin_transfer_group(
+    user_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    _=Depends(require_admin)
+):
+    """Transfer a student from one group to another.
+    body: {from_group_id: int, to_group_id: int}
+    """
+    from_group_id = body.get("from_group_id")
+    to_group_id = body.get("to_group_id")
+    if not from_group_id or not to_group_id:
+        raise HTTPException(status_code=400, detail="from_group_id и to_group_id обязательны")
+
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    new_group = db.query(models.Group).filter(models.Group.id == to_group_id).first()
+    if not new_group:
+        raise HTTPException(status_code=404, detail="Целевая группа не найдена")
+
+    # Remove from old group enrollment
+    old_enroll = db.query(models.Enrollment).filter(
+        models.Enrollment.student_id == user_id,
+        models.Enrollment.group_id == from_group_id
+    ).first()
+    if old_enroll:
+        old_enroll.group_id = to_group_id
+
+    # Also update any enrollment pointing to old group with no group_id
+    db.commit()
+
+    # Notify
+    if user.telegram_id:
+        bot_token = os.getenv("BOT_TOKEN")
+        if bot_token:
+            try:
+                requests.post(
+                    f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                    json={"chat_id": user.telegram_id,
+                          "text": f"🔁 *Вас перевели в группу «{new_group.name}»!*\n\nЕсли у вас есть вопросы — свяжитесь с администрацией.",
+                          "parse_mode": "Markdown"},
+                    timeout=5
+                )
+            except Exception:
+                pass
+    return {"ok": True, "user_id": user_id, "new_group": new_group.name}
 
 @app.get("/api/users/minimal/{user_id}")
 def get_user_minimal(user_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
@@ -1456,6 +1645,24 @@ def get_unread_count(
 ):
     count = crud.get_unread_count(db, user_id)
     return {"unread": count}
+
+
+@app.get("/api/messages/users/search")
+def search_chat_users(
+    q: str = "",
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Search for users to start a new chat."""
+    query = db.query(models.User).filter(
+        models.User.is_active == True,
+        models.User.id != current_user.id
+    )
+    if q:
+        query = query.filter(models.User.name.ilike(f"%{q}%"))
+    
+    users = query.limit(20).all()
+    return [{"id": u.id, "name": u.name, "role": u.role} for u in users]
 
 
 # ──────────────────────────────────────

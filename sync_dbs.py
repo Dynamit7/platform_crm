@@ -130,6 +130,27 @@ def sync_bot_to_web():
     except Exception as e:
         print(f"  ⚠️  Платежи из бота пропущены: {e}")
 
+    # ── Feedback from bot → web ──
+    try:
+        bot_cur.execute("SELECT f.id as fid, u.full_name as student_name, f.rating, f.comment as text FROM feedback f JOIN users u ON f.user_id = u.id")
+        bot_feedbacks = bot_cur.fetchall()
+        
+        ensure_columns(web, 'reviews', {'bot_feedback_id': 'INTEGER'})
+        web_cur.execute("SELECT bot_feedback_id FROM reviews WHERE bot_feedback_id IS NOT NULL")
+        existing_fid = {r[0] for r in web_cur.fetchall()}
+        
+        f_added = 0
+        for fb in bot_feedbacks:
+            if fb['fid'] in existing_fid:
+                continue
+            web_cur.execute("INSERT INTO reviews (student_name, text, rating, bot_feedback_id) VALUES (?, ?, ?, ?)", (fb['student_name'], fb['text'], fb['rating'], fb['fid']))
+            f_added += 1
+            
+        web.commit()
+        print(f"  ⭐ Отзывы: добавлено {f_added} из бота")
+    except Exception as e:
+        print(f"  ⚠️  Отзывы из бота пропущены: {e}")
+
     bot.close()
     web.close()
     print("  ✅ Синхронизация БОТ → ВЕБ завершена")
