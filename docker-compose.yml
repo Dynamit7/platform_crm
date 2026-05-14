@@ -19,7 +19,7 @@ services:
       - "8000:8000"
     volumes:
       - ./web/education_center_web.db:/app/web/education_center_web.db
-      - ./web/uploads:/app/web/uploads
+      - ./web/frontend/uploads:/app/web/frontend/uploads
     env_file:
       - web/.env
     depends_on: []

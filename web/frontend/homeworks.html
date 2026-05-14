@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -78,7 +78,11 @@
             <input type="hidden" id="modalHwId">
             <div class="form-group">
                 <label>Ваш ответ или ссылка на работу</label>
-                <textarea id="hwAnswer" placeholder="Напишите ответ или вставьте ссылку на Google Doc..." required></textarea>
+                <textarea id="hwAnswer" placeholder="Напишите ответ или вставьте ссылку на Google Doc..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Прикрепить файл (опционально)</label>
+                <input type="file" id="hwFile" style="width:100%; padding: 8px; border: 1.5px solid var(--border); border-radius: 12px; font-family: inherit;">
             </div>
             <button type="submit" class="btn-primary w-100" id="hwSubmitBtn">📤 Отправить на проверку</button>
         </form>
@@ -152,27 +156,61 @@ function openSubmit(id, title) {
     document.getElementById('hwSubmitForm').style.display = 'block';
     document.getElementById('hwSuccessBox').style.display = 'none';
     document.getElementById('hwAnswer').value = '';
+    document.getElementById('hwFile').value = '';
     document.getElementById('submitModal').classList.add('active');
 }
 document.getElementById('closeModal').onclick = () => document.getElementById('submitModal').classList.remove('active');
 document.getElementById('submitModal').onclick = (e) => { if (e.target.id === 'submitModal') document.getElementById('submitModal').classList.remove('active'); };
+
 document.getElementById('hwSubmitForm').onsubmit = async (e) => {
     e.preventDefault();
+    const answerContent = document.getElementById('hwAnswer').value.trim();
+    const fileInput = document.getElementById('hwFile');
+    if (!answerContent && (!fileInput.files || fileInput.files.length === 0)) {
+        alert('Пожалуйста, напишите ответ или прикрепите файл.');
+        return;
+    }
+
     const btn = document.getElementById('hwSubmitBtn');
     btn.textContent = 'Отправка...'; btn.disabled = true;
+
     try {
-        const res = await fetch(`${API}/api/homework/submit`, {
+        let payload = {
+            homework_id: parseInt(document.getElementById('modalHwId').value),
+            content: answerContent
+        };
+
+        if (fileInput.files && fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            const base64Str = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                reader.readAsDataURL(file);
+            });
+            payload.file_name = file.name;
+            payload.file_data = base64Str;
+        }
+
+        const res = await fetch(`${API}/api/homework/submit-file`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ homework_id: parseInt(document.getElementById('modalHwId').value), student_id: parseInt(userId), content: document.getElementById('hwAnswer').value })
+            body: JSON.stringify(payload)
         });
+
         if (res.ok) {
             document.getElementById('hwSubmitForm').style.display = 'none';
             document.getElementById('hwSuccessBox').style.display = 'block';
             setTimeout(() => { document.getElementById('submitModal').classList.remove('active'); loadHW(); }, 2000);
-        } else { alert('Ошибка при отправке'); }
-    } catch { alert('Нет соединения'); }
-    finally { btn.textContent = '📤 Отправить'; btn.disabled = false; }
+        } else {
+            const err = await res.json();
+            alert('Ошибка при отправке: ' + (err.detail || 'Неизвестная ошибка'));
+        }
+    } catch(err) {
+        console.error(err);
+        alert('Нет соединения с сервером');
+    } finally {
+        btn.textContent = '📤 Отправить на проверку'; btn.disabled = false;
+    }
 };
 loadHW();
 </script>
