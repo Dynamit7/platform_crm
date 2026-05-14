@@ -95,15 +95,41 @@ document.addEventListener('DOMContentLoaded', () => {
         nameEl.textContent = localStorage.getItem('user_name') || '—';
     }
 
+    // Auto-populate admin/user name in top bar
+    const adminNameEl = document.getElementById('adminName');
+    if (adminNameEl) {
+        adminNameEl.textContent = localStorage.getItem('user_name') || 'Admin';
+    }
+
+    // ── Auto-mark active sidebar link based on current URL ──
+    autoMarkSidebarActive();
+
     updateChatBadge();
     initTheme();
 
     // Re-bind theme toggles dynamically
     document.querySelectorAll('.theme-toggle-btn').forEach(btn => {
-        btn.onclick = null; // Remove inline onclick if present
+        btn.onclick = null;
         btn.addEventListener('click', toggleTheme);
     });
 });
+
+/**
+ * Automatically marks the matching sidebar link as active
+ * based on the current page's filename.
+ */
+function autoMarkSidebarActive() {
+    const currentFile = window.location.pathname.split('/').pop() || 'index.html';
+    const sidebarLinks = document.querySelectorAll('.sidebar a, .sidebar-nav a');
+
+    sidebarLinks.forEach(link => {
+        link.classList.remove('active');
+        const linkFile = link.getAttribute('href')?.split('/').pop() || '';
+        if (linkFile && linkFile === currentFile) {
+            link.classList.add('active');
+        }
+    });
+}
 
 async function updateChatBadge() {
     const userId = localStorage.getItem('user_id');

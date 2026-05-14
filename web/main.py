@@ -1665,10 +1665,21 @@ def search_chat_users(
     return [{"id": u.id, "name": u.name, "role": u.role} for u in users]
 
 
+
+@app.get("/api/users/minimal/{user_id}")
+def get_minimal_user(user_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Not found")
+    return {"id": user.id, "name": user.name, "role": user.role}
+
 # ──────────────────────────────────────
 # Static Frontend (Root)
 # ──────────────────────────────────────
 # Mount static files at the root to handle app.css, logo.png, etc. directly.
 # This MUST be the last route so it doesn't shadow API routes.
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+
+
+
 
