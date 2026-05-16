@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Float, Boolean, JSON
+from sqlalchemy import Column, Integer, BigInteger, String, Text, ForeignKey, DateTime, Float, Boolean, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -63,7 +63,7 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    telegram_id = Column(Integer, unique=True, index=True, nullable=True)
+    telegram_id = Column(BigInteger, unique=True, index=True, nullable=True)
     name = Column(String)
     email = Column(String, unique=True, index=True)
     phone = Column(String, nullable=True)
@@ -72,6 +72,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     avatar_url = Column(String, nullable=True)
     registration_source = Column(String, default="web")
+    referral_code = Column(String(20), nullable=True, unique=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     enrollments = relationship("Enrollment", back_populates="student")
@@ -204,7 +205,10 @@ class Message(Base):
     id = Column(Integer, primary_key=True, index=True)
     sender_id = Column(Integer, ForeignKey("users.id"))
     receiver_id = Column(Integer, ForeignKey("users.id"))
-    content = Column(Text)
+    content = Column(Text, nullable=True)
+    file_url = Column(String, nullable=True)
+    file_type = Column(String, nullable=True)  # 'image', 'document', etc.
+    file_name = Column(String, nullable=True)  # original filename
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -253,3 +257,51 @@ class Notification(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="notifications")
+
+
+class LessonTemplate(Base):
+    __tablename__ = "lesson_templates"
+    id = Column(Integer, primary_key=True, index=True)
+    teacher_id = Column(Integer, ForeignKey("teachers.id"), index=True)
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=True)
+    title = Column(String(200))
+    topic = Column(String(500))
+    objectives = Column(Text, nullable=True)
+    materials = Column(Text, nullable=True)
+    homework_template = Column(Text, nullable=True)
+    duration_minutes = Column(Integer, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class PromoCode(Base):
+    __tablename__ = "promo_codes"
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), unique=True, index=True)
+    discount_percent = Column(Integer, default=0)
+    discount_amount = Column(Integer, nullable=True)
+    max_uses = Column(Integer, default=1)
+    used_count = Column(Integer, default=0)
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Referral(Base):
+    __tablename__ = "referrals"
+    id = Column(Integer, primary_key=True, index=True)
+    referrer_id = Column(Integer, ForeignKey("users.id"), index=True)
+    referred_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    reward_status = Column(String(20), default="pending")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class LeadHistory(Base):
+    __tablename__ = "lead_history"
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), index=True)
+    old_status = Column(String(50), nullable=True)
+    new_status = Column(String(50))
+    changed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -16,13 +16,10 @@ class TeacherService:
         return result.scalars().all()
 
     async def create_teacher(self, name: str, phone: str, email: str = None, specialization: str = None) -> Teacher:
-        teacher = Teacher(
-            name=name,
-            phone=phone,
-            email=email,
-            specialization=specialization,
-            is_active=True
-        )
+        user = User(full_name=name, phone=phone, email=email, role=UserRole.TEACHER)
+        self.session.add(user)
+        await self.session.flush()
+        teacher = Teacher(user_id=user.id, specialization=specialization, is_active=True)
         self.session.add(teacher)
         await self.session.commit()
         await self.session.refresh(teacher)

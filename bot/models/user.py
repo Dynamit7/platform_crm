@@ -1,7 +1,7 @@
 from datetime import datetime, date as date_type
 from enum import Enum
 from typing import Optional, List, TYPE_CHECKING
-from sqlalchemy import String, BigInteger, Boolean, ForeignKey, Date, func, Text, Enum as SQLAlchemyEnum
+from sqlalchemy import String, BigInteger, Boolean, ForeignKey, Date, func, Text, Integer, Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from bot.models.base import Base
 
@@ -28,6 +28,7 @@ class User(Base):
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, default=None)
     role: Mapped[UserRole] = mapped_column(SQLAlchemyEnum(UserRole, values_callable=lambda obj: [e.value for e in obj]), default=UserRole.PENDING, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    referral_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None, index=True)
     
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), init=False)
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now(), init=False)
@@ -87,6 +88,12 @@ class Student(Base):
     last_debt_reminder: Mapped[Optional[date_type]] = mapped_column(Date, nullable=True, default=None)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Gamification
+    xp: Mapped[int] = mapped_column(Integer, default=0)
+    level: Mapped[int] = mapped_column(Integer, default=1)
+    streak_days: Mapped[int] = mapped_column(Integer, default=0)
+    last_activity_date: Mapped[Optional[date_type]] = mapped_column(Date, nullable=True, default=None)
 
     # RELATIONSHIPS
     user: Mapped["User"] = relationship(back_populates="student", init=False)

@@ -9,48 +9,103 @@
     <style>
         body { overflow: hidden; }
         .chat-wrap { display: flex; height: 100vh; }
-        .chat-sidebar { width: 300px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--surface); flex-shrink: 0; }
-        .chat-sidebar-hdr { padding: 20px; border-bottom: 1px solid var(--border); font-weight: 700; font-size: 16px; }
+        .chat-sidebar { width: 340px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--surface); flex-shrink: 0; }
+        .chat-sidebar-hdr { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .chat-sidebar-hdr h2 { font-size: 16px; font-weight: 700; margin: 0; }
+        .new-msg-btn { width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--primary); color: #fff; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: 0.2s; flex-shrink: 0; }
+        .new-msg-btn:hover { opacity: 0.85; transform: scale(1.05); }
         .contact-list { flex: 1; overflow-y: auto; }
-        .contact-item { display: flex; align-items: center; gap: 12px; padding: 14px 20px; cursor: pointer; border-bottom: 1px solid var(--border); transition: 0.2s; }
+        .contact-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; cursor: pointer; border-bottom: 1px solid var(--border); transition: 0.15s; position: relative; }
         .contact-item:hover, .contact-item.active { background: rgba(4,30,66,0.05); }
-        .c-av { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .c-av { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 15px; }
+        .c-av.admin { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+        .c-av.teacher { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+        .c-av.student { background: linear-gradient(135deg, var(--primary), var(--accent)); }
         .c-info { flex: 1; min-width: 0; }
-        .c-name { font-weight: 600; font-size: 14px; }
-        .c-last { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .c-badge { background: var(--danger); color: white; border-radius: 50%; min-width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
-        .chat-main { flex: 1; display: flex; flex-direction: column; }
-        .chat-hdr { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; gap: 14px; }
+        .c-name { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+        .c-role-badge { font-size: 10px; padding: 1px 7px; border-radius: 10px; font-weight: 500; }
+        .c-role-badge.admin { background: #fde8e8; color: #c0392b; }
+        .c-role-badge.teacher { background: #e8f8f0; color: #27ae60; }
+        .c-role-badge.student { background: #e8f0fe; color: var(--primary); }
+        .c-last { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+        .c-badge { background: var(--danger); color: white; border-radius: 50%; min-width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+        .chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .chat-hdr { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 14px; }
         .chat-hdr h3 { font-size: 15px; margin: 0 0 2px; }
         .chat-hdr p { font-size: 12px; color: var(--muted); margin: 0; }
-        .msgs { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; background: var(--bg-color); }
-        .msg-row { display: flex; gap: 8px; }
+        .msgs { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 2px; background: var(--bg-color); }
+        .date-sep { text-align: center; font-size: 11px; color: var(--muted); padding: 12px 0 8px; font-weight: 500; }
+        .msg-row { display: flex; gap: 8px; margin-bottom: 1px; }
         .msg-row.mine { flex-direction: row-reverse; }
-        .m-av { width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: white; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; align-self: flex-end; flex-shrink: 0; }
-        .bubble { max-width: 60%; padding: 9px 13px; border-radius: 16px; font-size: 14px; line-height: 1.5; word-break: break-word; }
-        .msg-row:not(.mine) .bubble { background: white; border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+        .msg-row .m-av { width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: white; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; align-self: flex-end; flex-shrink: 0; opacity: 0.5; }
+        .msg-row.mine .m-av { background: #6b7b8d; }
+        .msg-row .bubble { max-width: 550px; padding: 8px 14px; border-radius: 16px; font-size: 14px; line-height: 1.5; word-break: break-word; }
+        .msg-row:not(.mine) .bubble { background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
         .msg-row.mine .bubble { background: var(--primary); color: white; border-bottom-right-radius: 4px; }
-        .m-time { font-size: 10px; opacity: 0.55; margin-top: 3px; }
-        .msg-row.mine .m-time { text-align: right; }
-        .chat-input-row { background: var(--surface); border-top: 1px solid var(--border); padding: 14px 20px; display: flex; gap: 10px; align-items: center; }
-        .chat-input { flex: 1; padding: 11px 16px; border: 1.5px solid var(--border); border-radius: 24px; font-size: 14px; font-family: inherit; outline: none; transition: 0.2s; }
+        .msg-row .msg-info { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+        .msg-row .m-time { font-size: 10px; opacity: 0.5; }
+        .msg-row.mine .msg-info { justify-content: flex-end; }
+        .msg-row .m-sender { font-size: 11px; font-weight: 600; color: var(--primary); }
+        .msg-row.mine .m-sender { display: none; }
+        .msg-row .file-attach { display: block; margin-top: 4px; }
+        .msg-row .file-attach img { max-width: 260px; max-height: 200px; border-radius: 10px; cursor: pointer; display: block; transition: 0.2s; }
+        .msg-row .file-attach img:hover { opacity: 0.85; }
+        .msg-row .file-doc { display: flex; align-items: center; gap: 8px; background: rgba(4,30,66,0.04); padding: 8px 12px; border-radius: 10px; font-size: 13px; text-decoration: none; color: var(--text); margin-top: 4px; }
+        .msg-row .file-doc:hover { background: rgba(4,30,66,0.08); }
+        .chat-input-row { background: var(--surface); border-top: 1px solid var(--border); padding: 12px 16px; display: flex; gap: 8px; align-items: center; }
+        .file-btn { width: 38px; height: 38px; border-radius: 50%; border: 1.5px solid var(--border); background: none; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: 0.2s; flex-shrink: 0; color: var(--muted); }
+        .file-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .chat-input { flex: 1; padding: 10px 16px; border: 1.5px solid var(--border); border-radius: 24px; font-size: 14px; font-family: inherit; outline: none; transition: 0.2s; background: var(--bg-color); color: var(--text); }
         .chat-input:focus { border-color: var(--primary); }
-        .send-btn { width: 42px; height: 42px; border-radius: 50%; background: var(--primary); color: white; border: none; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+        .send-btn { width: 42px; height: 42px; border-radius: 50%; background: var(--primary); color: white; border: none; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: 0.2s; flex-shrink: 0; }
         .send-btn:hover { opacity: 0.85; transform: scale(1.05); }
-        .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); gap: 12px; }
+        .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); gap: 8px; padding: 40px; text-align: center; }
+        .empty-state h3 { margin: 0; font-size: 18px; color: var(--text); }
+        .empty-state p { margin: 0; font-size: 13px; max-width: 280px; line-height: 1.5; }
+
+        /* ── Modal ── */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-overlay.show { display: flex; }
+        .modal-box { background: var(--surface); border-radius: 16px; width: 440px; max-width: 90vw; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+        .modal-hdr { padding: 18px 20px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .modal-hdr h3 { margin: 0; font-size: 16px; }
+        .modal-close { width: 32px; height: 32px; border: none; background: none; cursor: pointer; font-size: 20px; color: var(--muted); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+        .modal-close:hover { background: var(--bg-color); }
+        .modal-search { padding: 12px 20px 4px; }
+        .modal-search input { width: 100%; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: 12px; font-size: 14px; font-family: inherit; outline: none; background: var(--bg-color); color: var(--text); box-sizing: border-box; }
+        .modal-search input:focus { border-color: var(--primary); }
+        .modal-results { flex: 1; overflow-y: auto; padding: 4px 12px 16px; }
+        .modal-user { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: 0.15s; }
+        .modal-user:hover { background: var(--bg-color); }
+        .modal-user .c-av { width: 36px; height: 36px; font-size: 13px; }
+        .modal-user .c-info { flex: 1; }
+        .modal-user .c-name { font-size: 13px; }
+        .modal-empty { padding: 30px; text-align: center; color: var(--muted); font-size: 13px; }
+
+        /* ── Image preview ── */
+        .preview-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 2000; align-items: center; justify-content: center; cursor: zoom-out; }
+        .preview-overlay.show { display: flex; }
+        .preview-overlay img { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
+
+        /* ── Toast ── */
+        .toast-fixed { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a2634; color: #fff; padding: 10px 20px; border-radius: 12px; font-size: 13px; z-index: 3000; box-shadow: 0 4px 20px rgba(0,0,0,0.2); animation: fadeIn 0.2s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+        @media (max-width: 768px) {
+            .chat-sidebar { width: 260px; }
+            .msg-row .bubble { max-width: 85%; }
+            .msg-row .m-av { display: none; }
+            .chat-wrap { flex-direction: column; }
+            .chat-sidebar { width: 100%; height: auto; max-height: 40vh; border-right: none; border-bottom: 1px solid var(--border); }
+            .chat-main { height: 60vh; }
+        }
     </style>
 </head>
 <body>
 <div class="dashboard-layout">
-    <aside class="sidebar">
+    <aside class="sidebar" id="chatSidebar">
         <div class="sidebar-logo">TIL <span>USER</span></div>
-        <nav class="sidebar-nav">
-            <a href="dashboard.html"><span class="icon">📊</span> Дашборд</a>
-            <a href="courses.html"><span class="icon">📚</span> Мои курсы</a>
-            <a href="homeworks.html"><span class="icon">📝</span> Домашние задания <span class="chat-badge" style="display:none;"></span></a>
-            <a href="chat.html" class="active"><span class="icon">💬</span> Чат <span class="chat-badge" style="display:none;"></span></a>
-            <a href="achievements.html"><span class="icon">🏆</span> Достижения</a>
-        </nav>
+        <nav class="sidebar-nav" id="chatNav"></nav>
         <div class="sidebar-bottom">
             <a href="login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
         </div>
@@ -59,96 +114,195 @@
     <div class="main-content" style="padding:0;display:flex;flex-direction:column;">
         <div class="chat-wrap">
             <div class="chat-sidebar">
-                <div class="chat-sidebar-hdr">💬 Сообщения</div>
-                <div class="contact-list" id="contactList">
-                    <div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">Загрузка...</div>
+                <div class="chat-sidebar-hdr">
+                    <h2>💬 Сообщения</h2>
+                    <button class="new-msg-btn" onclick="openNewMsgModal()" title="Новое сообщение">✏️</button>
                 </div>
+                <div class="contact-list" id="contactList"></div>
             </div>
             <div class="chat-main" id="chatMain">
-                <div class="empty-state">
+                <div class="empty-state" id="emptyState">
                     <div style="font-size:56px;">💬</div>
                     <h3>Выберите собеседника</h3>
-                    <p>Выберите контакт слева для начала переписки</p>
+                    <p>Выберите контакт слева или нажмите ✏️ чтобы написать новое сообщение</p>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
+<div class="modal-overlay" id="newMsgModal">
+    <div class="modal-box">
+        <div class="modal-hdr">
+            <h3>✏️ Новое сообщение</h3>
+            <button class="modal-close" onclick="closeNewMsgModal()">✕</button>
+        </div>
+        <div class="modal-search">
+            <input type="text" id="userSearchInput" placeholder="Поиск по имени..." oninput="searchUsers(this.value)" autocomplete="off">
+        </div>
+        <div class="modal-results" id="userSearchResults">
+            <div class="modal-empty">Загрузка...</div>
+        </div>
+    </div>
+</div>
+
+<div class="preview-overlay" id="previewOverlay" onclick="closePreview()">
+    <img id="previewImg" src="" alt="Preview">
+</div>
+
+<input type="file" id="fileInput" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar" style="display:none" onchange="uploadAndSendFile(this)">
+
 <script src="auth-utils.js"></script>
 <script>
-    // API: относительный URL — работает на любом хосте
     const API = '';
-    // WebSocket: автоопределяем ws:// или wss:// по текущему протоколу
     const WS_BASE = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host;
     const token = localStorage.getItem('access_token');
     const myId  = parseInt(localStorage.getItem('user_id'));
     const myName = localStorage.getItem('user_name') || 'Я';
+    const myRole = localStorage.getItem('user_role');
     if (!token || !myId) window.location.href = 'login.html';
-    document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = 'login.html'; };
+    document.getElementById('logoutBtn').onclick = () => { if (confirm('Вы уверены, что хотите выйти?')) { localStorage.clear(); window.location.href = 'login.html'; } };
+
+    (function initSidebarNav() {
+        const nav = document.getElementById('chatNav');
+        if (!nav) return;
+        const links = myRole === 'admin' ? [
+            ['📊','Дашборд','admin/dashboard.html'],
+            ['🎯','Заявки','admin/leads.html'],
+            ['👨‍🎓','Студенты','admin/students.html'],
+            ['💬','Чат','chat.html'],
+        ] : myRole === 'teacher' ? [
+            ['📊','Мой кабинет','teacher/dashboard.html'],
+            ['👨‍🎓','Мои студенты','teacher/students.html'],
+            ['💬','Чат','chat.html'],
+        ] : [
+            ['📊','Дашборд','dashboard.html'],
+            ['📚','Мои курсы','courses.html'],
+            ['📝','ДЗ','homeworks.html'],
+            ['💬','Чат','chat.html'],
+            ['🏆','Достижения','achievements.html'],
+        ];
+        nav.innerHTML = links.map(([icon,label,href]) =>
+            `<a href="${href}"${href==='chat.html'?' class="active"':''}><span class="icon">${icon}</span> ${label}</a>`
+        ).join('');
+    })();
+
+    const ROLE_LABELS = { admin:'👑 Админ', teacher:'👩‍🏫 Преподаватель', student:'👨‍🎓 Студент' };
 
     let ws = null, currentContact = null;
 
     function connectWS() {
-        // Передаём токен как query-параметр для аутентификации
         ws = new WebSocket(`${WS_BASE}/ws/chat/${myId}?token=${encodeURIComponent(token)}`);
         ws.onmessage = e => {
             const msg = JSON.parse(e.data);
             if (currentContact && (msg.sender_id === currentContact || msg.receiver_id === currentContact)) appendMsg(msg);
-            else loadContacts();
+            loadContacts();
         };
         ws.onclose = () => setTimeout(connectWS, 3000);
     }
 
     async function loadContacts() {
+        const el = document.getElementById('contactList');
+        el.innerHTML = '<div style="padding:20px;text-align:center;"><div class="spinner"></div></div>';
         try {
             const res = await fetch(`${API}/api/messages/contacts/${myId}`, { headers: { Authorization: `Bearer ${token}` } });
-            if (!res.ok) return;
+            if (!res.ok) { el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">Ошибка загрузки</div>'; return; }
             const contacts = await res.json();
-            const el = document.getElementById('contactList');
-            if (!contacts.length) { el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">Нет диалогов</div>'; return; }
-            el.innerHTML = contacts.map(c => `
-                <div class="contact-item ${currentContact === c.user_id ? 'active' : ''}" onclick="openChat(${c.user_id},'${esc(c.name)}','${c.role}')">
-                    <div class="c-av">${c.name[0].toUpperCase()}</div>
-                    <div class="c-info"><div class="c-name">${esc(c.name)}</div><div class="c-last">${esc(c.last_message)}</div></div>
+            if (!contacts.length) { el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">📭 Нет контактов</div>'; return; }
+            el.innerHTML = contacts.map(c => {
+                const roleClass = c.role === 'admin' ? 'admin' : c.role === 'teacher' ? 'teacher' : 'student';
+                const roleLabel = ROLE_LABELS[c.role] || '';
+                return `<div class="contact-item ${currentContact === c.user_id ? 'active' : ''}" data-uid="${c.user_id}" data-name="${esc(c.name)}" data-role="${c.role}" onclick="openChat(parseInt(this.dataset.uid),this.dataset.name,this.dataset.role)">
+                    <div class="c-av ${roleClass}">${c.name[0].toUpperCase()}</div>
+                    <div class="c-info">
+                        <div class="c-name">${esc(c.name)} <span class="c-role-badge ${roleClass}">${roleLabel}</span></div>
+                        <div class="c-last">${c.last_message ? esc(c.last_message) : 'Нет сообщений'}</div>
+                    </div>
                     ${c.unread > 0 ? `<div class="c-badge">${c.unread}</div>` : ''}
-                </div>`).join('');
-        } catch(e) {}
+                </div>`;
+            }).join('');
+        } catch(e) { el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">⚠️ Ошибка сети</div>'; }
     }
 
     async function openChat(userId, name, role) {
         currentContact = userId;
         loadContacts();
-        const roleL = role === 'teacher' ? '👩‍🏫 Преподаватель' : role === 'admin' ? '👑 Администратор' : '👨‍🎓 Студент';
+        const roleLabel = ROLE_LABELS[role] || '👤 Пользователь';
         document.getElementById('chatMain').innerHTML = `
             <div class="chat-hdr">
-                <div class="c-av">${name[0].toUpperCase()}</div>
-                <div><h3>${esc(name)}</h3><p>${roleL}</p></div>
+                <div class="c-av ${role}">${name[0].toUpperCase()}</div>
+                <div><h3>${esc(name)}</h3><p>${roleLabel}</p></div>
             </div>
-            <div class="msgs" id="msgArea"></div>
+            <div class="msgs" id="msgArea"><div class="state-box"><div class="spinner"></div></div></div>
             <div class="chat-input-row">
+                <button class="file-btn" onclick="document.getElementById('fileInput').click()" title="Прикрепить файл">📎</button>
                 <input class="chat-input" id="msgInput" placeholder="Написать сообщение..." onkeydown="if(event.key==='Enter')sendMsg()">
                 <button class="send-btn" onclick="sendMsg()">➤</button>
             </div>`;
         try {
             const res = await fetch(`${API}/api/messages/${myId}?with_user=${userId}`, { headers: { Authorization: `Bearer ${token}` } });
-            if (res.ok) { const msgs = await res.json(); msgs.forEach(m => appendMsg(m, false)); scrollBot(); }
-        } catch(e) {}
+            const area = document.getElementById('msgArea');
+            if (res.ok) { const msgs = await res.json(); if (area) area.innerHTML = ''; renderMessages(msgs); }
+            else if (area) area.innerHTML = '<div class="state-box"><div class="state-icon">⚠️</div><div class="state-title">Ошибка загрузки</div></div>';
+        } catch(e) { const area = document.getElementById('msgArea'); if(area) area.innerHTML = '<div class="state-box"><div class="state-icon">⚠️</div><div class="state-title">Ошибка сети</div></div>'; }
+        setTimeout(() => document.getElementById('msgInput')?.focus(), 100);
+    }
+
+    let renderedDate = null;
+
+    function renderMessages(msgs) {
+        const area = document.getElementById('msgArea');
+        if (!area) return;
+        area.innerHTML = '';
+        renderedDate = null;
+        msgs.forEach(m => appendMsg(m, false));
+        scrollBot();
+    }
+
+    function formatDateLabel(dateStr) {
+        const d = new Date(dateStr);
+        const today = new Date();
+        const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        if (ymd(d) === ymd(today)) return 'Сегодня';
+        const yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
+        if (ymd(d) === ymd(yesterday)) return 'Вчера';
+        return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
     }
 
     function appendMsg(msg, scroll = true) {
         const area = document.getElementById('msgArea');
         if (!area) return;
         const isMine = msg.sender_id === myId;
-        const init = (isMine ? myName : msg.sender_name || '?')[0].toUpperCase();
+        const senderInitial = (isMine ? myName : msg.sender_name || '?')[0].toUpperCase();
+        const dateKey = (msg.created_at||'').slice(0,10);
+
+        if (renderedDate !== dateKey) {
+            renderedDate = dateKey;
+            const sep = document.createElement('div');
+            sep.className = 'date-sep';
+            sep.textContent = formatDateLabel(dateKey);
+            area.appendChild(sep);
+        }
+
         const d = document.createElement('div');
         d.className = `msg-row ${isMine ? 'mine' : ''}`;
-        d.innerHTML = `<div class="m-av">${init}</div><div><div class="bubble">${esc(msg.content)}</div><div class="m-time">${(msg.created_at||'').slice(11,16)}</div></div>`;
+
+        let contentHtml = esc(msg.content || '');
+        if (msg.file_url) {
+            if (msg.file_type === 'image') {
+                contentHtml += `<span class="file-attach"><img src="${msg.file_url}" onclick="event.stopPropagation();openPreview('${msg.file_url}')" loading="lazy"></span>`;
+            } else {
+                contentHtml += `<a class="file-doc" href="${msg.file_url}" target="_blank">📄 ${msg.file_name || 'Файл'}</a>`;
+            }
+        }
+
+        d.innerHTML = `<div class="m-av">${senderInitial}</div><div><div class="bubble">${contentHtml}</div><div class="msg-info"><span class="m-time">${(msg.created_at||'').slice(11,16)}</span>${!isMine ? `<span class="m-sender">${esc(msg.sender_name||'')}</span>` : ''}</div></div>`;
         area.appendChild(d);
         if (scroll) scrollBot();
     }
 
     function scrollBot() { const a = document.getElementById('msgArea'); if(a) a.scrollTop = a.scrollHeight; }
+
     function sendMsg() {
         const inp = document.getElementById('msgInput');
         if (!inp || !ws || ws.readyState !== 1 || !currentContact) return;
@@ -157,30 +311,103 @@
         ws.send(JSON.stringify({ receiver_id: currentContact, content }));
         inp.value = '';
     }
+
+    async function uploadAndSendFile(input) {
+        const file = input.files[0];
+        if (!file || !ws || ws.readyState !== 1 || !currentContact) { input.value = ''; return; }
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const res = await fetch(`${API}/api/messages/upload`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData });
+            if (!res.ok) { showToast('Ошибка загрузки файла'); input.value = ''; return; }
+            const data = await res.json();
+            ws.send(JSON.stringify({ receiver_id: currentContact, content: '', file_url: data.file_url, file_type: data.file_type, file_name: data.file_name }));
+        } catch(e) { showToast('Ошибка сети при загрузке файла'); }
+        input.value = '';
+    }
+
+    function showToast(msg) {
+        const t = document.createElement('div');
+        t.className = 'toast-fixed';
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 3000);
+    }
+
     function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function openPreview(url) { document.getElementById('previewImg').src = url; document.getElementById('previewOverlay').classList.add('show'); }
+    function closePreview() { document.getElementById('previewOverlay').classList.remove('show'); }
+
+    let allUsersCache = [];
+
+    function openNewMsgModal() {
+        document.getElementById('newMsgModal').classList.add('show');
+        document.getElementById('userSearchInput').value = '';
+        const resEl = document.getElementById('userSearchResults');
+        resEl.innerHTML = '<div style="padding:20px;text-align:center;"><div class="spinner"></div></div>';
+        setTimeout(() => document.getElementById('userSearchInput')?.focus(), 100);
+        loadAllUsers();
+    }
+
+    function closeNewMsgModal() {
+        document.getElementById('newMsgModal').classList.remove('show');
+    }
+
+    let searchTimer = null;
+
+    async function loadAllUsers() {
+        try {
+            const r = await fetch(`${API}/api/messages/users/search?q=`, { headers: { Authorization: `Bearer ${token}` } });
+            if (!r.ok) { document.getElementById('userSearchResults').innerHTML = '<div class="modal-empty">Ошибка загрузки</div>'; return; }
+            allUsersCache = await r.json();
+            renderUserResults(allUsersCache);
+        } catch(e) { document.getElementById('userSearchResults').innerHTML = '<div class="modal-empty">⚠️ Ошибка сети</div>'; }
+    }
+
+    function searchUsers(q) {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            const query = q.trim().toLowerCase();
+            if (!query) { renderUserResults(allUsersCache); return; }
+            const filtered = allUsersCache.filter(u => u.name.toLowerCase().includes(query));
+            renderUserResults(filtered);
+        }, 200);
+    }
+
+    function renderUserResults(users) {
+        const resEl = document.getElementById('userSearchResults');
+        if (!users.length) { resEl.innerHTML = '<div class="modal-empty">Ничего не найдено</div>'; return; }
+        resEl.innerHTML = users.map(u => {
+            const roleClass = u.role === 'admin' ? 'admin' : u.role === 'teacher' ? 'teacher' : 'student';
+            const roleLabel = ROLE_LABELS[u.role] || '';
+            return `<div class="modal-user" data-uid="${u.id}" data-name="${esc(u.name)}" data-role="${u.role}" onclick="startChatWith(parseInt(this.dataset.uid),this.dataset.name,this.dataset.role)">
+                <div class="c-av ${roleClass}">${u.name[0].toUpperCase()}</div>
+                <div class="c-info">
+                    <div class="c-name">${esc(u.name)} <span class="c-role-badge ${roleClass}">${roleLabel}</span></div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function startChatWith(userId, name, role) {
+        closeNewMsgModal();
+        openChat(userId, name, role);
+    }
 
     async function initChat() {
         connectWS();
         await loadContacts();
-        
         const chatWith = localStorage.getItem('chat_with');
         if (chatWith) {
             localStorage.removeItem('chat_with');
             const userId = parseInt(chatWith);
-            const contact = Array.from(document.querySelectorAll('.contact-item'))
-                                 .find(el => el.onclick.toString().includes(userId));
-            if (contact) {
-                contact.click();
-            } else {
-                // If not in contacts, fetch minimal user info and open
-                try {
-                    const res = await fetch(`${API}/api/users/minimal/${userId}`, { headers: { Authorization: `Bearer ${token}` } });
-                    if (res.ok) {
-                        const u = await res.json();
-                        openChat(u.id, u.name, u.role);
-                    }
-                } catch(e) {}
-            }
+            const contact = document.querySelector(`.contact-item[data-uid="${userId}"]`);
+            if (contact) { contact.click(); return; }
+            try {
+                const res = await fetch(`${API}/api/users/minimal/${userId}`, { headers: { Authorization: `Bearer ${token}` } });
+                if (res.ok) { const u = await res.json(); openChat(u.id, u.name, u.role); }
+            } catch(e) {}
         }
     }
 

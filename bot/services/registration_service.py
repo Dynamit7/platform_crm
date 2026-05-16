@@ -35,7 +35,7 @@ class RegistrationService:
 
         new_reg = Registration(
             user_id=user.id,
-            course_id=1, # Дефолтный курс (A1) из седа
+            course_id=None,
             trial_lesson_time=None,
             notes=f"Интересует курс: {course_interest} | Удобное время: {trial_time}"
         )

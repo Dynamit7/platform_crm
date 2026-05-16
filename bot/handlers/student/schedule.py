@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 async def view_student_schedule(event: types.TelegramObject, session: AsyncSession, db_user: User):
     """Просмотр расписания занятий для ученика (данные из CRM)."""
     
-    text = "🗓 *Ваше ближайшее расписание:*\n\n"
+    text = "🗓 *Ваше ближайшее расписание*\n――――――――――――――――\n"
     
     try:
         async with aiohttp.ClientSession() as http_session:
@@ -27,11 +27,11 @@ async def view_student_schedule(event: types.TelegramObject, session: AsyncSessi
                         text += "🌴 _Занятий на ближайшее время не запланировано._"
                     else:
                         for l in lessons:
-                            text += f"🔹 `{l['date']} {l['time']}` | *{l['group_name']}* | {l['topic']}\n"
+                            text += f"🔹 `{l['date']} {l['time']}` | *{l['group_name']}*\n   _{l['topic']}_\n"
                             if l.get('zoom_link'):
                                 text += f"   🔗 [Zoom]({l['zoom_link']})\n"
                 else:
-                    text += "❌ _Не удалось загрузить расписание. Пользователь не найден._"
+                    text += "❌ _Не удалось загрузить расписание._"
     except Exception as e:
         logger.error(f"Failed to fetch schedule from CRM: {e}")
         text += "❌ _Сервис временно недоступен._"

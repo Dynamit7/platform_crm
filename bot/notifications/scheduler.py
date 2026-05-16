@@ -7,7 +7,8 @@ from sqlalchemy.orm import selectinload
 from bot.database import async_session_factory
 from bot.models.education import Lesson, StudentGroup, Group
 from bot.models.user import Student, User
-from bot.services.notification_service import NotificationService
+from bot.notifications.service import NotificationService
+from bot.notifications.types import NotificationType
 
 logger = logging.getLogger(__name__)
 
@@ -80,10 +81,12 @@ class NotificationScheduler:
                     if await service.is_student_frozen(link.student_id):
                         continue
                     student_user = link.student.user
-                    await self.notifier.notify_lesson_reminder(
+                    notif_type = NotificationType.LESSON_REMINDER_60 if "60" in time_text else NotificationType.LESSON_REMINDER_30
+                    await self.notifier.send_notification(
                         student_user.telegram_id,
-                        lesson_topic,
-                        f"{lesson_time} ({time_text})"
+                        notif_type,
+                        name=student_user.full_name,
+                        topic=lesson_topic
                     )
                 except Exception as e:
                     logger.error(f"Failed to notify student {link.student_id}: {e}")
@@ -102,10 +105,11 @@ class NotificationScheduler:
                 debt = d['debt_amount']
                 
                 try:
-                    await self.notifier.notify_payment_limit(
-                        user_id=student.user.telegram_id,
+                    await self.notifier.send_notification(
+                        student.user.telegram_id,
+                        NotificationType.PAYMENT_REMINDER,
                         name=student.user.full_name,
-                        amount=debt
+                        balance=debt
                     )
                     # Обновляем дату напоминания
                     await finance_service.update_reminder_date(student.id)
@@ -151,16 +155,64 @@ class NotificationScheduler:
                     submission = (await session.execute(sub_stmt)).scalar_one_or_none()
                     
                     if not submission:
-                        # Не сдал! Отправляем пуш
-                        try:
-                            await self.notifier.notify_user_status_change(
-                                student.user.telegram_id,
-                                f"⏰ *Напоминание о домашнем задании!*\n\n"
-                                f"Вчера прошел урок по теме: `{lesson.topic}`.\n"
-                                f"Вы еще не сдали домашнее задание! Не забудьте загрузить его в Личном Кабинете, чтобы получить опыт и не отставать от группы."
-                            )
-                        except Exception as e:
-                            logger.error(f"Failed to send HW reminder to {student.id}: {e}")
+                        await self.notifier.send_notification(
+                            student.user.telegram_id,
+                            NotificationType.HOMEWORK_NEW,
+                            topic=lesson.topic or "Урок",
+                            deadline="сегодня"
+                        )
+
+    async def send_tomorrow_schedule(self):
+        """Рассылка расписания на завтра (в 21:00)."""
+        from datetime import timedelta
+        async with async_session_factory() as session:
+            tomorrow = datetime.now().date() + timedelta(days=1)
+            stmt = (
+                select(Lesson)
+                .where(Lesson.lesson_date == tomorrow)
+                .options(
+                    selectinload(Lesson.group)
+                    .selectinload(Group.student_groups)
+                    .selectinload(StudentGroup.student)
+                    .selectinload(Student.user)
+                )
+            )
+            lessons = (await session.execute(stmt)).scalars().all()
+            if not lessons:
+                return
+
+            # Group lessons by student
+            student_lessons = {}
+            for lesson in lessons:
+                if not lesson.group or not lesson.lesson_time:
+                    continue
+                for link in lesson.group.student_groups:
+                    student = link.student
+                    if not student or not student.is_active:
+                        continue
+                    student_lessons.setdefault(student.id, []).append(lesson)
+
+            for student_id, student_lessons_list in student_lessons.items():
+                try:
+                    stmt_u = select(User).join(Student).where(Student.id == student_id)
+                    user = (await session.execute(stmt_u)).scalar_one_or_none()
+                    if not user or not user.telegram_id:
+                        continue
+                    lines = []
+                    for l in sorted(student_lessons_list, key=lambda x: x.lesson_time or "00:00"):
+                        time_str = l.lesson_time or "—"
+                        topic = l.topic or "Урок"
+                        group_name = l.group.name if l.group else ""
+                        lines.append(f"• {time_str} — *{topic}* ({group_name})")
+                    if not lines:
+                        continue
+                    await self.notifier.send_notification(
+                        user.telegram_id,
+                        NotificationType.SCHEDULE_DAILY,
+                        lessons="\n".join(lines)
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send schedule to student {student_id}: {e}")
 
     async def check_trial_expiry(self):
         """Проверяет пробных учеников (trial) — уведомляет админа если прошло 3 дня."""
@@ -234,6 +286,7 @@ class NotificationScheduler:
         self.scheduler.add_job(self.check_upcoming_lessons, 'interval', minutes=1)
         self.scheduler.add_job(self.remind_about_debts, 'cron', hour=10, minute=0)
         self.scheduler.add_job(self.remind_about_homework, 'cron', hour=19, minute=0)
+        self.scheduler.add_job(self.send_tomorrow_schedule, 'cron', hour=21, minute=0)
         # Проверяем пробников каждое утро в 9:00
         self.scheduler.add_job(self.check_trial_expiry, 'cron', hour=9, minute=0)
         

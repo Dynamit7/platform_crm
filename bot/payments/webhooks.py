@@ -1,7 +1,18 @@
+import base64
 import structlog
 from aiohttp import web
 from bot.database import async_session_factory
 from bot.payments.service import PaymentService
+
+
+def _verify_yookassa_basic_auth(auth_header: str, shop_id: str, secret_key: str) -> bool:
+    if not auth_header or not auth_header.startswith("Basic "):
+        return False
+    try:
+        decoded = base64.b64decode(auth_header[6:]).decode("utf-8")
+        return decoded == f"{shop_id}:{secret_key}"
+    except Exception:
+        return False
 
 log = structlog.get_logger()
 

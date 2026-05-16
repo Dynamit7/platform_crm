@@ -9,7 +9,7 @@
 </head>
 <body>
 
-<aside class="sidebar">
+<aside id="main-sidebar" class="sidebar">
     <div class="sidebar-logo">
         <img src="../logo.png" alt="TIL USER Logo" style="height:32px; width:auto; border-radius:4px;">
         TIL <span>USER</span><small>ADMIN CRM</small>
@@ -36,22 +36,16 @@
         <a href="reviews.html" class="active"><span class="icon">⭐</span> Отзывы</a>
     </nav>
     <div class="sidebar-bottom">
-        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
-        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
-    </div>
+    <button class="notif-bell" onclick="toggleNotifDropdown()" title="Уведомления">🔔 <span class="badge-dot"></span></button>
+    <div class="notif-dropdown" id="notifDropdown"></div>
+
+
+
+    <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+    <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+</div>
 </aside>
-
-<div class="main-content">
-    <div class="top-bar">
-        <h1>⭐ Отзывы студентов</h1>
-        <div class="top-bar-right">
-            <button class="theme-toggle-btn" onclick="toggleTheme()" id="themeBtn" style="width:36px; height:36px; font-size:18px; margin-right:15px; border:none; background:var(--bg-color); border-radius:10px; cursor:pointer;">🌙</button>
-            <div class="admin-badge">👑 ADMIN</div>
-        </div>
-    </div>
-
-    <div class="page-content">
-        <div class="kpi-grid" id="statsGrid">
+<div class="page-content"><div class="kpi-grid" id="statsGrid">
             <div class="kpi-card">
                 <div class="kpi-icon yellow">⭐</div>
                 <div class="kpi-info">
@@ -89,6 +83,7 @@
     </div>
 </div>
 
+<script src="../auth-utils.js"></script>
 <script>
     const API = '';
     const token = localStorage.getItem('access_token');
@@ -113,6 +108,7 @@
     }
 
     async function loadReviews() {
+        showLoading('reviewsContainer', 'Загрузка отзывов...');
         try {
             const res = await fetch(`${API}/api/reviews`, { headers: authHeaders() });
             if (!res.ok) throw new Error();
@@ -153,13 +149,13 @@
             `).join('');
 
         } catch (e) {
-            console.error(e);
-            document.getElementById('reviewsContainer').innerHTML = '<div style="color:var(--danger); text-align:center; grid-column: 1 / -1; padding: 40px;">Ошибка загрузки отзывов</div>';
+            showError('reviewsContainer', 'Ошибка', 'Не удалось загрузить отзывы');
         }
     }
 
     loadReviews();
 </script>
-<script src="../auth-utils.js"></script>
+
+<div class="sidebar-overlay" ></div>
 </body>
 </html>

@@ -26,6 +26,8 @@ def get_admin_main_kb() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="💰 Финансы", callback_data="admin:finance"),
             InlineKeyboardButton(text="📊 Отчеты", callback_data="admin:reports"),
         ],
+        # --- CRM ---
+        [InlineKeyboardButton(text="📊 Воронка заявок (CRM)", callback_data="admin:leads")],
         # --- Коммуникация ---
         [InlineKeyboardButton(text="📢 Рассылка", callback_data="admin:broadcast")],
         [InlineKeyboardButton(text="⚙️ Настройки", callback_data="admin:settings")],

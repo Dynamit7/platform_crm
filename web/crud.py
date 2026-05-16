@@ -6,6 +6,8 @@ from auth import get_password_hash, verify_password
 import os
 import requests
 
+BOT_SYNC_URL = os.getenv("BOT_SYNC_URL", "http://127.0.0.1:8080/api/web/sync-user")
+
 def send_telegram_notification(telegram_id: int, message: str):
     bot_token = os.getenv("BOT_TOKEN")
     if not bot_token or not telegram_id:
@@ -42,7 +44,7 @@ def create_user(db: Session, user: schemas.UserRegister):
     # Sync to bot
     try:
         requests.post(
-            "http://127.0.0.1:8080/api/web/sync-user",
+            BOT_SYNC_URL,
             json={
                 "id": db_user.id,
                 "name": db_user.name,
@@ -98,7 +100,7 @@ def create_user_by_admin(db: Session, user_data: schemas.UserCreate):
     # Sync to bot
     try:
         requests.post(
-            "http://127.0.0.1:8080/api/web/sync-user",
+            BOT_SYNC_URL,
             json={
                 "id": db_user.id,
                 "name": db_user.name,
@@ -135,7 +137,7 @@ def update_user(db: Session, user_id: int, update: schemas.UserUpdate):
     # Sync to bot
     try:
         requests.post(
-            "http://127.0.0.1:8080/api/web/sync-user",
+            BOT_SYNC_URL,
             json={
                 "id": user.id,
                 "name": user.name,
@@ -278,6 +280,19 @@ def get_lessons_by_group(db: Session, group_id: int):
     return db.query(models.Lesson).filter(models.Lesson.group_id == group_id).all()
 
 def create_lesson(db: Session, lesson: schemas.LessonCreate):
+    # Auto-fill from LessonTemplate if topic is empty
+    if not lesson.topic or lesson.topic.strip() == "":
+        group = db.query(models.Group).filter(models.Group.id == lesson.group_id).first()
+        if group and group.teacher_id:
+            template = db.query(models.LessonTemplate).filter(
+                models.LessonTemplate.teacher_id == group.teacher_id,
+                models.LessonTemplate.course_id == group.course_id
+            ).order_by(models.LessonTemplate.id.desc()).first()
+            if template:
+                lesson.topic = template.topic
+                if not lesson.description and template.objectives:
+                    lesson.description = template.objectives
+
     db_lesson = models.Lesson(**lesson.model_dump())
     db.add(db_lesson)
     db.commit()
@@ -488,8 +503,8 @@ def mark_all_read(db: Session, user_id: int):
 # ─────────────────────────────────────
 # Messages / Chat
 # ─────────────────────────────────────
-def create_message(db: Session, sender_id: int, receiver_id: int, content: str):
-    msg = models.Message(sender_id=sender_id, receiver_id=receiver_id, content=content)
+def create_message(db: Session, sender_id: int, receiver_id: int, content: str = None, file_url: str = None, file_type: str = None, file_name: str = None):
+    msg = models.Message(sender_id=sender_id, receiver_id=receiver_id, content=content, file_url=file_url, file_type=file_type, file_name=file_name)
     db.add(msg)
     db.commit()
     db.refresh(msg)
@@ -517,9 +532,69 @@ def get_unread_count(db: Session, user_id: int) -> int:
         models.Message.is_read == False
     ).count()
 
+def get_group_gradebook(db: Session, group_id: int):
+    """Return gradebook for a group: students × lessons/homeworks with grades."""
+    group = db.query(models.Group).filter(models.Group.id == group_id).first()
+    if not group:
+        return None
+
+    # Students
+    enrollments = db.query(models.Enrollment).filter(
+        models.Enrollment.group_id == group_id
+    ).all()
+    students = []
+    for e in enrollments:
+        u = db.query(models.User).filter(models.User.id == e.student_id).first()
+        if u:
+            students.append({"id": u.id, "name": u.name, "email": u.email})
+
+    # Lessons
+    lessons = db.query(models.Lesson).filter(
+        models.Lesson.group_id == group_id
+    ).order_by(models.Lesson.scheduled_at.asc()).all()
+
+    # Homeworks
+    homeworks = db.query(models.Homework).filter(
+        models.Homework.group_id == group_id
+    ).order_by(models.Homework.due_date.asc()).all()
+
+    # Attendance
+    attendance = db.query(models.LessonAttendance).all()
+    att_map = {}
+    for a in attendance:
+        att_map.setdefault(a.lesson_id, {})[a.student_id] = a.attended
+
+    # Submissions
+    hw_ids = [h.id for h in homeworks]
+    subs = db.query(models.HomeworkSubmission).filter(
+        models.HomeworkSubmission.homework_id.in_(hw_ids)
+    ).all() if hw_ids else []
+    sub_map = {}
+    for s in subs:
+        sub_map.setdefault(s.homework_id, {})[s.student_id] = {
+            "grade": s.grade, "status": s.status, "feedback": s.feedback
+        }
+
+    return {
+        "group": {"id": group.id, "name": group.name},
+        "course": {"id": group.course.id, "title": group.course.title} if group.course else None,
+        "teacher": {"name": group.teacher.name} if group.teacher else None,
+        "students": students,
+        "lessons": [{"id": l.id, "topic": l.topic, "date": str(l.scheduled_at)[:10] if l.scheduled_at else None} for l in lessons],
+        "homeworks": [{"id": h.id, "title": h.title, "due_date": str(h.due_date)[:10] if h.due_date else None} for h in homeworks],
+        "attendance": {str(lid): {str(s): v for s, v in att.items()} for lid, att in att_map.items()},
+        "submissions": {str(hid): {str(s): v for s, v in subs.items()} for hid, subs in sub_map.items()},
+    }
+
+
 def get_chat_contacts(db: Session, user_id: int):
-    """Return list of unique users this user has chatted with, with last message."""
-    from sqlalchemy import or_, and_
+    """Return role-appropriate contacts with last message and unread count."""
+    from sqlalchemy import or_
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        return []
+
+    # Get message history
     msgs = db.query(models.Message).filter(
         or_(
             models.Message.sender_id == user_id,
@@ -537,14 +612,111 @@ def get_chat_contacts(db: Session, user_id: int):
                 models.Message.receiver_id == user_id,
                 models.Message.is_read == False
             ).count()
+            last_msg = m.content or (m.file_type or "Файл")
             seen[other_id] = {
                 "user_id": other_id,
                 "name": other.name if other else f"User #{other_id}",
                 "role": other.role if other else "student",
-                "last_message": m.content[:60],
+                "last_message": last_msg[:60],
                 "last_time": str(m.created_at)[:16],
                 "unread": unread,
             }
+
+    # Add role-suggested contacts (people this user can chat with)
+    suggest_ids = set()
+
+    if user.role == 'admin':
+        users = db.query(models.User).filter(
+            models.User.is_active == True,
+            models.User.id != user_id
+        ).all()
+        for u in users:
+            if u.id not in seen:
+                suggest_ids.add(u.id)
+
+    elif user.role == 'teacher':
+        # Admin
+        admins = db.query(models.User).filter(
+            models.User.role == 'admin',
+            models.User.is_active == True,
+            models.User.id != user_id
+        ).all()
+        for a in admins:
+            if a.id not in seen:
+                suggest_ids.add(a.id)
+        # Their students
+        teacher = db.query(models.Teacher).filter(models.Teacher.user_id == user_id).first()
+        if teacher:
+            sids = db.query(models.Enrollment.student_id).filter(
+                models.Enrollment.group_id.in_(
+                    db.query(models.Group.id).filter(models.Group.teacher_id == teacher.id)
+                )
+            ).distinct().all()
+            sids = [r[0] for r in sids]
+            students = db.query(models.User).filter(
+                models.User.id.in_(sids), models.User.is_active == True,
+                models.User.id != user_id
+            ).all()
+            for s in students:
+                if s.id not in seen:
+                    suggest_ids.add(s.id)
+
+    elif user.role == 'student':
+        # Admin
+        admins = db.query(models.User).filter(
+            models.User.role == 'admin',
+            models.User.is_active == True
+        ).all()
+        for a in admins:
+            if a.id not in seen:
+                suggest_ids.add(a.id)
+        # Their teachers + classmates
+        enrollments = db.query(models.Enrollment).filter(
+            models.Enrollment.student_id == user_id
+        ).all()
+        gids = [e.group_id for e in enrollments if e.group_id]
+        if gids:
+            # Classmates
+            cids = db.query(models.Enrollment.student_id).filter(
+                models.Enrollment.group_id.in_(gids),
+                models.Enrollment.student_id != user_id
+            ).distinct().all()
+            cids = [r[0] for r in cids]
+            classmates = db.query(models.User).filter(
+                models.User.id.in_(cids), models.User.is_active == True
+            ).all()
+            for c in classmates:
+                if c.id not in seen:
+                    suggest_ids.add(c.id)
+            # Teachers
+            teacher_ids = db.query(models.Group.teacher_id).filter(
+                models.Group.id.in_(gids)
+            ).distinct().all()
+            tids = [r[0] for r in teacher_ids if r[0]]
+            teacher_users = db.query(models.Teacher).filter(
+                models.Teacher.id.in_(tids)
+            ).all()
+            tuids = [t.user_id for t in teacher_users if t.user_id]
+            teachers = db.query(models.User).filter(
+                models.User.id.in_(tuids), models.User.is_active == True
+            ).all()
+            for t in teachers:
+                if t.id not in seen:
+                    suggest_ids.add(t.id)
+
+    # Merge suggested contacts
+    if suggest_ids:
+        suggested = db.query(models.User).filter(models.User.id.in_(suggest_ids)).all()
+        for u in suggested:
+            seen[u.id] = {
+                "user_id": u.id,
+                "name": u.name,
+                "role": u.role,
+                "last_message": "",
+                "last_time": "",
+                "unread": 0,
+            }
+
     return list(seen.values())
 
 

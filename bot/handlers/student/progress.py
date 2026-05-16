@@ -40,18 +40,18 @@ async def show_progress_and_achievements(event: types.TelegramObject, session: A
     if total_xp >= 300: rank = "💎 Мастер"
 
     text = (
-        f"🎮 *Ваш игровой профиль*\n"
+        f"🎮 *Игровой профиль*\n"
         f"――――――――――――――――\n"
-        f"🌟 Уровень: {rank}\n"
-        f"🔮 Опыт: `{total_xp} XP`\n\n"
+        f"🌟 *Уровень:* `{rank}`\n"
+        f"🔮 *Опыт:* `{total_xp} XP`\n\n"
     )
     
     if not achievements:
-        text += "🏆 *Достижения:*\n_Сдавайте домашние задания, чтобы получать опыт и награды!_\n\n"
+        text += "🏆 *Достижения:*\n_Сдавайте домашние задания, чтобы получать опыт и награды!_\n"
     else:
-        text += "🏆 *Ваши награды:*\n"
+        text += "🏆 *Награды:*\n"
         for sa in achievements:
-            text += f"{sa.achievement.icon} *{sa.achievement.name}* \n   _{sa.achievement.description}_\n"
+            text += f"   {sa.achievement.icon} *{sa.achievement.name}*\n      _{sa.achievement.description}_\n"
 
     from bot.keyboards.student import get_back_to_cabinet_kb
     kb = get_back_to_cabinet_kb()

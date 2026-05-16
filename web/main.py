@@ -1,11 +1,12 @@
-from fastapi import FastAPI, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query, Body, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Dict, Optional
 from datetime import timedelta, datetime
-import io, openpyxl, json, os, requests
+import asyncio, io, openpyxl, json, os, requests
+from uuid import uuid4
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,6 +21,31 @@ from auth import (
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
+
+# Migration: add file_url/file_type columns to messages table if missing
+import sqlalchemy as sa
+try:
+    with engine.connect() as conn:
+        conn.execute(sa.text("ALTER TABLE messages ADD COLUMN file_url VARCHAR"))
+        conn.commit()
+except Exception:
+    pass
+try:
+    with engine.connect() as conn:
+        conn.execute(sa.text("ALTER TABLE messages ADD COLUMN file_type VARCHAR"))
+        conn.commit()
+except Exception:
+    pass
+try:
+    with engine.connect() as conn:
+        conn.execute(sa.text("ALTER TABLE messages ADD COLUMN file_name VARCHAR"))
+        conn.commit()
+except Exception:
+    pass
+
+# Ensure uploads directory exists
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = FastAPI(
     title="TIL USER CRM API",
@@ -43,9 +69,9 @@ app.add_middleware(
 # All /api/bot/* endpoints require X-Bot-Secret header = BOT_TOKEN
 _BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 
-def verify_bot_secret(x_bot_secret: str = None):
-    """Dependency: verify that the request comes from our bot."""
-    from fastapi import Header
+async def verify_bot_secret(x_bot_secret: str = Header(None)):
+    if not x_bot_secret or x_bot_secret != _BOT_TOKEN:
+        raise HTTPException(status_code=403, detail="Forbidden: invalid bot secret")
     return x_bot_secret
 
 # ── Global exception handlers ────────────────────────────────────
@@ -99,6 +125,25 @@ def login(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer", "user": user}
 
 
+@app.post("/auth/refresh")
+def refresh_token(body: dict = Body(...), db: Session = Depends(get_db)):
+    refresh = body.get("refresh_token")
+    if not refresh:
+        raise HTTPException(status_code=400, detail="refresh_token обязателен")
+    payload = decode_token(refresh)
+    if not payload or payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Невалидный refresh token")
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Невалидный refresh token")
+    user = db.query(models.User).filter(models.User.id == int(user_id)).first()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="Пользователь не найден")
+    new_access = create_access_token({"sub": str(user.id)})
+    new_refresh = create_refresh_token({"sub": str(user.id)})
+    return {"access_token": new_access, "refresh_token": new_refresh, "token_type": "bearer"}
+
+
 @app.get("/auth/me", response_model=schemas.UserPublic)
 def get_me(current_user: models.User = Depends(get_current_user)):
     return current_user
@@ -126,7 +171,7 @@ def update_me(update_data: schemas.UserProfileUpdate, db: Session = Depends(get_
 # BOT INTEGRATION
 # ──────────────────────────────────────
 @app.post("/api/bot/sync-user")
-def sync_bot_user(data: schemas.BotUserSync, db: Session = Depends(get_db)):
+def sync_bot_user(data: schemas.BotUserSync, db: Session = Depends(get_db), _: str = Depends(verify_bot_secret)):
     # 1. Search by telegram_id
     user = db.query(models.User).filter(models.User.telegram_id == data.telegram_id).first()
     
@@ -173,7 +218,7 @@ def sync_bot_user(data: schemas.BotUserSync, db: Session = Depends(get_db)):
 
 
 @app.post("/api/bot/sync-payment")
-def sync_bot_payment(data: schemas.BotPaymentSync, db: Session = Depends(get_db)):
+def sync_bot_payment(data: schemas.BotPaymentSync, db: Session = Depends(get_db), _: str = Depends(verify_bot_secret)):
     # Find user by telegram_id
     user = db.query(models.User).filter(models.User.telegram_id == data.telegram_id).first()
     if not user:
@@ -195,7 +240,7 @@ def sync_bot_payment(data: schemas.BotPaymentSync, db: Session = Depends(get_db)
 
 
 @app.post("/api/bot/sync-homework")
-def sync_bot_homework(data: schemas.BotHomeworkSync, db: Session = Depends(get_db)):
+def sync_bot_homework(data: schemas.BotHomeworkSync, db: Session = Depends(get_db), _: str = Depends(verify_bot_secret)):
     user = db.query(models.User).filter(models.User.telegram_id == data.telegram_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -229,7 +274,7 @@ def sync_bot_homework(data: schemas.BotHomeworkSync, db: Session = Depends(get_d
     return {"status": "ok", "submission_id": sub.id}
 
 @app.get("/api/bot/student/{telegram_id}/schedule")
-def get_bot_student_schedule(telegram_id: int, db: Session = Depends(get_db)):
+def get_bot_student_schedule(telegram_id: int, db: Session = Depends(get_db), _: str = Depends(verify_bot_secret)):
     user = db.query(models.User).filter(models.User.telegram_id == telegram_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -260,7 +305,7 @@ def get_bot_student_schedule(telegram_id: int, db: Session = Depends(get_db)):
     return {"status": "ok", "lessons": out}
 
 @app.post("/api/bot/sync-review")
-def sync_bot_review(data: schemas.BotReviewSync, db: Session = Depends(get_db)):
+def sync_bot_review(data: schemas.BotReviewSync, db: Session = Depends(get_db), _: str = Depends(verify_bot_secret)):
     user = db.query(models.User).filter(models.User.telegram_id == data.telegram_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -274,6 +319,178 @@ def sync_bot_review(data: schemas.BotReviewSync, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(review)
     return {"status": "ok", "review_id": review.id}
+
+@app.post("/api/bot/send-message")
+def bot_send_message(data: schemas.BotMessage, db: Session = Depends(get_db), _: str = Depends(verify_bot_secret)):
+    sender = db.query(models.User).filter(models.User.telegram_id == data.sender_tg_id).first()
+    receiver = db.query(models.User).filter(models.User.id == data.receiver_id).first()
+    if not sender or not receiver:
+        raise HTTPException(status_code=404, detail="Sender or receiver not found")
+    if not data.content.strip():
+        raise HTTPException(status_code=400, detail="Empty message")
+    msg = crud.create_message(db, sender_id=sender.id, receiver_id=receiver.id, content=data.content.strip())
+    if receiver.telegram_id:
+        try:
+            crud.send_telegram_notification(
+                receiver.telegram_id,
+                f"💬 *{sender.name}*:\n{data.content.strip()[:200]}"
+            )
+        except Exception:
+            pass
+    return {"status": "ok", "message_id": msg.id}
+
+@app.get("/api/bot/messages/{user_id}")
+def bot_get_conversation(user_id: int, with_user: int, db: Session = Depends(get_db), _: str = Depends(verify_bot_secret)):
+    msgs = crud.get_messages(db, user_id, with_user)
+    crud.mark_messages_read(db, reader_id=user_id, sender_id=with_user)
+    return [
+        {"id": m.id, "sender_id": m.sender_id, "content": m.content, "created_at": str(m.created_at)[:16]}
+        for m in msgs
+    ]
+
+@app.get("/api/bot/messages/contacts/{user_id}")
+def bot_get_contacts(user_id: int, db: Session = Depends(get_db), _: str = Depends(verify_bot_secret)):
+    return crud.get_chat_contacts(db, user_id)
+
+@app.get("/api/bot/messages/unread/{user_id}")
+def bot_get_unread(user_id: int, db: Session = Depends(get_db), _: str = Depends(verify_bot_secret)):
+    return {"unread": crud.get_unread_count(db, user_id)}
+
+@app.get("/api/bot/users/search")
+def bot_search_users(q: str = "", exclude_id: int = None, db: Session = Depends(get_db), _: str = Depends(verify_bot_secret)):
+    query = db.query(models.User).filter(models.User.is_active == True)
+    if exclude_id:
+        query = query.filter(models.User.id != exclude_id)
+    if q:
+        query = query.filter(models.User.name.ilike(f"%{q}%"))
+    users = query.limit(20).all()
+    return [{"id": u.id, "name": u.name, "role": u.role, "telegram_id": u.telegram_id} for u in users]
+
+# ── Bot: Lead CRM ──────────────────
+@app.get("/api/bot/leads")
+def bot_list_leads(status: str = None, search: str = None, db: Session = Depends(get_db), _: str = Depends(verify_bot_secret)):
+    q = db.query(models.Lead)
+    if status:
+        q = q.filter(models.Lead.status == status)
+    if search:
+        q = q.filter(
+            models.Lead.name.ilike(f"%{search}%") |
+            models.Lead.phone.ilike(f"%{search}%")
+        )
+    leads = q.order_by(models.Lead.created_at.desc()).limit(50).all()
+    return [
+        {
+            "id": l.id, "name": l.name, "phone": l.phone,
+            "status": l.status, "course": l.course.title if l.course else None,
+            "created_at": str(l.created_at)[:16],
+            "notes": (l.notes or "")[:100]
+        }
+        for l in leads
+    ]
+
+@app.get("/api/bot/leads/funnel")
+def bot_lead_funnel(db: Session = Depends(get_db), _: str = Depends(verify_bot_secret)):
+    total = db.query(models.Lead).count()
+    new = db.query(models.Lead).filter(models.Lead.status == "new").count()
+    contacted = db.query(models.Lead).filter(models.Lead.status == "contacted").count()
+    enrolled = db.query(models.Lead).filter(models.Lead.status == "enrolled").count()
+    lost = db.query(models.Lead).filter(models.Lead.status == "lost").count()
+    return {
+        "total": total, "new": new, "contacted": contacted,
+        "enrolled": enrolled, "lost": lost,
+        "conversion_rate": round(enrolled / total * 100, 1) if total else 0
+    }
+
+
+@app.get("/api/bot/leads/{lead_id}")
+def bot_lead_detail(lead_id: int, db: Session = Depends(get_db), _: str = Depends(verify_bot_secret)):
+    lead = db.query(models.Lead).filter(models.Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404)
+    history = db.query(models.LeadHistory).filter(
+        models.LeadHistory.lead_id == lead_id
+    ).order_by(models.LeadHistory.created_at.desc()).limit(20).all()
+    return {
+        "id": lead.id, "name": lead.name, "phone": lead.phone,
+        "email": lead.email, "status": lead.status,
+        "course": lead.course.title if lead.course else None,
+        "source": lead.source, "notes": lead.notes,
+        "created_at": str(lead.created_at)[:16],
+        "history": [
+            {"old": h.old_status, "new": h.new_status, "at": str(h.created_at)[:16], "comment": h.comment}
+            for h in history
+        ]
+    }
+
+@app.post("/api/bot/leads/{lead_id}/status")
+def bot_update_lead_status(lead_id: int, status: str = Body(...), notes: str = Body(default=None), db: Session = Depends(get_db), _: str = Depends(verify_bot_secret)):
+    update = schemas.LeadStatusUpdate(status=status, notes=notes)
+    lead = crud.update_lead_status(db, lead_id, update)
+    if not lead:
+        raise HTTPException(status_code=404)
+    return {"status": lead.status}
+
+@app.post("/api/bot/leads/{lead_id}/convert")
+def bot_convert_lead(lead_id: int, db: Session = Depends(get_db), _: str = Depends(verify_bot_secret)):
+    """Convert a lead to a student (simplified — no group_id needed)."""
+    lead = db.query(models.Lead).filter(models.Lead.id == lead_id).first()
+    if not lead or lead.status == "enrolled":
+        raise HTTPException(status_code=400, detail="Lead not found or already enrolled")
+    import hashlib, secrets
+    user = None
+    if lead.phone:
+        user = db.query(models.User).filter(models.User.phone == lead.phone).first()
+    if not user and lead.email:
+        user = db.query(models.User).filter(models.User.email == lead.email).first()
+    if not user:
+        temp_pass = secrets.token_hex(8)
+        user = models.User(
+            name=lead.name, phone=lead.phone,
+            email=lead.email or f"lead_{lead.id}@edusmart.local",
+            role="student",
+            password_hash=hashlib.sha256(temp_pass.encode()).hexdigest(),
+            registration_source="crm_convert", is_active=True,
+        )
+        db.add(user); db.commit(); db.refresh(user)
+    lead.status = "enrolled"
+    lead.notes = (lead.notes or "") + f"\n[Бот] Конвертирован (user_id={user.id})"
+    db.commit()
+    bot_token = os.getenv("BOT_TOKEN")
+    if user.telegram_id and bot_token:
+        try:
+            requests.post(f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                json={"chat_id": user.telegram_id, "text": "🎉 *Поздравляем!* Вы зачислены в TIL USER Education Center!", "parse_mode": "Markdown"}, timeout=5)
+        except Exception:
+            pass
+    return {"status": "ok", "user_id": user.id, "lead_id": lead.id}
+
+# ── Bot: Broadcast to Group ──────────
+@app.post("/api/bot/broadcast-group")
+def bot_broadcast_group(group_id: int = Body(...), message: str = Body(...), db: Session = Depends(get_db), _: str = Depends(verify_bot_secret)):
+    """Send a message to all students in a group via Telegram."""
+    group = db.query(models.Group).filter(models.Group.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    enrollments = db.query(models.Enrollment).filter(
+        models.Enrollment.group_id == group_id
+    ).all()
+    bot_token = os.getenv("BOT_TOKEN")
+    if not bot_token:
+        raise HTTPException(status_code=500, detail="BOT_TOKEN not configured")
+    sent = 0
+    for enroll in enrollments:
+        student = db.query(models.User).filter(models.User.id == enroll.student_id).first()
+        if student and student.telegram_id:
+            try:
+                requests.post(
+                    f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                    json={"chat_id": student.telegram_id, "text": f"📢 *{group.name}*\n\n{message}", "parse_mode": "Markdown"},
+                    timeout=5
+                )
+                sent += 1
+            except Exception:
+                pass
+    return {"sent": sent, "total": len(enrollments)}
 
 # ──────────────────────────────────────
 # COURSES
@@ -363,6 +580,15 @@ def get_group_students(group_id: int, db: Session = Depends(get_db), _=Depends(r
     return result
 
 
+@app.get("/api/groups/{group_id}/gradebook")
+def get_group_gradebook(group_id: int, db: Session = Depends(get_db), _=Depends(require_teacher)):
+    """Return full gradebook for a group: students, lessons, homeworks, grades, attendance."""
+    data = crud.get_group_gradebook(db, group_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="Группа не найдена")
+    return data
+
+
 @app.get("/api/groups/{group_id}/homeworks")
 def get_group_homeworks(group_id: int, db: Session = Depends(get_db), _=Depends(require_teacher)):
     """Return all homeworks assigned to a specific group."""
@@ -411,7 +637,28 @@ def enroll(body: dict, db: Session = Depends(get_db), _=Depends(require_admin)):
 @app.post("/api/homeworks", response_model=schemas.Homework)
 def create_homework(hw: schemas.HomeworkCreate, db: Session = Depends(get_db),
                     _=Depends(require_teacher)):
-    return crud.create_homework(db=db, hw=hw)
+    result = crud.create_homework(db=db, hw=hw)
+
+    # Notify students in the group via Telegram
+    if result and result.group_id:
+        students = db.query(models.User).join(models.Enrollment).filter(
+            models.Enrollment.group_id == result.group_id,
+            models.User.is_active == True,
+            models.User.telegram_id.isnot(None)
+        ).all()
+        bot_token = os.getenv("BOT_TOKEN")
+        if bot_token:
+            msg = f"📝 *Новое домашнее задание!*\n\n*{result.title}*\n{result.description or ''}\n\n📅 Дедлайн: {result.due_date.strftime('%d.%m.%Y %H:%M') if result.due_date else '—'}"
+            for s in students:
+                try:
+                    requests.post(
+                        f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                        json={"chat_id": s.telegram_id, "text": msg, "parse_mode": "Markdown"},
+                        timeout=3
+                    )
+                except:
+                    pass
+    return result
 
 @app.post("/api/homework/submit")
 def submit_homework(submission: schemas.HomeworkSubmissionBase, db: Session = Depends(get_db),
@@ -1552,21 +1799,28 @@ manager = ConnectionManager()
 async def websocket_chat(
     ws: WebSocket,
     user_id: int,
-    token: Optional[str] = Query(default=None),
     db: Session = Depends(get_db)
 ):
-    # Проверяем токен перед подключением
-    if not token:
-        await ws.close(code=4001, reason="Токен не передан")
+    # Принимаем соединение и ждём auth handshake
+    await ws.accept()
+    try:
+        raw = await asyncio.wait_for(ws.receive_text(), timeout=15)
+    except asyncio.TimeoutError:
+        await ws.close(code=4001, reason="Таймаут аутентификации")
         return
-
-    payload = decode_token(token)
+    try:
+        auth_data = json.loads(raw)
+    except json.JSONDecodeError:
+        await ws.close(code=4002, reason="Невалидный JSON")
+        return
+    if auth_data.get("type") != "auth" or not auth_data.get("token"):
+        await ws.close(code=4001, reason="Требуется аутентификация")
+        return
+    payload = decode_token(auth_data["token"])
     token_user_id = payload.get("sub")
     if not token_user_id or int(token_user_id) != user_id:
         await ws.close(code=4003, reason="Недействительный токен")
         return
-
-    # Проверяем пользователя в БД
     db_user = db.query(models.User).filter(
         models.User.id == user_id, models.User.is_active == True
     ).first()
@@ -1579,18 +1833,26 @@ async def websocket_chat(
         while True:
             raw = await ws.receive_text()
             data = json.loads(raw)
+            if data.get("type") == "auth":
+                continue
             receiver_id = int(data["receiver_id"])
-            content = data["content"].strip()
-            if not content:
+            content = data.get("content", "").strip()
+            file_url = data.get("file_url") or None
+            file_type = data.get("file_type") or None
+            file_name = data.get("file_name") or None
+            if not content and not file_url:
                 continue
             # Persist to DB
-            msg = crud.create_message(db, sender_id=user_id, receiver_id=receiver_id, content=content)
+            msg = crud.create_message(db, sender_id=user_id, receiver_id=receiver_id, content=content or None, file_url=file_url, file_type=file_type, file_name=file_name)
             payload_out = {
                 "id": msg.id,
                 "sender_id": user_id,
                 "sender_name": db_user.name,
                 "receiver_id": receiver_id,
                 "content": content,
+                "file_url": file_url,
+                "file_type": file_type,
+                "file_name": file_name,
                 "created_at": str(msg.created_at)[:16],
                 "is_read": False,
             }
@@ -1598,6 +1860,16 @@ async def websocket_chat(
             await manager.send_to(user_id, payload_out)
             # Deliver to receiver if online
             await manager.send_to(receiver_id, payload_out)
+            # Push to receiver via Telegram if offline
+            receiver_user = db.query(models.User).filter(models.User.id == receiver_id).first()
+            if receiver_user and receiver_user.telegram_id:
+                try:
+                    crud.send_telegram_notification(
+                        receiver_user.telegram_id,
+                        f"💬 *{db_user.name}*:\n{content[:200]}"
+                    )
+                except Exception:
+                    pass
     except WebSocketDisconnect:
         manager.disconnect(user_id, ws)
 
@@ -1620,6 +1892,9 @@ def get_conversation(
             "sender_name": m.sender.name if m.sender else "?",
             "receiver_id": m.receiver_id,
             "content": m.content,
+            "file_url": m.file_url,
+            "file_type": m.file_type,
+            "file_name": m.file_name,
             "is_read": m.is_read,
             "created_at": str(m.created_at)[:16],
         }
@@ -1647,6 +1922,24 @@ def get_unread_count(
     return {"unread": count}
 
 
+@app.post("/api/messages/upload")
+async def upload_file(file: UploadFile = File(...), current_user: models.User = Depends(get_current_user)):
+    """Upload a file and return its URL. Max 20MB."""
+    import aiofiles
+    MAX_SIZE = 20 * 1024 * 1024
+    contents = await file.read()
+    if len(contents) > MAX_SIZE:
+        raise HTTPException(status_code=413, detail="Файл слишком большой (макс. 20MB)")
+    ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+    name = f"{uuid4().hex}{ext}"
+    path = os.path.join(UPLOAD_DIR, name)
+    async with aiofiles.open(path, "wb") as f:
+        await f.write(contents)
+    # Determine file type category
+    img_exts = {".jpg",".jpeg",".png",".gif",".webp",".bmp",".svg"}
+    file_type = "image" if ext in img_exts else "document"
+    return {"file_url": f"/uploads/{name}", "file_type": file_type, "file_name": file.filename}
+
 @app.get("/api/messages/users/search")
 def search_chat_users(
     q: str = "",
@@ -1664,20 +1957,14 @@ def search_chat_users(
     users = query.limit(20).all()
     return [{"id": u.id, "name": u.name, "role": u.role} for u in users]
 
-
-
-@app.get("/api/users/minimal/{user_id}")
-def get_minimal_user(user_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Not found")
-    return {"id": user.id, "name": user.name, "role": user.role}
-
 # ──────────────────────────────────────
 # Static Frontend (Root)
 # ──────────────────────────────────────
 # Mount static files at the root to handle app.css, logo.png, etc. directly.
 # This MUST be the last route so it doesn't shadow API routes.
+# Mount uploads for file access (must be before root static mount)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 
 

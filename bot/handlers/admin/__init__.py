@@ -12,6 +12,7 @@ from .students import router as students_router
 from .teachers import router as teachers_router
 from .feedback import router as feedback_router
 from .settings import router as settings_router
+from .leads import router as leads_router
 
 router = Router(name="admin_root")
 router.include_router(panel_router)
@@ -27,3 +28,4 @@ router.include_router(students_router)
 router.include_router(teachers_router)
 router.include_router(feedback_router)
 router.include_router(settings_router)
+router.include_router(leads_router)

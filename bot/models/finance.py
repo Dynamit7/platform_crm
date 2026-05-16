@@ -37,6 +37,10 @@ class Finance(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), init=False, index=True)
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now(), init=False)
 
+    # FIELDS USED BY PAYMENT SERVICE
+    description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True, default=None)
+    confirmation_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True, default=None)
+
     # RELATIONSHIPS
     user: Mapped["User"] = relationship(foreign_keys=[user_id], init=False, back_populates="payments")
     student: Mapped[Optional["Student"]] = relationship(init=False)

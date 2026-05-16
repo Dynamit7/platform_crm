@@ -8,35 +8,33 @@
     <link rel="stylesheet" href="../app.css">
 </head>
 <body>
-<aside class="sidebar">
+<aside id="main-sidebar" class="sidebar">
     <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>TEACHER</small></div>
     <nav class="sidebar-nav">
         <a href="dashboard.html"><span class="icon">📊</span> Мой кабинет</a>
         <a href="students.html"><span class="icon">👨‍🎓</span> Мои студенты</a>
-        <a href="groups.html"><span class="icon">👥</span> Мои группы</a>
+        <a href="groups.html"><span class="icon">👥</span> Группы</a>
+        <a href="gradebook.html"><span class="icon">📋</span> Журнал</a>
         <a href="homeworks.html"><span class="icon">📝</span> Проверка ДЗ</a>
-        <a href="../chat.html"><span class="icon">💬</span> Чат <span class="chat-badge"></span></a>
         <a href="lessons.html" class="active"><span class="icon">🗓️</span> Уроки</a>
         <a href="attendance.html"><span class="icon">✅</span> Посещаемость</a>
+        <a href="../chat.html"><span class="icon">💬</span> Чат <span class="chat-badge"></span></a>
     </nav>
     <div class="sidebar-bottom">
-        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
-        <a href="../settings.html"><span class="icon">⚙️</span> Настройки</a>
-        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
-    </div>
+    <button class="notif-bell" onclick="toggleNotifDropdown()" title="Уведомления">🔔 <span class="badge-dot"></span></button>
+    <div class="notif-dropdown" id="notifDropdown"></div>
+
+
+
+    <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+    <a href="../settings.html"><span class="icon">⚙️</span> Настройки</a>
+    <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+</div>
 </aside>
 
-<div class="main-content">
-    <div class="top-bar">
-        <h1>🗓️ Управление уроками</h1>
-        <div class="top-bar-right">
-            <button class="btn btn-accent" id="addLessonBtn">+ Создать урок</button>
-            <div class="admin-badge" style="background:linear-gradient(135deg,#3B82F6,#6366F1);">👩‍🏫 TEACHER</div>
-        </div>
-    </div>
 
-    <div class="page-content">
-        <!-- Group selector -->
+
+<div class="page-content"><!-- Group selector -->
         <div class="filters-bar" style="margin-bottom: 24px;">
             <label style="font-size:14px;font-weight:600;color:var(--muted);">Группа:</label>
             <select class="filter-select" id="groupSelect" style="min-width:240px;">
@@ -60,10 +58,10 @@
 
 <!-- Create Lesson Modal -->
 <div id="lessonModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(5px);z-index:999;align-items:center;justify-content:center;">
-    <div style="background:white;border-radius:24px;padding:36px;width:90%;max-width:500px;box-shadow:0 25px 60px rgba(0,0,0,0.15);max-height:90vh;overflow-y:auto;">
+    <div style="background:var(--surface);border-radius:24px;padding:36px;width:90%;max-width:500px;box-shadow:0 25px 60px rgba(0,0,0,0.15);max-height:90vh;overflow-y:auto;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
             <h2>🗓️ Новый урок</h2>
-            <button onclick="closeModal()" style="font-size:24px;background:none;border:none;cursor:pointer;color:#666;">×</button>
+            <button onclick="closeModal()" style="font-size:24px;background:none;border:none;cursor:pointer;color:var(--muted);">×</button>
         </div>
         <form id="lessonForm">
             <div style="margin-bottom:16px;">
@@ -94,6 +92,7 @@
     </div>
 </div>
 
+<script src="../auth-utils.js"></script>
 <script>
     const API = '';
     const token = localStorage.getItem('access_token');
@@ -200,8 +199,7 @@
         const group = allGroups.find(g => g.id == groupId);
         const groupName = group ? group.name : `Группа #${groupId}`;
 
-        document.getElementById('lessonsContainer').innerHTML = `
-            <div class="panel"><div class="panel-body" style="text-align:center;padding:30px;color:var(--muted);">Загрузка уроков...</div></div>`;
+        showLoading('lessonsContainer', 'Загрузка уроков...');
 
         try {
             const res = await fetch(`${API}/api/groups/${groupId}/lessons`, { headers: authHeaders() });
@@ -211,8 +209,7 @@
             lessons.sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
             renderLessons(lessons, groupName);
         } catch(e) {
-            document.getElementById('lessonsContainer').innerHTML = `
-                <div class="panel"><div class="panel-body" style="text-align:center;padding:30px;color:var(--danger);">Ошибка загрузки уроков</div></div>`;
+            showError('lessonsContainer', 'Ошибка', 'Не удалось загрузить уроки');
         }
     });
 
@@ -233,6 +230,9 @@
         e.preventDefault();
         const errEl = document.getElementById('lError');
         errEl.style.display = 'none';
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = '⏳ Создание...';
 
         const groupId = parseInt(document.getElementById('lGroupId').value);
         const dateVal = document.getElementById('lDateTime').value;
@@ -250,6 +250,7 @@
             });
             if (res.ok) {
                 closeModal();
+                showToast('Урок создан', 'success');
                 // Reload lessons for the current group
                 document.getElementById('groupSelect').value = groupId;
                 document.getElementById('groupSelect').dispatchEvent(new Event('change'));
@@ -261,11 +262,15 @@
         } catch(e) {
             errEl.textContent = 'Ошибка соединения';
             errEl.style.display = 'block';
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Создать урок';
         }
     };
 
     loadGroups();
 </script>
-<script src="../auth-utils.js"></script>
+
+<div class="sidebar-overlay" ></div>
 </body>
 </html>

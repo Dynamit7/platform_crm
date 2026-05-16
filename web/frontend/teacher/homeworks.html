@@ -8,30 +8,33 @@
     <link rel="stylesheet" href="../app.css">
 </head>
 <body>
-<aside class="sidebar">
+<aside id="main-sidebar" class="sidebar">
     <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>TEACHER</small></div>
     <nav class="sidebar-nav">
         <a href="dashboard.html"><span class="icon">📊</span> Мой кабинет</a>
         <a href="students.html"><span class="icon">👨‍🎓</span> Мои студенты</a>
+        <a href="groups.html"><span class="icon">👥</span> Группы</a>
+        <a href="gradebook.html"><span class="icon">📋</span> Журнал</a>
         <a href="homeworks.html" class="active"><span class="icon">📝</span> Проверка ДЗ</a>
         <a href="lessons.html"><span class="icon">🗓️</span> Уроки</a>
+        <a href="attendance.html"><span class="icon">✅</span> Посещаемость</a>
+        <a href="../chat.html"><span class="icon">💬</span> Чат <span class="chat-badge"></span></a>
     </nav>
     <div class="sidebar-bottom">
-        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
-        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
-    </div>
+    <button class="notif-bell" onclick="toggleNotifDropdown()" title="Уведомления">🔔 <span class="badge-dot"></span></button>
+    <div class="notif-dropdown" id="notifDropdown"></div>
+
+
+
+    <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+    <a href="../settings.html"><span class="icon">⚙️</span> Настройки</a>
+    <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+</div>
 </aside>
 
-<div class="main-content">
-    <div class="top-bar">
-        <h1>📝 Проверка домашних заданий</h1>
-        <div class="top-bar-right">
-            <div class="admin-badge" style="background:linear-gradient(135deg,#3B82F6,#6366F1);">👩‍🏫 TEACHER</div>
-        </div>
-    </div>
 
-    <div class="page-content">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
+
+<div class="page-content"><div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
             <!-- Pending list -->
             <div class="panel">
                 <div class="panel-header">
@@ -56,6 +59,7 @@
     </div>
 </div>
 
+<script src="../auth-utils.js"></script>
 <script>
     const API = '';
     const token = localStorage.getItem('access_token');
@@ -143,6 +147,7 @@
 
     async function submitGrade(e) {
         e.preventDefault();
+        showLoading('gradeContent', 'Сохранение...');
         const grade = document.getElementById('gradeInput').value;
         const feedback = document.getElementById('feedbackInput').value;
         try {
@@ -154,34 +159,40 @@
                 pendingList = pendingList.filter(s => s.id !== selectedId);
                 renderList(pendingList);
                 document.getElementById('gradeContent').innerHTML = '<div style="text-align:center;color:var(--success);padding:30px;"><div style="font-size:40px;margin-bottom:12px;">✅</div><p>Работа проверена!</p></div>';
-            } else { alert('Ошибка при сохранении оценки'); }
-        } catch(e) { alert('Ошибка соединения'); }
+                showToast('Оценка сохранена', 'success');
+            } else { showToast('Ошибка при сохранении оценки', 'error'); }
+        } catch(e) { showToast('Ошибка соединения', 'error'); }
     }
 
     async function returnWork() {
         if (!selectedId) return;
-        try {
-            await fetch(`${API}/api/homework/grade`, {
-                method: 'POST', headers: authHeaders(),
-                body: JSON.stringify({ submission_id: selectedId, grade: 'returned', feedback: document.getElementById('feedbackInput')?.value || 'Требует доработки' })
-            });
-            pendingList = pendingList.filter(s => s.id !== selectedId);
-            renderList(pendingList);
-            document.getElementById('gradeContent').innerHTML = '<div style="text-align:center;color:var(--warning);padding:30px;"><div style="font-size:40px;margin-bottom:12px;">↩</div><p>Работа возвращена студенту</p></div>';
-        } catch(e) { alert('Ошибка'); }
+        confirmAction('Вернуть работу студенту на доработку?', async () => {
+            try {
+                await fetch(`${API}/api/homework/grade`, {
+                    method: 'POST', headers: authHeaders(),
+                    body: JSON.stringify({ submission_id: selectedId, grade: 'returned', feedback: document.getElementById('feedbackInput')?.value || 'Требует доработки' })
+                });
+                pendingList = pendingList.filter(s => s.id !== selectedId);
+                renderList(pendingList);
+                document.getElementById('gradeContent').innerHTML = '<div style="text-align:center;color:var(--warning);padding:30px;"><div style="font-size:40px;margin-bottom:12px;">↩</div><p>Работа возвращена студенту</p></div>';
+                showToast('Работа возвращена', 'info');
+            } catch(e) { showToast('Ошибка при возврате работы', 'error'); }
+        });
     }
 
     async function load() {
+        showLoading('pendingList', 'Загрузка...');
         try {
             const res = await fetch(`${API}/api/homework/pending`, { headers: authHeaders() });
-            if (!res.ok) return;
+            if (!res.ok) { showEmpty('pendingList', 'Нет данных'); return; }
             pendingList = await res.json();
             renderList(pendingList);
-        } catch(e) { console.error(e); }
+        } catch(e) { showError('pendingList', 'Ошибка', 'Не удалось загрузить работы'); }
     }
     load();
     function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 </script>
-<script src="../auth-utils.js"></script>
+
+<div class="sidebar-overlay" ></div>
 </body>
 </html>

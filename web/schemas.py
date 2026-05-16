@@ -355,5 +355,10 @@ class AdminStats(BaseModel):
     pending_homeworks: int
     active_enrollments: int
 
+class BotMessage(BaseModel):
+    sender_tg_id: int
+    receiver_id: int
+    content: str
+
 class BulkAction(BaseModel):
     ids: List[int]

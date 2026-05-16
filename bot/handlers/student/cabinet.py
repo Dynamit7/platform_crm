@@ -47,8 +47,9 @@ async def show_cabinet(event: types.TelegramObject, db_user: User, session: Asyn
     hw_count = await session.scalar(sub_count_stmt) or 0
     
     text = (
-        f"🎓 *Личный кабинет ученика*\n\n"
-        f"👤 *Имя:* {db_user.full_name}\n"
+        f"🎓 *Личный кабинет*\n"
+        f"――――――――――――――――\n"
+        f"👤 *Имя:* `{db_user.full_name}`\n"
         f"📊 *Сдано заданий:* `{hw_count}`\n\n"
         f"Выберите раздел для обучения:"
     )
@@ -168,11 +169,12 @@ async def view_student_course_details(callback: types.CallbackQuery, session: As
             hw_text += f"\nКомментарий учителя: {last_hw.teacher_comment}"
     
     text = (
-        f"🔸 *Курс: {group.course.name}*\n"
-        f"👨‍🏫 *Учитель:* {teacher_name}\n\n"
+        f"📚 *{group.course.name}*\n"
+        f"――――――――――――――――\n"
+        f"👨‍🏫 *Учитель:* `{teacher_name}`\n"
         f"📊 *Прогресс:* `{p_bar}`\n"
         f"✅ *Посещено уроков:* `{lessons_attended}/{lessons_total}`\n\n"
-        f"📝 *Последняя домашка:*\n{hw_text}"
+        f"📝 *Домашка:*\n   {hw_text}"
     )
     
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton

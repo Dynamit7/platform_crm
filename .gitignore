@@ -164,8 +164,21 @@ cython_debug/
 .idea/
 .aider*
 .env
-.env
-.env
-.env
-.env
-.env
+.wp-env/
+*.db-shm
+*.db-wal
+*.db-journal
+*db.backup
+*.pyc
+
+# local override (keep your secrets here)
+docker-compose.override.yml
+
+# logs
+*.log
+bot.err
+web.err
+
+# local certs (not committed)
+certs/
+uploads/

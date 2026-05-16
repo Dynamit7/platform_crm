@@ -19,6 +19,12 @@ TEMPLATES = {
         "Уважаемый {name}, напоминаем о необходимости пополнить баланс для продолжения обучения.\n"
         "Текущий баланс: {balance} сум."
     ),
+    NotificationType.PAYMENT_SUCCESS: (
+        "✅ *Оплата получена!*\n\n"
+        "Сумма: {amount} {currency}\n"
+        "{description}\n"
+        "Спасибо, что вы с нами! 🙌"
+    ),
     NotificationType.HOMEWORK_NEW: (
         "📝 *Новое домашнее задание*\n\n"
         "Преподаватель добавил ДЗ к уроку \"{topic}\". Срок сдачи: {deadline}."
@@ -26,5 +32,10 @@ TEMPLATES = {
     NotificationType.HOMEWORK_GRADED: (
         "⭐ *ДЗ проверено!*\n\n"
         "Ваше задание по теме \"{topic}\" проверено. Оценка: *{grade}*."
+    ),
+    NotificationType.SCHEDULE_DAILY: (
+        "📅 *Расписание на завтра*\n\n"
+        "{lessons}\n\n"
+        "Готовьтесь заранее и не опаздывайте! 🎯"
     )
 }

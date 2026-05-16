@@ -14,7 +14,7 @@
             margin-top: 30px;
         }
         .course-card-full {
-            background: white;
+            background: var(--surface);
             border-radius: 24px;
             border: 1px solid var(--border);
             overflow: hidden;
@@ -107,6 +107,8 @@
     </style>
 </head>
 <body>
+<script src="auth-utils.js"></script>
+<script>var _r=localStorage.getItem('user_role');if(_r==='admin')window.location.href='admin/dashboard.html';else if(_r==='teacher')window.location.href='teacher/dashboard.html';</script>
     <div class="dashboard-layout">
         <aside class="sidebar">
             <div class="sidebar-logo">TIL <span>USER</span></div>
@@ -144,8 +146,10 @@
         const userId = localStorage.getItem('user_id');
         document.getElementById('logoutBtn').onclick = (e) => {
             e.preventDefault();
-            localStorage.clear();
-            window.location.href = 'login.html';
+            if (confirm('Вы уверены, что хотите выйти?')) {
+                localStorage.clear();
+                window.location.href = 'login.html';
+            }
         };
 
         const IMGS = {
@@ -164,6 +168,7 @@
 
         async function loadCourses() {
             const grid = document.getElementById('coursesGrid');
+            grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--text-muted);">Загрузка...</div>';
             try {
                 const res = await fetch(`${API}/api/dashboard/${userId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -216,6 +221,6 @@
 
         loadCourses();
     </script>
-<script src="auth-utils.js"></script>
+
 </body>
 </html>

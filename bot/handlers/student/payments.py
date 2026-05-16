@@ -140,9 +140,6 @@ async def process_payment_receipt(message: types.Message, state: FSMContext, ses
         ]
     ])
     
-    from bot.notifications.service import NotificationService
-    notifier = NotificationService(message.bot)
-    
     for admin in admins:
         try:
             await message.bot.send_photo(

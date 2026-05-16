@@ -75,7 +75,7 @@
             margin: 0 auto;
             transition: all 0.15s;
             font-size: 14px;
-            background: white;
+            background: var(--surface);
             user-select: none;
         }
         .att-checkbox:hover { border-color: var(--primary); background: rgba(4,30,66,0.05); }
@@ -120,7 +120,7 @@
         .save-bar {
             position: sticky;
             bottom: 0;
-            background: white;
+            background: var(--surface);
             border-top: 2px solid var(--border);
             padding: 16px 24px;
             display: flex;
@@ -158,7 +158,7 @@
             margin-bottom: 24px;
         }
         .summary-card {
-            background: white;
+            background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 16px;
             padding: 20px;
@@ -190,7 +190,7 @@
 </head>
 <body>
 
-<aside class="sidebar">
+<aside id="main-sidebar" class="sidebar">
     <div class="sidebar-logo">
         <img src="../logo.png" alt="TIL USER Logo" style="height:32px; width:auto; border-radius:4px;">
         TIL <span>USER</span><small>TEACHER</small>
@@ -198,27 +198,28 @@
     <nav class="sidebar-nav">
         <a href="dashboard.html"><span class="icon">📊</span> Мой кабинет</a>
         <a href="students.html"><span class="icon">👨‍🎓</span> Мои студенты</a>
+        <a href="groups.html"><span class="icon">👥</span> Группы</a>
+        <a href="gradebook.html"><span class="icon">📋</span> Журнал</a>
         <a href="homeworks.html"><span class="icon">📝</span> Проверка ДЗ</a>
         <a href="lessons.html"><span class="icon">🗓️</span> Уроки</a>
         <a href="attendance.html" class="active"><span class="icon">✅</span> Посещаемость</a>
+        <a href="../chat.html"><span class="icon">💬</span> Чат <span class="chat-badge"></span></a>
     </nav>
     <div class="sidebar-bottom">
-        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
-        <a href="../settings.html"><span class="icon">⚙️</span> Настройки</a>
-        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
-    </div>
+    <button class="notif-bell" onclick="toggleNotifDropdown()" title="Уведомления">🔔 <span class="badge-dot"></span></button>
+    <div class="notif-dropdown" id="notifDropdown"></div>
+
+
+
+    <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+    <a href="../settings.html"><span class="icon">⚙️</span> Настройки</a>
+    <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+</div>
 </aside>
 
-<div class="main-content">
-    <div class="top-bar">
-        <h1>✅ Посещаемость</h1>
-        <div class="top-bar-right">
-            <div class="admin-badge" style="background:linear-gradient(135deg,#3B82F6,#6366F1);">👩‍🏫 TEACHER</div>
-        </div>
-    </div>
 
-    <div class="page-content">
-        <!-- Group selector -->
+
+<div class="page-content"><!-- Group selector -->
         <div class="panel" style="margin-bottom:24px;">
             <div class="panel-header">
                 <h2>👥 Выберите группу</h2>
@@ -290,6 +291,7 @@
     </div>
 </div>
 
+<script src="../auth-utils.js"></script>
 <script>
     const API = '';
     const token = localStorage.getItem('access_token');
@@ -339,14 +341,15 @@
 
     async function loadGroupAttendance() {
         if (!selectedGroupId) return;
+        showLoading('overviewTable', 'Загрузка...');
         try {
             const res = await fetch(`${API}/api/groups/${selectedGroupId}/attendance`, { headers: authH() });
-            if (!res.ok) return;
+            if (!res.ok) { showError('overviewTable', 'Ошибка', 'Не удалось загрузить данные'); return; }
             groupData = await res.json();
             renderSummaryCards(groupData);
             renderLessonSelect(groupData.lessons);
             renderOverviewTable(groupData);
-        } catch(e) { console.error(e); }
+        } catch(e) { showError('overviewTable', 'Ошибка', 'Не удалось загрузить данные'); }
     }
 
     function renderSummaryCards(data) {
@@ -378,10 +381,12 @@
     async function loadLessonAttendance() {
         const lessonId = parseInt(document.getElementById('lessonSelect').value);
         if (!lessonId || !groupData) {
-            document.getElementById('markTable').innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px;">Выберите урок</div>';
+            showEmpty('markTable', 'Выберите урок', '👈');
             document.getElementById('saveBar').style.display = 'none';
             return;
         }
+
+        showLoading('markTable', 'Загрузка...');
 
         // Build current attendance from groupData
         currentAttendance = {};
@@ -520,12 +525,12 @@
                 btn.textContent = '✅ Сохранено!';
                 setTimeout(() => { btn.textContent = '💾 Сохранить посещаемость'; btn.disabled = false; }, 2000);
             } else {
-                alert('Ошибка сохранения');
+                showToast('Ошибка сохранения', 'error');
                 btn.disabled = false;
                 btn.textContent = '💾 Сохранить посещаемость';
             }
         } catch(e) {
-            alert('Ошибка сети');
+            showToast('Ошибка сети', 'error');
             btn.disabled = false;
             btn.textContent = '💾 Сохранить посещаемость';
         }
@@ -579,6 +584,7 @@
 
     loadGroups();
 </script>
-<script src="../auth-utils.js"></script>
+
+<div class="sidebar-overlay" ></div>
 </body>
 </html>

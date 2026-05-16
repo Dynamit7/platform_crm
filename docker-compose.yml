@@ -1,49 +1,55 @@
-# ──────────────────────────────────────────────────────────────────
-# SmartEdu CRM — Docker Production Setup
-# ──────────────────────────────────────────────────────────────────
+# SmartEdu CRM — Docker Production
 # Usage:
-#   docker-compose up --build -d
-# ──────────────────────────────────────────────────────────────────
-
-version: "3.9"
+#   docker compose up --build -d
+#   docker compose -f docker-compose.yml -f docker-compose.override.yml up -d
 
 services:
-  # ── Web (FastAPI + Uvicorn) ───────────────────────────────────
   web:
     build:
       context: .
       dockerfile: docker/Dockerfile.web
     container_name: smartedu_web
     restart: unless-stopped
-    ports:
-      - "8000:8000"
     volumes:
-      - ./web/education_center_web.db:/app/web/education_center_web.db
+      - ./education_center_v2.db:/app/education_center_v2.db
       - ./web/frontend/uploads:/app/web/frontend/uploads
     env_file:
       - web/.env
-    depends_on: []
+    environment:
+      - DATABASE_URL=sqlite:///./education_center_v2.db
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/admin/stats"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # ── Bot (Aiogram + aiohttp webhook) ──────────────────────────
   bot:
     build:
       context: .
       dockerfile: docker/Dockerfile.bot
     container_name: smartedu_bot
     restart: unless-stopped
-    ports:
-      - "8080:8080"   # Payment webhook port
     volumes:
       - ./education_center_v2.db:/app/education_center_v2.db
       - ./bot.log:/app/bot.log
     env_file:
       - .env
     environment:
-      - API_URL=http://web:8000
+      - API_URL=http://web:8000/api/bot
+    depends_on:
+      web:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:alpine
+    container_name: smartedu_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
     depends_on:
       - web
+      - bot
+    restart: unless-stopped

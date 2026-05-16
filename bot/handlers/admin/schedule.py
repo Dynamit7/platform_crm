@@ -249,6 +249,10 @@ async def add_lesson_step2_teachers(callback: types.CallbackQuery, state: FSMCon
     builder = InlineKeyboardBuilder()
     for t in teachers:
         builder.row(types.InlineKeyboardButton(text=f"👨‍🏫 {t.full_name}", callback_data=f"sch_set_teacher:{t.id}"))
+    builder.row(
+        types.InlineKeyboardButton(text="⬅️ Назад к группам", callback_data="admin_sch:add_start"),
+        types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin:schedule")
+    )
     
     await callback.message.edit_text("🆕 *Шаг 2: Выберите преподавателя*", parse_mode="Markdown", reply_markup=builder.as_markup())
     await state.set_state(AdminScheduleStates.waiting_for_teacher)

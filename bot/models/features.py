@@ -4,6 +4,14 @@ from sqlalchemy import String, ForeignKey, DateTime, func, Integer, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from bot.models.base import Base
 
+class Referral(Base):
+    __tablename__ = "referrals"
+    id: Mapped[int] = mapped_column(primary_key=True, init=False)
+    referrer_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    referred_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    reward_status: Mapped[str] = mapped_column(String(20), default="pending")
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), init=False)
+
 if TYPE_CHECKING:
     from bot.models.user import User, Student
 

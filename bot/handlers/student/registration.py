@@ -114,23 +114,6 @@ async def process_trial_time(message: types.Message, state: FSMContext, session:
             trial_time=trial_time
         )
         
-        # Sync user with Web API to link by phone or create CRM student
-        try:
-            import aiohttp
-            from bot.config import config
-            async with aiohttp.ClientSession() as http_session:
-                payload = {
-                    "telegram_id": message.from_user.id,
-                    "name": data["full_name"],
-                    "phone": data["phone"],
-                    "email": None,
-                    "course_interest": data["course_interest"],
-                    "trial_time": trial_time
-                }
-                await http_session.post(f"{config.API_URL}/sync-user", json=payload, timeout=3)
-        except Exception as e:
-            logger.error(f"Failed to sync user with API on registration: {e}")
-        
         # Уведомляем админов
         notifier = NotificationService(bot)
         msg_text = f"🆕 *Новая заявка!*\n\n👤 Имя: {user.full_name}\n📞 Телефон: {user.phone}\n📚 Курс: {data['course_interest']}\n🗓 Время (пробный): {trial_time}"

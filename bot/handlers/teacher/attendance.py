@@ -97,7 +97,7 @@ async def set_attendance_status(callback: types.CallbackQuery, session: AsyncSes
         lesson = (await session.execute(stmt_l)).scalar_one_or_none()
         
         if student and student.user and lesson:
-            from bot.notifications.service import NotificationService
+            from bot.services.notification_service import NotificationService
             notifier = NotificationService(callback.bot)
             try:
                 await notifier.notify_user_status_change(

@@ -25,9 +25,10 @@ async def show_teacher_panel(event: types.TelegramObject, db_user: User):
         return
 
     text = (
-        f"👨‍🏫 *Панель преподавателя*\n\n"
-        f"Здравствуйте, {db_user.full_name}!\n"
-        f"Здесь вы можете управлять своими группами и проверять задания."
+        f"👨‍🏫 *Панель преподавателя*\n"
+        f"――――――――――――――――\n"
+        f"Здравствуйте, `{db_user.full_name}`!\n"
+        f"Управляйте группами, проверяйте задания и следите за прогрессом учеников."
     )
     
     kb = get_teacher_main_kb()
@@ -58,9 +59,9 @@ async def list_teacher_groups(callback: types.CallbackQuery, session: AsyncSessi
         await callback.message.edit_text("ℹ️ У вас пока нет назначенных групп.", reply_markup=get_teacher_main_kb())
         return
 
-    text = "👥 *Ваши учебные группы:* \n\n"
+    text = "👥 *Учебные группы*\n――――――――――――――――\n"
     for g in groups:
-        text += f"🔹 *{g.name}* | {g.course.name}\n"
+        text += f"🔹 *{g.name}* | `{g.course.name}`\n"
         
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_teacher_groups_kb(groups))
 
@@ -100,7 +101,7 @@ async def process_broadcast_message(message: types.Message, state: FSMContext, s
         
     from bot.models.education import StudentGroup
     from bot.models.user import Student
-    from bot.notifications.service import NotificationService
+    from bot.services.notification_service import NotificationService
     
     stmt = (
         select(StudentGroup)
@@ -137,9 +138,10 @@ async def show_teacher_profile(callback: types.CallbackQuery, session: AsyncSess
         return await callback.answer("Профиль не найден", show_alert=True)
         
     text = (
-        f"👤 *Ваш профиль преподавателя*\n\n"
-        f"Имя: {t.user.full_name}\n"
-        f"Специализация: {t.specialization or 'Не указана'}\n"
+        f"👤 *Профиль преподавателя*\n"
+        f"――――――――――――――――\n"
+        f"👤 *Имя:* `{t.user.full_name}`\n"
+        f"📌 *Специализация:* `{t.specialization or 'Не указана'}`\n"
     )
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     builder = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data="teacher:main")]])

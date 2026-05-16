@@ -133,7 +133,7 @@ async def change_user_role(callback: types.CallbackQuery, session: AsyncSession)
         reg_service = RegistrationService(session)
         student = await reg_service.approve_application(user_id)
         # Уведомляем ученика
-        from bot.notifications.service import NotificationService
+        from bot.services.notification_service import NotificationService
         from aiogram import Bot
         notifier = NotificationService(callback.bot)
         await notifier.notify_user_status_change(
@@ -152,7 +152,7 @@ async def change_user_role(callback: types.CallbackQuery, session: AsyncSession)
             session.add(Teacher(user_id=user.id, is_active=True))
         await session.commit()
         # Уведомляем учителя
-        from bot.notifications.service import NotificationService
+        from bot.services.notification_service import NotificationService
         notifier = NotificationService(callback.bot)
         await notifier.notify_user_status_change(
             user.telegram_id, 

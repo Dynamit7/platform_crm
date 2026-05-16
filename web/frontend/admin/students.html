@@ -9,7 +9,7 @@
     <style>
         .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px); }
         .modal-overlay.open { display:flex; }
-        .modal { background:#fff;border-radius:20px;width:560px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,0.2);animation:slideUp 0.25s ease; }
+        .modal { background:var(--surface);border-radius:20px;width:560px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,0.2);animation:slideUp 0.25s ease; }
         .modal-lg { width:780px; }
         @keyframes slideUp { from{transform:translateY(24px);opacity:0} to{transform:translateY(0);opacity:1} }
         .modal-header { padding:24px 28px 0;display:flex;justify-content:space-between;align-items:center; }
@@ -50,7 +50,7 @@
 </head>
 <body>
 
-<aside class="sidebar">
+<aside id="main-sidebar" class="sidebar">
     <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>ADMIN CRM</small></div>
         <nav class="sidebar-nav">
         <div class="section-label">Главное</div>
@@ -74,23 +74,16 @@
         <a href="reviews.html" ><span class="icon">⭐</span> Отзывы</a>
     </nav>
     <div class="sidebar-bottom">
-        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
-        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
-    </div>
+    <button class="notif-bell" onclick="toggleNotifDropdown()" title="Уведомления">🔔 <span class="badge-dot"></span></button>
+    <div class="notif-dropdown" id="notifDropdown"></div>
+
+
+
+    <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+    <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+</div>
 </aside>
-
-<div class="main-content">
-    <div class="top-bar">
-        <h1>👨‍🎓 Студенты</h1>
-        <div class="top-bar-right">
-            <button class="btn btn-primary" id="addUserBtn">+ Добавить</button>
-            <button class="btn btn-outline btn-sm" id="exportBtn">📊 Excel</button>
-            <div class="admin-badge">👑 ADMIN</div>
-        </div>
-    </div>
-
-    <div class="page-content">
-        <div class="filters-bar">
+<div class="page-content"><div class="filters-bar">
             <div style="display: flex; gap: 12px; flex: 1;">
                 <input type="text" class="search-input" id="searchInput" placeholder="🔍 Поиск по имени, email или группе...">
                 <select class="filter-select" id="roleFilter">
@@ -106,7 +99,7 @@
                     <option value="none">Нет данных</option>
                 </select>
             </div>
-            <div id="bulkActions" style="display: none; gap: 8px; align-items: center; background: #f0f4f8; padding: 4px 12px; border-radius: 10px;">
+            <div id="bulkActions" style="display: none; gap: 8px; align-items: center; background: var(--bg-color); padding: 4px 12px; border-radius: 10px;">
                 <span style="font-size: 13px; font-weight: 600;" id="selectedCount">0 выбрано</span>
                 <button class="btn btn-outline btn-sm" style="margin:0; width:auto;" onclick="bulkMessage()">💬 Написать</button>
                 <button class="btn btn-danger btn-sm" style="margin:0; width:auto;" onclick="bulkDelete()">🗑 Удалить</button>
@@ -276,6 +269,7 @@
     </div>
 </div>
 
+<script src="../auth-utils.js"></script>
 <script>
     const API = '';
     const token = localStorage.getItem('access_token');
@@ -303,14 +297,14 @@
             const roleTag = `<span class="tag-role-${u.role}">${roleLabel(u.role)}</span>`;
             
             // Payment badge
-            let payBadge = '<span class="badge-status" style="background:#f1f5f9;color:#64748b;">Нет данных</span>';
+            let payBadge = '<span class="badge-status" style="background:var(--surface);color:var(--muted);">Нет данных</span>';
             if (u.latest_payment_status === 'paid') payBadge = '<span class="badge-status enrolled">Оплачено</span>';
             else if (u.latest_payment_status === 'pending') payBadge = '<span class="badge-status contacted">Ожидает</span>';
             else if (u.latest_payment_status === 'none' && u.role === 'student') payBadge = '<span class="badge-status lost">Долг</span>';
 
             // Group tags
             const groupTags = u.groups.length 
-                ? u.groups.map(g => `<span style="font-size:11px;background:rgba(4,30,66,0.05);padding:2px 6px;border-radius:4px;margin-right:4px;">${esc(g)}</span>`).join('')
+                ? u.groups.map(g => `<span style="font-size:11px;background:var(--bg-color);padding:2px 6px;border-radius:4px;margin-right:4px;">${esc(g)}</span>`).join('')
                 : '<span style="color:#cbd5e1;font-size:11px;">Нет групп</span>';
 
             let sourceIcon = u.registration_source === 'telegram' ? '<span title="Telegram Bot" style="font-size:14px; margin-left:4px;">🤖</span>' : '<span title="Сайт" style="font-size:14px; margin-left:4px;">🌐</span>';
@@ -397,13 +391,18 @@
 
     // ─── Load ───
     async function loadUsers() {
+        showLoading('studentsTable', 'Загрузка...');
         try {
             const res = await fetch(`${API}/api/admin/users/summary`, { headers: authH() });
             if (res.ok) {
                 allUsers = await res.json();
                 renderTable(allUsers);
+            } else {
+                showError('studentsTable', 'Ошибка', 'Не удалось загрузить список');
             }
-        } catch(e) { console.error(e); }
+        } catch(e) {
+            showError('studentsTable', 'Ошибка', 'Не удалось загрузить список');
+        }
     }
 
     // ─── Export ───
@@ -499,11 +498,11 @@
                 selectedIds.clear();
                 updateBulkUI();
                 loadUsers();
-                alert('Пользователи удалены');
+                showToast('Пользователи удалены', 'success');
             } else {
-                alert('Ошибка при удалении');
+                showToast('Ошибка при удалении', 'error');
             }
-        } catch(e) { alert('Ошибка соединения'); }
+        } catch(e) { showToast('Ошибка соединения', 'error'); }
     }
 
     function bulkMessage() {
@@ -528,17 +527,17 @@
                 method: 'DELETE', headers: authH()
             });
             if (res.ok) { closeModal('deleteModal'); loadUsers(); }
-            else alert('Ошибка удаления');
-        } catch(e) { alert('Ошибка соединения'); }
+            else showToast('Ошибка удаления', 'error');
+        } catch(e) { showToast('Ошибка соединения', 'error'); }
     };
 
     // ─── PROFILE VIEW ───
     async function viewProfile(id) {
         openModal('profileModal');
-        document.getElementById('profileBody').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">Загрузка...</div>';
+        showLoading('profileBody', 'Загрузка...');
         try {
             const res = await fetch(`${API}/api/admin/users/${id}`, { headers: authH() });
-            if (!res.ok) { document.getElementById('profileBody').innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger);">Ошибка загрузки</div>'; return; }
+            if (!res.ok) { showError('profileBody', 'Ошибка загрузки'); return; }
             const data = await res.json();
             const u = data.user;
             const initials = u.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
@@ -617,7 +616,7 @@
                 <div class="tab-panel" id="tabPay">${payHTML}</div>
                 <div class="tab-panel" id="tabHW">${hwHTML}</div>
             `;
-        } catch(e) { document.getElementById('profileBody').innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger);">Ошибка соединения</div>'; }
+        } catch(e) { showError('profileBody', 'Ошибка', 'Не удалось загрузить профиль'); }
     }
 
     function switchTab(btn, tabId) {
@@ -647,12 +646,12 @@
             const data = await res.json();
             if (res.ok) {
                 closeModal('freezeModal');
-                alert(`✅ Профиль заморожен до ${data.frozen_until}`);
+                showToast(`Профиль заморожен до ${data.frozen_until}`, 'success');
                 loadUsers();
             } else {
-                alert('Ошибка: ' + (data.detail || 'Неизвестная ошибка'));
+                showToast('Ошибка: ' + (data.detail || 'Неизвестная ошибка'), 'error');
             }
-        } catch(e) { alert('Ошибка соединения'); }
+        } catch(e) { showToast('Ошибка соединения', 'error'); }
     }
 
     async function unfreezeUser(userId) {
@@ -663,13 +662,13 @@
             });
             if (res.ok) {
                 closeModal('profileModal');
-                alert('✅ Профиль разморожен!');
+                showToast('Профиль разморожен', 'success');
                 loadUsers();
             } else {
                 const d = await res.json();
-                alert('Ошибка: ' + (d.detail || ''));
+                showToast('Ошибка: ' + (d.detail || ''), 'error');
             }
-        } catch(e) { alert('Ошибка соединения'); }
+        } catch(e) { showToast('Ошибка соединения', 'error'); }
     }
 
     async function toggleActive(userId, restore) {
@@ -684,13 +683,13 @@
             const data = await res.json();
             if (res.ok) {
                 closeModal('profileModal');
-                alert(`✅ Студент ${data.action}`);
+                showToast(`Студент ${data.action}`, 'success');
                 loadUsers();
             } else {
                 const d = await res.json();
-                alert('Ошибка: ' + (d.detail || ''));
+                showToast('Ошибка: ' + (d.detail || ''), 'error');
             }
-        } catch(e) { alert('Ошибка соединения'); }
+        } catch(e) { showToast('Ошибка соединения', 'error'); }
     }
 
     async function openTransfer(userId) {
@@ -723,14 +722,14 @@
 
             closeModal('profileModal');
             openModal('transferModal');
-        } catch(e) { alert('Ошибка загрузки групп'); }
+        } catch(e) { showToast('Ошибка загрузки групп', 'error'); }
     }
 
     async function confirmTransfer() {
         const fromGroupId = parseInt(document.getElementById('transferFromGroup').value);
         const toGroupId = parseInt(document.getElementById('transferToGroup').value);
-        if (!fromGroupId || !toGroupId) { alert('Выберите группы'); return; }
-        if (fromGroupId === toGroupId) { alert('Группы должны отличаться'); return; }
+        if (!fromGroupId || !toGroupId) { showToast('Выберите группы', 'error'); return; }
+        if (fromGroupId === toGroupId) { showToast('Группы должны отличаться', 'error'); return; }
         try {
             const res = await fetch(`${API}/api/admin/users/${transferTargetId}/transfer-group`, {
                 method: 'POST', headers: authH(true),
@@ -739,16 +738,17 @@
             const data = await res.json();
             if (res.ok) {
                 closeModal('transferModal');
-                alert(`✅ Студент переведён в группу «${data.new_group}»`);
+                showToast(`Студент переведён в группу «${data.new_group}»`, 'success');
                 loadUsers();
             } else {
-                alert('Ошибка: ' + (data.detail || ''));
+                showToast('Ошибка: ' + (data.detail || ''), 'error');
             }
-        } catch(e) { alert('Ошибка соединения'); }
+        } catch(e) { showToast('Ошибка соединения', 'error'); }
     }
 
     loadUsers();
 </script>
-<script src="../auth-utils.js"></script>
+
+<div class="sidebar-overlay" ></div>
 </body>
 </html>

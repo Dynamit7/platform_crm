@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="../app.css">
 </head>
 <body>
-<aside class="sidebar">
+<aside id="main-sidebar" class="sidebar">
     <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>ADMIN CRM</small></div>
         <nav class="sidebar-nav">
         <div class="section-label">Главное</div>
@@ -32,21 +32,16 @@
         <a href="reviews.html" ><span class="icon">⭐</span> Отзывы</a>
     </nav>
     <div class="sidebar-bottom">
-        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
-        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
-    </div>
-</aside>
+    <button class="notif-bell" onclick="toggleNotifDropdown()" title="Уведомления">🔔 <span class="badge-dot"></span></button>
+    <div class="notif-dropdown" id="notifDropdown"></div>
 
-<div class="main-content">
-    <div class="top-bar">
-        <h1>👩‍🏫 Преподаватели</h1>
-        <div class="top-bar-right">
-            <button class="btn btn-accent" id="addTeacherBtn">+ Добавить преподавателя</button>
-            <div class="admin-badge">👑 ADMIN</div>
-        </div>
-    </div>
-    <div class="page-content">
-        <!-- Stats row -->
+
+
+    <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+    <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+</div>
+</aside>
+<div class="page-content"><!-- Stats row -->
         <div class="kpi-grid" style="grid-template-columns: repeat(3,1fr); margin-bottom: 24px;">
             <div class="kpi-card">
                 <div class="kpi-icon blue">👩‍🏫</div>
@@ -79,10 +74,10 @@
 
 <!-- Add Teacher Modal -->
 <div id="teacherModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); backdrop-filter:blur(5px); z-index:999; align-items:center; justify-content:center;">
-    <div style="background:white; border-radius:24px; padding:36px; width:90%; max-width:520px; box-shadow:0 25px 60px rgba(0,0,0,0.15); max-height:90vh; overflow-y:auto;">
+    <div style="background:var(--surface); border-radius:24px; padding:36px; width:90%; max-width:520px; box-shadow:0 25px 60px rgba(0,0,0,0.15); max-height:90vh; overflow-y:auto;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
             <h2>👩‍🏫 Новый преподаватель</h2>
-            <button onclick="closeModal()" style="font-size:24px;background:none;border:none;cursor:pointer;color:#666;">×</button>
+            <button onclick="closeModal()" style="font-size:24px;background:none;border:none;cursor:pointer;color:var(--muted);">×</button>
         </div>
         <form id="teacherForm">
             <div style="margin-bottom:16px;">
@@ -107,6 +102,7 @@
     </div>
 </div>
 
+<script src="../auth-utils.js"></script>
 <script>
     const API = '';
     const token = localStorage.getItem('access_token');
@@ -177,6 +173,7 @@
     };
 
     async function loadTeachers() {
+        showLoading('teachersGrid', 'Загрузка...');
         try {
             const [teachersRes, accountsRes] = await Promise.all([
                 fetch(`${API}/api/teachers`, { headers: authHeaders() }),
@@ -185,15 +182,20 @@
             if (teachersRes.ok) {
                 allTeachers = await teachersRes.json();
                 renderGrid(allTeachers);
+            } else {
+                showError('teachersGrid', 'Ошибка', 'Не удалось загрузить преподавателей');
             }
             if (accountsRes.ok) {
                 const accounts = await accountsRes.json();
                 document.getElementById('countAccounts').textContent = accounts.length;
             }
-        } catch(e) { console.error(e); }
+        } catch(e) {
+            showError('teachersGrid', 'Ошибка', 'Не удалось загрузить преподавателей');
+        }
     }
     loadTeachers();
 </script>
-<script src="../auth-utils.js"></script>
+
+<div class="sidebar-overlay" ></div>
 </body>
 </html>

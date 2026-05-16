@@ -7,10 +7,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../app.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="../auth-utils.js"></script>
 </head>
 <body>
 
-<aside class="sidebar">
+<aside id="main-sidebar" class="sidebar">
     <div class="sidebar-logo">
         <img src="../logo.png" alt="TIL USER Logo" style="height:32px; width:auto; border-radius:4px;">
         TIL <span>USER</span><small>ADMIN CRM</small>
@@ -37,43 +38,16 @@
         <a href="reviews.html" ><span class="icon">⭐</span> Отзывы</a>
     </nav>
     <div class="sidebar-bottom">
-        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
-        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
-    </div>
+    <button class="notif-bell" onclick="toggleNotifDropdown()" title="Уведомления">🔔 <span class="badge-dot"></span></button>
+    <div class="notif-dropdown" id="notifDropdown"></div>
+
+
+
+    <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+    <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+</div>
 </aside>
-
-<div class="main-content">
-    <div class="top-bar">
-        <h1>📊 Панель управления</h1>
-        <div class="top-bar-right"><button class="theme-toggle-btn" onclick="toggleTheme()" id="themeBtn" style="width:36px; height:36px; font-size:18px; margin-right:15px; border:none; background:var(--bg-color); border-radius:10px; cursor:pointer;">🌙</button>
-            <div class="admin-badge">👑 ADMIN</div>
-            <div class="user-info" style="position:relative; cursor:pointer;" onclick="toggleProfileDropdown(event)" id="profileBtn">
-                Привет, <strong id="adminName">—</strong>
-                <div class="notifications-dropdown" id="profileDropdown" style="width: 200px; padding: 10px; position:absolute; right:0; top:40px; text-align:left; font-weight:normal; display:none; background:#fff; border-radius:10px; box-shadow:0 10px 25px rgba(0,0,0,0.1); border:1px solid var(--border); z-index:100;">
-                    <a href="../settings.html" style="display: block; padding: 10px; color: var(--text); text-decoration: none; transition: 0.2s; border-radius:6px;" onmouseover="this.style.background='var(--bg-color)'" onmouseout="this.style.background='none'">👤 Мой профиль</a>
-                    <a href="#" onclick="localStorage.clear(); window.location.href='../login.html';" style="display: block; padding: 10px; color: var(--danger); text-decoration: none; transition: 0.2s; border-radius:6px;" onmouseover="this.style.background='var(--bg-color)'" onmouseout="this.style.background='none'">🚪 Выйти</a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        function toggleProfileDropdown(e) {
-            e.stopPropagation();
-            const dp = document.getElementById('profileDropdown');
-            dp.style.display = dp.style.display === 'block' ? 'none' : 'block';
-        }
-        window.addEventListener('click', function(e) {
-            const dp = document.getElementById('profileDropdown');
-            if (dp && dp.style.display === 'block' && !document.getElementById('profileBtn').contains(e.target)) {
-                dp.style.display = 'none';
-            }
-        });
-    </script>
-
-    <div class="page-content">
-
-        <!-- KPI Cards -->
+<div class="page-content"><!-- KPI Cards -->
         <div class="kpi-grid" id="kpiGrid">
             <div class="kpi-card"><div class="kpi-icon blue">👨‍🎓</div><div class="kpi-info"><h3>Студентов</h3><div class="kpi-value" id="kpiStudents">—</div><div class="kpi-trend up">Всего активных</div></div></div>
             <div class="kpi-card"><div class="kpi-icon green">💰</div><div class="kpi-info"><h3>Доход в месяц</h3><div class="kpi-value" id="kpiRevenue">—</div><div class="kpi-trend up">Текущий месяц</div></div></div>
@@ -253,13 +227,14 @@
     }
 
     async function loadRecentLeads() {
+        const tbody = document.getElementById('recentLeads');
+        showLoading('recentLeads', 'Загрузка заявок...');
         try {
             const res = await fetch(`${API}/api/leads`, { headers: authHeaders() });
-            if (!res.ok) return;
+            if (!res.ok) { showError('recentLeads', 'Ошибка загрузки'); return; }
             const leads = await res.json();
-            const tbody = document.getElementById('recentLeads');
             if (!leads.length) {
-                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color: var(--muted); padding: 20px;">Заявок пока нет</td></tr>';
+                showEmpty('recentLeads', 'Заявок пока нет', '🎯');
                 return;
             }
             tbody.innerHTML = leads.slice(0, 6).map(l => `
@@ -269,7 +244,7 @@
                     <td><span class="badge-status ${l.status}">${{new:'Новый',contacted:'Contacted',enrolled:'Enrolled',lost:'Lost'}[l.status]||l.status}</span></td>
                 </tr>
             `).join('');
-        } catch(e) { console.error(e); }
+        } catch(e) { showError('recentLeads', 'Ошибка сети', 'Проверьте подключение'); }
     }
 
     document.getElementById('exportBtn').onclick = () => window.open(`${API}/api/admin/export/students`, '_blank');
@@ -312,6 +287,7 @@
     loadRecentLeads();
     loadPendingBadge();
 </script>
-<script src="../auth-utils.js"></script>
+
+<div class="sidebar-overlay" ></div>
 </body>
 </html>

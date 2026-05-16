@@ -7,7 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../app.css">
     <style>
-        .student-card { background:#fff;border:1px solid var(--border);border-radius:16px;padding:20px;display:flex;gap:16px;align-items:flex-start;transition:0.2s;cursor:pointer; }
+        .student-card { background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;display:flex;gap:16px;align-items:flex-start;transition:0.2s;cursor:pointer; }
         .student-card:hover { box-shadow:0 4px 20px rgba(4,30,66,0.1);transform:translateY(-2px); }
         .s-avatar { width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#3B82F6,#6366F1);color:#fff;font-weight:800;font-size:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
         .s-info { flex:1; }
@@ -21,7 +21,7 @@
         .cards-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px; }
         .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px); }
         .modal-overlay.open { display:flex; }
-        .modal { background:#fff;border-radius:20px;width:640px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,0.2);animation:slideUp 0.25s ease; }
+        .modal { background:var(--surface);border-radius:20px;width:640px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,0.2);animation:slideUp 0.25s ease; }
         @keyframes slideUp { from{transform:translateY(24px);opacity:0} to{transform:translateY(0);opacity:1} }
         .modal-header { padding:24px 28px 0;display:flex;justify-content:space-between;align-items:center; }
         .modal-close { background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1; }
@@ -39,38 +39,39 @@
         .hw-item:last-child { border-bottom:none; }
         .empty-msg { text-align:center;padding:30px;color:var(--muted);font-size:14px; }
         .kpi-mini { display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px; }
-        .kpi-mini-card { background:#F8FAFC;border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center; }
+        .kpi-mini-card { background:var(--bg-color);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center; }
         .kpi-mini-val { font-size:22px;font-weight:800;color:#3B82F6;font-family:'Outfit',sans-serif; }
         .kpi-mini-lbl { font-size:11px;color:var(--muted);margin-top:4px; }
     </style>
 </head>
 <body>
-<aside class="sidebar">
+<aside id="main-sidebar" class="sidebar">
     <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>TEACHER</small></div>
     <nav class="sidebar-nav">
         <a href="dashboard.html"><span class="icon">📊</span> Мой кабинет</a>
         <a href="students.html" class="active"><span class="icon">👨‍🎓</span> Мои студенты</a>
+        <a href="groups.html"><span class="icon">👥</span> Группы</a>
+        <a href="gradebook.html"><span class="icon">📋</span> Журнал</a>
         <a href="homeworks.html"><span class="icon">📝</span> Проверка ДЗ</a>
-        <a href="../chat.html"><span class="icon">💬</span> Чат <span class="chat-badge"></span></a>
         <a href="lessons.html"><span class="icon">🗓️</span> Уроки</a>
         <a href="attendance.html"><span class="icon">✅</span> Посещаемость</a>
+        <a href="../chat.html"><span class="icon">💬</span> Чат <span class="chat-badge"></span></a>
     </nav>
     <div class="sidebar-bottom">
-        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
-        <a href="../settings.html"><span class="icon">⚙️</span> Настройки</a>
-        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
-    </div>
+    <button class="notif-bell" onclick="toggleNotifDropdown()" title="Уведомления">🔔 <span class="badge-dot"></span></button>
+    <div class="notif-dropdown" id="notifDropdown"></div>
+
+
+
+    <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+    <a href="../settings.html"><span class="icon">⚙️</span> Настройки</a>
+    <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+</div>
 </aside>
 
-<div class="main-content">
-    <div class="top-bar">
-        <h1>👨‍🎓 Мои студенты</h1>
-        <div class="top-bar-right">
-            <div class="admin-badge" style="background:linear-gradient(135deg,#3B82F6,#6366F1);">👩‍🏫 TEACHER</div>
-        </div>
-    </div>
-    <div class="page-content">
-        <!-- KPI mini -->
+
+
+<div class="page-content"><!-- KPI mini -->
         <div class="kpi-mini" id="kpiMini">
             <div class="kpi-mini-card"><div class="kpi-mini-val" id="kpiTotal">—</div><div class="kpi-mini-lbl">Всего студентов</div></div>
             <div class="kpi-mini-card"><div class="kpi-mini-val" id="kpiPending">—</div><div class="kpi-mini-lbl">ДЗ на проверке</div></div>
@@ -103,6 +104,7 @@
     </div>
 </div>
 
+<script src="../auth-utils.js"></script>
 <script>
     const API = '';
     const token = localStorage.getItem('access_token');
@@ -177,6 +179,7 @@
     });
 
     async function load() {
+        showLoading('studentCards', 'Загрузка студентов...');
         try {
             // Step 1: get teacher's groups
             const groupsUrl = role === 'admin'
@@ -243,7 +246,7 @@
             document.getElementById('kpiAvgProgress').textContent = avgP + '%';
 
             renderCards(allStudents);
-        } catch(e) { console.error(e); }
+        } catch(e) { showError('studentCards', 'Ошибка', 'Не удалось загрузить студентов'); }
     }
 
     // ─── Profile Modal ───
@@ -257,7 +260,7 @@
         openModal();
         const s = allStudents.find(x => x.id === id);
         const initials = s ? s.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) : '?';
-        document.getElementById('profileBody').innerHTML = '<div class="empty-msg">Загрузка...</div>';
+        showLoading('profileBody', 'Загрузка...');
 
         try {
             // Load real homework data for this student
@@ -337,7 +340,7 @@
                 </div>
             `;
         } catch(e) {
-            document.getElementById('profileBody').innerHTML = '<div class="empty-msg" style="color:var(--danger);">Ошибка загрузки данных</div>';
+            showError('profileBody', 'Ошибка', 'Не удалось загрузить данные студента');
         }
     }
 
@@ -351,162 +354,6 @@
     load();
 </script>
 
-
-    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-    function renderCards(students) {
-        const grid = document.getElementById('studentCards');
-        if (!students.length) {
-            grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted);">Студентов не найдено</div>';
-            return;
-        }
-        grid.innerHTML = students.map(s => {
-            const initials = s.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-            const progress = s._progress || 0;
-            const hwGraded = s._graded || 0;
-            const hwPending = s._pending || 0;
-            return `
-            <div class="student-card" onclick="viewProfile(${s.id})">
-                <div class="s-avatar">${initials}</div>
-                <div class="s-info">
-                    <div class="s-name">${esc(s.name)}</div>
-                    <div class="s-email">${esc(s.email)}</div>
-                    <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Прогресс</div>
-                    <div class="progress-bar"><div class="progress-fill" style="width:${progress}%"></div></div>
-                    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:10px;">
-                        <span>${progress}%</span>
-                    </div>
-                    <div class="s-stats">
-                        <div class="s-stat"><strong>${hwGraded}</strong>ДЗ проверено</div>
-                        <div class="s-stat"><strong style="color:${hwPending>0?'#F59E0B':'#10B981'}">${hwPending}</strong>На проверке</div>
-                        <div class="s-stat"><strong>${s.phone || '—'}</strong>Телефон</div>
-                    </div>
-                </div>
-            </div>`;
-        }).join('');
-    }
-
-    document.getElementById('searchInput').addEventListener('input', e => {
-        const q = e.target.value.toLowerCase();
-        renderCards(allStudents.filter(s =>
-            s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q)
-        ));
-    });
-
-    async function load() {
-        try {
-            const [studRes, pendRes] = await Promise.all([
-                fetch(`${API}/api/admin/students`, { headers: authH() }),
-                fetch(`${API}/api/homework/pending`, { headers: authH() })
-            ]);
-            const students = studRes.ok ? await studRes.json() : [];
-            const pending = pendRes.ok ? await pendRes.json() : [];
-
-            // map pending by student_id
-            const pendMap = {};
-            pending.forEach(p => { pendMap[p.student_id] = (pendMap[p.student_id] || 0) + 1; });
-
-            allStudents = students.map(s => ({
-                ...s,
-                _progress: Math.floor(Math.random() * 60 + 20), // placeholder until enrollment API
-                _pending: pendMap[s.id] || 0,
-                _graded: 0
-            }));
-
-            pendingCount = pending.length;
-            document.getElementById('kpiTotal').textContent = students.length;
-            document.getElementById('kpiPending').textContent = pendingCount;
-            const avgP = allStudents.length
-                ? Math.round(allStudents.reduce((a,s) => a + s._progress, 0) / allStudents.length)
-                : 0;
-            document.getElementById('kpiAvgProgress').textContent = avgP + '%';
-
-            renderCards(allStudents);
-        } catch(e) { console.error(e); }
-    }
-
-    // ─── Profile Modal ───
-    function openModal() { document.getElementById('profileModal').style.display = 'flex'; }
-    function closeModal() { document.getElementById('profileModal').style.display = 'none'; }
-    document.getElementById('profileModal').addEventListener('click', e => {
-        if (e.target === document.getElementById('profileModal')) closeModal();
-    });
-
-    async function viewProfile(id) {
-        openModal();
-        const s = allStudents.find(x => x.id === id);
-        const initials = s ? s.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) : '?';
-        document.getElementById('profileBody').innerHTML = '<div class="empty-msg">Загрузка...</div>';
-
-        try {
-            // Get submissions for this student
-            const pendRes = await fetch(`${API}/api/homework/pending`, { headers: authH() });
-            const allPending = pendRes.ok ? await pendRes.json() : [];
-            const studentPending = allPending.filter(p => p.student_id === id);
-
-            const progress = s ? (s._progress || 0) : 0;
-
-            document.getElementById('profileTitle').textContent = `👤 ${s ? esc(s.name) : 'Профиль'}`;
-            document.getElementById('profileBody').innerHTML = `
-                <div style="display:flex;gap:16px;align-items:center;margin-bottom:20px;">
-                    <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#3B82F6,#6366F1);color:#fff;font-size:22px;font-weight:800;display:flex;align-items:center;justify-content:center;">${initials}</div>
-                    <div>
-                        <h3 style="margin:0 0 4px;">${esc(s?.name||'—')}</h3>
-                        <div style="font-size:13px;color:var(--muted);">${esc(s?.email||'—')}</div>
-                    </div>
-                    <a href="../chat.html" onclick="localStorage.setItem('chat_with',${id})"
-                       class="btn btn-primary" style="margin-left:auto;text-decoration:none;">💬 Написать</a>
-                </div>
-
-                <div style="margin-bottom:20px;">
-                    <div style="font-size:13px;color:var(--muted);margin-bottom:8px;font-weight:600;">Прогресс обучения</div>
-                    <div class="progress-bar" style="height:10px;"><div class="progress-fill" style="width:${progress}%"></div></div>
-                    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px;">
-                        <span>Выполнено</span><span>${progress}%</span>
-                    </div>
-                </div>
-
-                <div class="tabs">
-                    <button class="tab-btn active" onclick="switchTab(this,'tInfo')">ℹ️ Данные</button>
-                    <button class="tab-btn" onclick="switchTab(this,'tHW')">📝 ДЗ (${studentPending.length} на проверке)</button>
-                </div>
-
-                <div class="tab-panel active" id="tInfo">
-                    <div class="stat-row"><span>Телефон</span><strong>${esc(s?.phone||'—')}</strong></div>
-                    <div class="stat-row"><span>Email</span><strong>${esc(s?.email||'—')}</strong></div>
-                    <div class="stat-row"><span>Дата регистрации</span><strong>${s?.created_at ? new Date(s.created_at).toLocaleDateString('ru-RU') : '—'}</strong></div>
-                    <div class="stat-row"><span>ДЗ ожидает проверки</span><strong style="color:${studentPending.length>0?'#F59E0B':'#10B981'}">${studentPending.length}</strong></div>
-                </div>
-
-                <div class="tab-panel" id="tHW">
-                    ${studentPending.length
-                        ? studentPending.map(sub => `
-                            <div class="hw-item">
-                                <div>
-                                    <div style="font-weight:600;">ДЗ #${sub.homework_id}</div>
-                                    <div style="font-size:12px;color:var(--muted);">${sub.submitted_at ? new Date(sub.submitted_at).toLocaleString('ru-RU') : '—'}</div>
-                                    <div style="font-size:13px;margin-top:6px;color:var(--text);">${esc((sub.content||'').slice(0,80))}${(sub.content||'').length > 80 ? '...' : ''}</div>
-                                </div>
-                                <a href="homeworks.html?id=${sub.id}" class="btn btn-accent btn-sm" style="text-decoration:none;flex-shrink:0;">Проверить</a>
-                            </div>`).join('')
-                        : '<div class="empty-msg">🎉 Все работы проверены!</div>'
-                    }
-                </div>
-            `;
-        } catch(e) {
-            document.getElementById('profileBody').innerHTML = '<div class="empty-msg" style="color:var(--danger);">Ошибка загрузки данных</div>';
-        }
-    }
-
-    function switchTab(btn, tabId) {
-        document.querySelectorAll('#profileBody .tab-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('#profileBody .tab-panel').forEach(p => p.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById(tabId).classList.add('active');
-    }
-
-    load();
-</script>
-<script src="../auth-utils.js"></script>
+<div class="sidebar-overlay" ></div>
 </body>
 </html>

@@ -13,6 +13,8 @@ COPY .env /app/.env
 # Create empty bot.log if not exists
 RUN touch /app/bot.log
 
+ENV PYTHONPATH=/app
+
 EXPOSE 8080
 
 CMD ["python", "-m", "bot.main"]

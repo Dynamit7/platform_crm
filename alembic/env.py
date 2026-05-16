@@ -10,7 +10,7 @@ import os
 import sys
 sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), '..')))
 
-from bot.core.config import config
+from bot.config import config
 from bot.models.base import Base
 
 # this is the Alembic Config object, which provides

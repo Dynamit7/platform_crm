@@ -10,7 +10,7 @@
         .group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
 
         .group-card {
-            background: #fff;
+            background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 20px;
             padding: 24px;
@@ -27,7 +27,7 @@
             background: linear-gradient(90deg, #3B82F6, #6366F1);
         }
         .group-card:hover { box-shadow: 0 8px 32px rgba(59,130,246,0.15); transform: translateY(-3px); }
-        .group-card.inactive::before { background: #E5E7EB; }
+        .group-card.inactive::before { background: var(--border); }
         .group-card.inactive { opacity: 0.7; }
 
         .group-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
@@ -38,7 +38,7 @@
         .badge-inactive { background: #F3F4F6; color: #6B7280; }
 
         .group-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
-        .g-stat { text-align: center; background: #F8FAFC; border-radius: 12px; padding: 10px 6px; }
+        .g-stat { text-align: center; background: var(--bg-color); border-radius: 12px; padding: 10px 6px; }
         .g-stat-val { font-size: 22px; font-weight: 800; font-family: 'Outfit', sans-serif; color: #3B82F6; }
         .g-stat-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; }
 
@@ -55,7 +55,7 @@
         /* Modal */
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 999; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
         .modal-overlay.open { display: flex; }
-        .modal { background: #fff; border-radius: 24px; width: 680px; max-width: 95vw; max-height: 88vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 24px 80px rgba(0,0,0,0.25); animation: slideUp 0.25s ease; }
+        .modal { background: var(--surface); border-radius: 24px; width: 680px; max-width: 95vw; max-height: 88vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 24px 80px rgba(0,0,0,0.25); animation: slideUp 0.25s ease; }
         @keyframes slideUp { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .modal-head { padding: 24px 28px 0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
         .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--muted); line-height: 1; }
@@ -78,46 +78,45 @@
         .tab-btn.active { color: #3B82F6; border-bottom-color: #3B82F6; font-weight: 700; }
 
         .schedule-table { width: 100%; border-collapse: collapse; }
-        .schedule-table th { background: #F8FAFC; font-size: 12px; font-weight: 600; color: var(--muted); padding: 10px 14px; text-align: left; }
+        .schedule-table th { background: var(--bg-color); font-size: 12px; font-weight: 600; color: var(--muted); padding: 10px 14px; text-align: left; }
         .schedule-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 14px; }
         .schedule-table tr:last-child td { border-bottom: none; }
 
         .kpi-top { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
-        .kpi-card { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 20px; text-align: center; }
+        .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; text-align: center; }
         .kpi-val { font-size: 32px; font-weight: 800; font-family: 'Outfit', sans-serif; color: #3B82F6; }
         .kpi-lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
     </style>
 </head>
 <body>
 
-<aside class="sidebar">
+<aside id="main-sidebar" class="sidebar">
     <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>TEACHER</small></div>
     <nav class="sidebar-nav">
         <a href="dashboard.html"><span class="icon">📊</span> Мой кабинет</a>
         <a href="students.html"><span class="icon">👨‍🎓</span> Мои студенты</a>
         <a href="groups.html" class="active"><span class="icon">👥</span> Мои группы</a>
+        <a href="gradebook.html"><span class="icon">📋</span> Журнал</a>
         <a href="homeworks.html"><span class="icon">📝</span> Проверка ДЗ</a>
-        <a href="../chat.html"><span class="icon">💬</span> Чат <span class="chat-badge"></span></a>
         <a href="lessons.html"><span class="icon">🗓️</span> Уроки</a>
         <a href="attendance.html"><span class="icon">✅</span> Посещаемость</a>
+        <a href="../chat.html"><span class="icon">💬</span> Чат <span class="chat-badge"></span></a>
     </nav>
     <div class="sidebar-bottom">
-        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
-        <a href="../settings.html"><span class="icon">⚙️</span> Настройки</a>
-        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
-    </div>
+    <button class="notif-bell" onclick="toggleNotifDropdown()" title="Уведомления">🔔 <span class="badge-dot"></span></button>
+    <div class="notif-dropdown" id="notifDropdown"></div>
+
+
+
+    <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+    <a href="../settings.html"><span class="icon">⚙️</span> Настройки</a>
+    <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+</div>
 </aside>
 
-<div class="main-content">
-    <div class="top-bar">
-        <h1>👥 Мои группы</h1>
-        <div class="top-bar-right">
-            <div class="admin-badge" style="background:linear-gradient(135deg,#3B82F6,#6366F1);">👩‍🏫 TEACHER</div>
-        </div>
-    </div>
 
-    <div class="page-content">
-        <!-- KPI Top -->
+
+<div class="page-content"><!-- KPI Top -->
         <div class="kpi-top">
             <div class="kpi-card">
                 <div class="kpi-val" id="kpiGroups">—</div>
@@ -179,6 +178,7 @@
     </div>
 </div>
 
+<script src="../auth-utils.js"></script>
 <script>
     const API = '';
     const token = localStorage.getItem('access_token');
@@ -276,6 +276,7 @@
 
     // ── Load data ──
     async function load() {
+        showLoading('groupGrid', 'Загрузка групп...');
         try {
             const [groupRes, enrollRes] = await Promise.all([
                 fetch(`${API}/api/groups`, { headers: authH() }),
@@ -283,17 +284,11 @@
             ]);
 
             if (!groupRes.ok) {
-                document.getElementById('groupGrid').innerHTML = `<div style="grid-column:1/-1" class="empty-box"><div class="emoji">⚠️</div>Нет доступа к группам</div>`;
+                showError('groupGrid', 'Нет доступа', 'Нет доступа к группам');
                 return;
             }
 
             allGroups = await groupRes.json();
-
-            // Count enrollments per group via students API
-            let enrollCountMap = {};
-            if (enrollRes.ok) {
-                // We don't have direct enrollment endpoint, use group.enrollments count from group data
-            }
 
             // Use enrollment count from group data if available
             allGroups.forEach(g => {
@@ -324,7 +319,7 @@
             renderGroups(allGroups);
         } catch(e) {
             console.error(e);
-            document.getElementById('groupGrid').innerHTML = `<div style="grid-column:1/-1" class="empty-box"><div class="emoji">❌</div>Ошибка загрузки</div>`;
+            showError('groupGrid', 'Ошибка', 'Не удалось загрузить группы');
         }
     }
 
@@ -352,7 +347,7 @@
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelector('.tab-btn').classList.add('active');
         showTabContent('tabStudents');
-        document.getElementById('tabStudents').innerHTML = '<div class="empty-box"><div class="emoji">⏳</div>Загрузка студентов...</div>';
+        showLoading('tabStudents', 'Загрузка студентов...');
 
         openModal();
 
@@ -432,7 +427,7 @@
             }
 
         } catch(e) {
-            document.getElementById('tabStudents').innerHTML = '<div class="empty-box" style="color:var(--danger);">Ошибка загрузки</div>';
+            showError('tabStudents', 'Ошибка', 'Не удалось загрузить данные группы');
         }
     }
 
@@ -450,6 +445,7 @@
 
     load();
 </script>
-<script src="../auth-utils.js"></script>
+
+<div class="sidebar-overlay" ></div>
 </body>
 </html>

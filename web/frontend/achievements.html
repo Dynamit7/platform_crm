@@ -14,7 +14,7 @@
             margin-top: 30px;
         }
         .achievement-card {
-            background: white;
+            background: var(--surface);
             border-radius: 20px;
             padding: 28px;
             text-align: center;
@@ -25,7 +25,7 @@
         }
         .achievement-card:hover { transform: translateY(-5px); box-shadow: 0 12px 30px rgba(0,0,0,0.08); }
         .achievement-card.locked { opacity: 0.55; filter: grayscale(0.8); }
-        .achievement-card.earned { border-color: #F59E0B; background: linear-gradient(135deg, #fffbeb, #fff); }
+        .achievement-card.earned { border-color: #F59E0B; background: linear-gradient(135deg, #fffbeb, var(--surface)); }
         .achievement-icon { font-size: 50px; margin-bottom: 16px; display: block; }
         .achievement-card h3 { font-size: 17px; margin-bottom: 8px; }
         .achievement-card p { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
@@ -47,6 +47,8 @@
     </style>
 </head>
 <body>
+<script src="auth-utils.js"></script>
+<script>var _r=localStorage.getItem('user_role');if(_r==='admin')window.location.href='admin/dashboard.html';else if(_r==='teacher')window.location.href='teacher/dashboard.html';</script>
 <div class="dashboard-layout">
     <aside class="sidebar">
         <div class="sidebar-logo">TIL <span>USER</span></div>
@@ -95,7 +97,7 @@
         </div>
 
         <h2 style="margin: 40px 0 20px;">Рейтинг студентов 👑</h2>
-        <div style="background:white;border-radius:20px;border:1px solid var(--border);overflow:hidden;margin-bottom:50px;">
+        <div style="background:var(--surface);border-radius:20px;border:1px solid var(--border);overflow:hidden;margin-bottom:50px;">
             <table style="width:100%;border-collapse:collapse;text-align:left;">
                 <thead>
                     <tr style="background:var(--bg-color);color:var(--muted);font-size:14px;">
@@ -114,11 +116,27 @@
 </div>
 
 <script>
+    function showToast(msg) {
+        let t = document.getElementById('toastMsg');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'toastMsg';
+            t.style.cssText = 'position:fixed;bottom:30px;right:30px;background:#10B981;color:white;padding:14px 24px;border-radius:14px;font-weight:700;font-size:15px;box-shadow:0 8px 24px rgba(16,185,129,0.3);z-index:9999;animation:slideInRight 0.3s ease;display:none;';
+            document.body.appendChild(t);
+            const s = document.createElement('style');
+            s.textContent = '@keyframes slideInRight{from{transform:translateX(60px);opacity:0}to{transform:translateX(0);opacity:1}}';
+            document.head.appendChild(s);
+        }
+        t.textContent = '✅ ' + msg;
+        t.style.display = 'block';
+        clearTimeout(t._hide);
+        t._hide = setTimeout(() => t.style.display = 'none', 3000);
+    }
     const API = '';
     const token = localStorage.getItem('access_token');
     const userId = parseInt(localStorage.getItem('user_id'));
     if (!token) window.location.href = 'login.html';
-    document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = 'login.html'; };
+    document.getElementById('logoutBtn').onclick = () => { if (confirm('Вы уверены, что хотите выйти?')) { localStorage.clear(); window.location.href = 'login.html'; } };
     function authH() { return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }; }
 
     const RANK_ICONS = { 'Bronze':'🥉','Silver':'🥈','Gold':'🥇','Platinum':'💎','Champion':'👑' };
@@ -126,6 +144,7 @@
     const MEDALS = ['🥇','🥈','🥉'];
 
     async function loadAchievements() {
+        document.getElementById('achievementsGrid').innerHTML = '<div class="panel"><div class="panel-body" style="text-align:center;padding:40px;color:var(--muted);">Загрузка достижений...</div></div>';
         try {
             const res = await fetch(`${API}/api/student/${userId}/achievements`, { headers: authH() });
             if (!res.ok) throw new Error();
@@ -157,6 +176,7 @@
     }
 
     async function loadLeaderboard() {
+        document.getElementById('leaderboardBody').innerHTML = '<tr><td colspan="4" style="padding:30px;text-align:center;color:var(--muted);">Загрузка...</td></tr>';
         try {
             const res = await fetch(`${API}/api/leaderboard?limit=10`, { headers: authH() });
             if (!res.ok) throw new Error();
@@ -183,11 +203,12 @@
     async function checkAchievements() {
         const btn = document.getElementById('checkBtn');
         btn.textContent = '⏳ Проверка...'; btn.disabled = true;
+        document.getElementById('achievementsGrid').innerHTML = '<div class="panel"><div class="panel-body" style="text-align:center;padding:40px;color:var(--muted);">Проверка достижений...</div></div>';
         try {
             const res = await fetch(`${API}/api/student/${userId}/achievements/check`, { method:'POST', headers: authH() });
             const data = await res.json();
             if (data.count > 0) {
-                alert(`🎉 Получено новых достижений: ${data.count}!\n${data.awarded.join(', ')}`);
+                showToast(`🎉 Получено новых достижений: ${data.count}! ${data.awarded.join(', ')}`);
                 await loadAchievements(); await loadLeaderboard();
             } else {
                 btn.textContent = '✅ Нет новых';
@@ -201,6 +222,6 @@
     loadAchievements();
     loadLeaderboard();
 </script>
-<script src="auth-utils.js"></script>
+
 </body>
 </html>

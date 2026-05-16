@@ -10,7 +10,7 @@
 </head>
 <body>
 
-<aside class="sidebar">
+<aside id="main-sidebar" class="sidebar">
     <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>ADMIN CRM</small></div>
         <nav class="sidebar-nav">
         <div class="section-label">Главное</div>
@@ -34,24 +34,16 @@
         <a href="reviews.html" ><span class="icon">⭐</span> Отзывы</a>
     </nav>
     <div class="sidebar-bottom">
-        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
-        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
-    </div>
+    <button class="notif-bell" onclick="toggleNotifDropdown()" title="Уведомления">🔔 <span class="badge-dot"></span></button>
+    <div class="notif-dropdown" id="notifDropdown"></div>
+
+
+
+    <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+    <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+</div>
 </aside>
-
-<div class="main-content">
-    <div class="top-bar">
-        <h1>💳 Финансы и платежи</h1>
-        <div class="top-bar-right">
-            <button class="btn btn-outline" id="remindDebtsBtn" style="border-color:#F59E0B;color:#D97706;">⚠️ Напомнить должникам</button>
-            <button class="btn btn-accent" id="addPaymentBtn">+ Добавить платёж</button>
-            <button class="btn btn-outline btn-sm" onclick="window.open('/api/admin/export/payments','_blank')">📊 Excel</button>
-            <div class="admin-badge">👑 ADMIN</div>
-        </div>
-    </div>
-
-    <div class="page-content">
-        <!-- Revenue Summary -->
+<div class="page-content"><!-- Revenue Summary -->
         <div class="kpi-grid" style="grid-template-columns: repeat(3, 1fr);">
             <div class="kpi-card">
                 <div class="kpi-icon green">💰</div>
@@ -107,10 +99,10 @@
 
 <!-- Add Payment Modal -->
 <div id="payModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); backdrop-filter:blur(5px); z-index:999; align-items:center; justify-content:center;">
-    <div style="background:white; border-radius:24px; padding:36px; width:90%; max-width:480px; box-shadow:0 25px 60px rgba(0,0,0,0.15);">
+    <div style="background:var(--surface); border-radius:24px; padding:36px; width:90%; max-width:480px; box-shadow:0 25px 60px rgba(0,0,0,0.15);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
             <h2>+ Новый платёж</h2>
-            <button onclick="closePayModal()" style="font-size:24px; background:none; border:none; cursor:pointer; color:#666;">×</button>
+            <button onclick="closePayModal()" style="font-size:24px; background:none; border:none; cursor:pointer; color:var(--muted);">×</button>
         </div>
         <form id="payForm">
             <div style="margin-bottom:16px;">
@@ -148,6 +140,7 @@
     </div>
 </div>
 
+<script src="../auth-utils.js"></script>
 <script>
     const API = '';
     const token = localStorage.getItem('access_token');
@@ -275,12 +268,15 @@
     };
 
     async function loadPayments() {
+        showLoading('paymentsTable', 'Загрузка...');
         try {
             const res = await fetch(`${API}/api/payments`, { headers: authHeaders() });
-            if (!res.ok) return;
+            if (!res.ok) { showError('paymentsTable', 'Ошибка', 'Не удалось загрузить платежи'); return; }
             allPayments = await res.json();
             renderTable(allPayments);
-        } catch(e) { console.error(e); }
+        } catch(e) {
+            showError('paymentsTable', 'Ошибка', 'Не удалось загрузить платежи');
+        }
     }
 
     // ─── REMIND DEBTS ───
@@ -295,12 +291,12 @@
             });
             const data = await res.json();
             if (res.ok) {
-                alert(`✅ Напоминания отправлены: ${data.reminded || 0} студентам`);
+                showToast(`Напоминания отправлены: ${data.reminded || 0} студентам`, 'success');
             } else {
-                alert('Ошибка: ' + (data.detail || 'Неизвестная ошибка'));
+                showToast('Ошибка: ' + (data.detail || 'Неизвестная ошибка'), 'error');
             }
         } catch(e) {
-            alert('Ошибка соединения');
+            showToast('Ошибка соединения', 'error');
         } finally {
             btn.disabled = false;
             btn.textContent = '⚠️ Напомнить должникам';
@@ -321,14 +317,15 @@
                 loadPayments();
             } else {
                 const d = await res.json();
-                alert('Ошибка: ' + (d.detail || ''));
+                showToast('Ошибка: ' + (d.detail || ''), 'error');
             }
-        } catch(e) { alert('Ошибка соединения'); }
+        } catch(e) { showToast('Ошибка соединения', 'error'); }
     }
 
     populateSelects();
     loadPayments();
 </script>
-<script src="../auth-utils.js"></script>
+
+<div class="sidebar-overlay" ></div>
 </body>
 </html>

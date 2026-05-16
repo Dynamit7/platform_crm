@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from bot.models.education import Group, Lesson, StudentGroup
 from bot.models.user import Student
-from bot.notifications.service import NotificationService
+from bot.services.notification_service import NotificationService
 from aiogram import Bot
 
 class GroupService:

@@ -6,6 +6,7 @@ def get_teacher_main_menu() -> ReplyKeyboardMarkup:
     keyboard = [
         [KeyboardButton(text="📅 Моё расписание"), KeyboardButton(text="👥 Мои группы")],
         [KeyboardButton(text="📋 Отчёты"), KeyboardButton(text="📚 Материалы")],
+        [KeyboardButton(text="💬 Чат")],
         [KeyboardButton(text="🏠 Главное меню")]
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)

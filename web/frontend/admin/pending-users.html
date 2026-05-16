@@ -13,7 +13,7 @@
             gap: 20px;
         }
         .pending-card {
-            background: white;
+            background: var(--surface);
             border-radius: 20px;
             border: 1.5px solid var(--border);
             padding: 24px;
@@ -98,7 +98,7 @@
             margin-bottom: 28px;
         }
         .mini-stat {
-            background: white;
+            background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 16px;
             padding: 20px;
@@ -121,7 +121,7 @@
 </head>
 <body>
 
-<aside class="sidebar">
+<aside id="main-sidebar" class="sidebar">
     <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>ADMIN CRM</small></div>
         <nav class="sidebar-nav">
         <div class="section-label">Главное</div>
@@ -145,22 +145,16 @@
         <a href="reviews.html" ><span class="icon">⭐</span> Отзывы</a>
     </nav>
     <div class="sidebar-bottom">
-        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
-        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
-    </div>
+    <button class="notif-bell" onclick="toggleNotifDropdown()" title="Уведомления">🔔 <span class="badge-dot"></span></button>
+    <div class="notif-dropdown" id="notifDropdown"></div>
+
+
+
+    <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+    <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+</div>
 </aside>
-
-<div class="main-content">
-    <div class="top-bar">
-        <h1>⏳ Новые заявки на регистрацию</h1>
-        <div class="top-bar-right">
-            <button class="btn btn-outline btn-sm" onclick="loadPending()">🔄 Обновить</button>
-            <div class="admin-badge">👑 ADMIN</div>
-        </div>
-    </div>
-
-    <div class="page-content">
-        <!-- Stats -->
+<div class="page-content"><!-- Stats -->
         <div class="stats-row" id="statsRow">
             <div class="mini-stat">
                 <div class="num" id="statTotal">—</div>
@@ -182,6 +176,7 @@
     </div>
 </div>
 
+<script src="../auth-utils.js"></script>
 <script>
     const API = '';
     const token = localStorage.getItem('access_token');
@@ -299,9 +294,9 @@
                 loadPending(); // Refresh
             } else {
                 const err = await res.json();
-                alert('Ошибка: ' + (err.detail || 'Неизвестная ошибка'));
+                showToast('Ошибка: ' + (err.detail || 'Неизвестная ошибка'), 'error');
             }
-        } catch(e) { alert('Ошибка сети'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
     }
 
     async function rejectUser(id, name) {
@@ -326,24 +321,23 @@
                 }
             } else {
                 const err = await res.json();
-                alert('Ошибка: ' + (err.detail || 'Неизвестная ошибка'));
+                showToast('Ошибка: ' + (err.detail || 'Неизвестная ошибка'), 'error');
             }
-        } catch(e) { alert('Ошибка сети'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
     }
 
     async function loadPending() {
+        showLoading('pendingContainer', 'Загрузка...');
         try {
             const res = await fetch(`${API}/api/admin/pending-users`, { headers: authH() });
             if (res.ok) {
                 pendingUsers = await res.json();
                 renderPending(pendingUsers);
             } else {
-                document.getElementById('pendingContainer').innerHTML = 
-                    '<div style="text-align:center;padding:40px;color:var(--danger);">Ошибка загрузки. Возможно, нет прав администратора.</div>';
+                showError('pendingContainer', 'Ошибка', 'Возможно, нет прав администратора');
             }
         } catch(e) { 
-            document.getElementById('pendingContainer').innerHTML = 
-                '<div style="text-align:center;padding:40px;color:var(--danger);">Ошибка соединения</div>';
+            showError('pendingContainer', 'Ошибка', 'Соединение не установлено');
         }
     }
 
@@ -351,6 +345,7 @@
     // Auto-refresh every 30 seconds
     setInterval(loadPending, 30000);
 </script>
-<script src="../auth-utils.js"></script>
+
+<div class="sidebar-overlay" ></div>
 </body>
 </html>

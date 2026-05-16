@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="../app.css">
 </head>
 <body>
-<aside class="sidebar">
+<aside id="main-sidebar" class="sidebar">
     <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>ADMIN CRM</small></div>
         <nav class="sidebar-nav">
         <div class="section-label">Главное</div>
@@ -32,21 +32,16 @@
         <a href="reviews.html" ><span class="icon">⭐</span> Отзывы</a>
     </nav>
     <div class="sidebar-bottom">
-        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
-        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
-    </div>
-</aside>
+    <button class="notif-bell" onclick="toggleNotifDropdown()" title="Уведомления">🔔 <span class="badge-dot"></span></button>
+    <div class="notif-dropdown" id="notifDropdown"></div>
 
-<div class="main-content">
-    <div class="top-bar">
-        <h1>📚 Курсы</h1>
-        <div class="top-bar-right">
-            <button class="btn btn-accent" id="addCourseBtn">+ Создать курс</button>
-            <div class="admin-badge">👑 ADMIN</div>
-        </div>
-    </div>
-    <div class="page-content">
-        <div id="coursesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px;">
+
+
+    <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+    <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+</div>
+</aside>
+<div class="page-content"><div id="coursesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px;">
             <div style="text-align:center;color:var(--muted);padding:40px;grid-column:1/-1;">Загрузка...</div>
         </div>
     </div>
@@ -54,10 +49,10 @@
 
 <!-- Add Course Modal -->
 <div id="courseModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); backdrop-filter:blur(5px); z-index:999; align-items:center; justify-content:center;">
-    <div style="background:white; border-radius:24px; padding:36px; width:90%; max-width:520px; box-shadow:0 25px 60px rgba(0,0,0,0.15); max-height:90vh; overflow-y:auto;">
+    <div style="background:var(--surface); border-radius:24px; padding:36px; width:90%; max-width:520px; box-shadow:0 25px 60px rgba(0,0,0,0.15); max-height:90vh; overflow-y:auto;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
             <h2>+ Новый курс</h2>
-            <button onclick="closeModal()" style="font-size:24px;background:none;border:none;cursor:pointer;color:#666;">×</button>
+            <button onclick="closeModal()" style="font-size:24px;background:none;border:none;cursor:pointer;color:var(--muted);">×</button>
         </div>
         <form id="courseForm">
             <div style="margin-bottom:16px;">
@@ -83,6 +78,7 @@
     </div>
 </div>
 
+<script src="../auth-utils.js"></script>
 <script>
     const API = '';
     const token = localStorage.getItem('access_token');
@@ -140,19 +136,23 @@
                 })
             });
             if (res.ok) { closeModal(); loadCourses(); }
-            else { const d = await res.json(); alert(d.detail || 'Ошибка'); }
-        } catch(e) { alert('Ошибка соединения'); }
+            else { const d = await res.json(); showToast(d.detail || 'Ошибка', 'error'); }
+        } catch(e) { showToast('Ошибка соединения', 'error'); }
     };
 
     async function loadCourses() {
+        showLoading('coursesGrid', 'Загрузка...');
         try {
             const res = await fetch(`${API}/api/courses`, { headers: authHeaders() });
-            if (!res.ok) return;
+            if (!res.ok) { showError('coursesGrid', 'Ошибка', 'Не удалось загрузить курсы'); return; }
             renderCourses(await res.json());
-        } catch(e) { console.error(e); }
+        } catch(e) {
+            showError('coursesGrid', 'Ошибка', 'Не удалось загрузить курсы');
+        }
     }
     loadCourses();
 </script>
-<script src="../auth-utils.js"></script>
+
+<div class="sidebar-overlay" ></div>
 </body>
 </html>

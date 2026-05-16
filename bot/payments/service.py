@@ -81,8 +81,10 @@ class PaymentService:
             if self.notif_service:
                 await self.notif_service.send_notification(
                     user_id=payment_record.user_id,
-                    notification_type=NotificationType.SYSTEM_ALERT, # Use a generic one or add PAYMENT_SUCCESS
-                    text=f"✅ *Оплата получена!*\nСумма: {payment_record.amount} RUB\nСпасибо, что вы с нами!"
+                    notification_type=NotificationType.PAYMENT_SUCCESS,
+                    amount=payment_record.amount,
+                    currency="RUB",
+                    description=payment_record.description or "Оплата обучения"
                 )
                 
             # Sync with CRM
@@ -94,7 +96,7 @@ class PaymentService:
                         "currency": "RUB",
                         "method": "yookassa",
                         "description": payment_record.description or "Автоматическая оплата ЮKassa",
-                        "course_id": student_id  # Just passing it if needed, we might not have course_id in the hook.
+                        "course_id": None  # Not available in webhook context
                     }
                     await http_session.post(f"{config.API_URL}/sync-payment", json=payload, timeout=3)
             except Exception as e:

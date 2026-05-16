@@ -89,7 +89,7 @@ class Registration(Base):
     __tablename__ = "registrations"
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), index=True)
+    course_id: Mapped[Optional[int]] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True, default=None)
     
     training_type_id: Mapped[Optional[int]] = mapped_column(ForeignKey("training_types.id", ondelete="SET NULL"), nullable=True, index=True, default=None)
     status_code: Mapped[str] = mapped_column(String(50), default="pending", index=True)
@@ -175,3 +175,29 @@ class HomeworkSubmission(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), init=False)
     student: Mapped["Student"] = relationship(init=False)
     lesson: Mapped["Lesson"] = relationship(init=False)
+
+class LessonTemplate(Base):
+    __tablename__ = "lesson_templates"
+    id: Mapped[int] = mapped_column(primary_key=True, init=False)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teachers.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(200))
+    topic: Mapped[str] = mapped_column(String(500))
+    course_id: Mapped[Optional[int]] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, default=None)
+    objectives: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True, default=None)
+    materials: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True, default=None)
+    homework_template: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True, default=None)
+    duration_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), init=False)
+
+class PromoCode(Base):
+    __tablename__ = "promo_codes"
+    id: Mapped[int] = mapped_column(primary_key=True, init=False)
+    code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    discount_percent: Mapped[int] = mapped_column(Integer, default=0)
+    max_uses: Mapped[int] = mapped_column(Integer, default=1)
+    used_count: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    discount_amount: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    course_id: Mapped[Optional[int]] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, default=None)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), init=False)

@@ -25,7 +25,7 @@ async def create_group_start(callback: types.CallbackQuery, state: FSMContext, s
 
     builder = types.InlineKeyboardMarkup(inline_keyboard=[
         [types.InlineKeyboardButton(text=c.name, callback_data=f"group_sel_course:{c.id}")] for c in courses
-    ])
+    ] + [[types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin:groups")]])
     await callback.message.edit_text("🆕 *Создание группы: Шаг 1*\nВыберите курс:", parse_mode="Markdown", reply_markup=builder)
     await state.set_state(AdminGroupCreateStates.waiting_for_course)
 
@@ -77,9 +77,23 @@ async def save_days(callback: types.CallbackQuery, state: FSMContext, session: A
     builder = types.InlineKeyboardMarkup(inline_keyboard=[
         [types.InlineKeyboardButton(text=f"{s.name} ({s.time_start}-{s.time_end})", callback_data=f"group_sel_sch:{s.id}")] 
         for s in schedules
+    ] + [
+        [types.InlineKeyboardButton(text="⬅️ Назад к дням", callback_data="group_back_to_days"),
+         types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin:groups")]
     ])
     await callback.message.edit_text("🆕 *Шаг 4:* Выберите временной слот:", parse_mode="Markdown", reply_markup=builder)
     await state.set_state(AdminGroupCreateStates.waiting_for_schedule)
+
+@router.callback_query(AdminGroupCreateStates.waiting_for_schedule, F.data == "group_back_to_days")
+async def back_to_days_selection(callback: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    days_mask = data.get("days_mask", 0)
+    await callback.message.edit_text(
+        f"🆕 *Шаг 3: Выберите дни недели*\nТекущий выбор: *{ScheduleHelper.get_readable_days(days_mask)}*",
+        parse_mode="Markdown",
+        reply_markup=get_days_selection_kb(days_mask)
+    )
+    await state.set_state(AdminGroupCreateStates.waiting_for_days)
 
 @router.callback_query(AdminGroupCreateStates.waiting_for_schedule, F.data.startswith("group_sel_sch:"))
 async def process_schedule(callback: types.CallbackQuery, state: FSMContext, session: AsyncSession):
@@ -97,10 +111,28 @@ async def process_schedule(callback: types.CallbackQuery, state: FSMContext, ses
     builder = types.InlineKeyboardMarkup(inline_keyboard=[
         [types.InlineKeyboardButton(text=t.user.full_name, callback_data=f"group_sel_teacher:{t.id}")] 
         for t in teachers
+    ] + [
+        [types.InlineKeyboardButton(text="⬅️ Назад к слоту", callback_data="group_back_to_schedule"),
+         types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin:groups")]
     ])
     
     await callback.message.edit_text("🆕 *Шаг 5:* Выберите преподавателя:", parse_mode="Markdown", reply_markup=builder)
     await state.set_state(AdminGroupCreateStates.waiting_for_teacher)
+
+@router.callback_query(AdminGroupCreateStates.waiting_for_teacher, F.data == "group_back_to_schedule")
+async def back_to_schedule_selection(callback: types.CallbackQuery, state: FSMContext, session: AsyncSession):
+    data = await state.get_data()
+    stmt = select(Schedule).where(Schedule.is_active == True)
+    schedules = (await session.execute(stmt)).scalars().all()
+    builder = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(text=f"{s.name} ({s.time_start}-{s.time_end})", callback_data=f"group_sel_sch:{s.id}")]
+        for s in schedules
+    ] + [
+        [types.InlineKeyboardButton(text="⬅️ Назад к дням", callback_data="group_back_to_days"),
+         types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin:groups")]
+    ])
+    await callback.message.edit_text("🆕 *Шаг 4:* Выберите временной слот:", parse_mode="Markdown", reply_markup=builder)
+    await state.set_state(AdminGroupCreateStates.waiting_for_schedule)
 
 @router.callback_query(AdminGroupCreateStates.waiting_for_teacher, F.data.startswith("group_sel_teacher:"))
 async def process_teacher(callback: types.CallbackQuery, state: FSMContext):
@@ -110,11 +142,28 @@ async def process_teacher(callback: types.CallbackQuery, state: FSMContext):
     # Новый шаг: Выбор типа группы (Групповая или Индивидуальная)
     builder = types.InlineKeyboardMarkup(inline_keyboard=[
         [types.InlineKeyboardButton(text="👥 Групповая (до 15 чел)", callback_data="group_type:15")],
-        [types.InlineKeyboardButton(text="👤 Индивидуальная (1 чел)", callback_data="group_type:1")]
+        [types.InlineKeyboardButton(text="👤 Индивидуальная (1 чел)", callback_data="group_type:1")],
+        [types.InlineKeyboardButton(text="⬅️ Назад к учителю", callback_data="group_back_to_teacher"),
+         types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin:groups")]
     ])
     
     await callback.message.edit_text("🆕 *Шаг 6:* Выберите формат обучения:", parse_mode="Markdown", reply_markup=builder)
     await state.set_state(AdminGroupCreateStates.waiting_for_max_students)
+
+@router.callback_query(AdminGroupCreateStates.waiting_for_max_students, F.data == "group_back_to_teacher")
+async def back_to_teacher_selection(callback: types.CallbackQuery, state: FSMContext, session: AsyncSession):
+    data = await state.get_data()
+    stmt = select(Teacher).options(selectinload(Teacher.user)).where(Teacher.is_active == True)
+    teachers = (await session.execute(stmt)).scalars().all()
+    builder = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(text=t.user.full_name, callback_data=f"group_sel_teacher:{t.id}")]
+        for t in teachers
+    ] + [
+        [types.InlineKeyboardButton(text="⬅️ Назад к слоту", callback_data="group_back_to_schedule"),
+         types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin:groups")]
+    ])
+    await callback.message.edit_text("🆕 *Шаг 5:* Выберите преподавателя:", parse_mode="Markdown", reply_markup=builder)
+    await state.set_state(AdminGroupCreateStates.waiting_for_teacher)
 
 @router.callback_query(AdminGroupCreateStates.waiting_for_max_students, F.data.startswith("group_type:"))
 async def process_group_type(callback: types.CallbackQuery, state: FSMContext, session: AsyncSession):

@@ -72,8 +72,9 @@ async def manual_pay_step2_user_select(message: types.Message, state: FSMContext
 
     text = "🔍 *Выберите пользователя для начисления оплаты:*"
     buttons = []
-    for u in users[:5]: # Показываем первых 5
+    for u in users[:5]:
         buttons.append([types.InlineKeyboardButton(text=f"👤 {u.full_name} ({u.phone})", callback_data=f"fin_set_user:{u.id}")])
+    buttons.append([types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin:finance")])
     
     await message.answer(text, parse_mode="Markdown", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons))
 

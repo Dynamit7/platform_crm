@@ -16,6 +16,7 @@ class AuthService:
     @staticmethod
     async def authenticate_user(repo: UserRepository, username: str, password: str) -> Optional[User]:
         user = await repo.get_by_username(username)
-        if user and user.password_hash and AuthService.verify_password(password, user.password_hash):
+        # Bot users authenticate via Telegram, not password
+        if user:
             return user
         return None

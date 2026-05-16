@@ -137,7 +137,7 @@
 </head>
 <body>
 
-<aside class="sidebar">
+<aside id="main-sidebar" class="sidebar">
     <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>ADMIN CRM</small></div>
         <nav class="sidebar-nav">
         <div class="section-label">Главное</div>
@@ -161,21 +161,16 @@
         <a href="reviews.html" ><span class="icon">⭐</span> Отзывы</a>
     </nav>
     <div class="sidebar-bottom">
-        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
-        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
-    </div>
+    <button class="notif-bell" onclick="toggleNotifDropdown()" title="Уведомления">🔔 <span class="badge-dot"></span></button>
+    <div class="notif-dropdown" id="notifDropdown"></div>
+
+
+
+    <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+    <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+</div>
 </aside>
-
-<div class="main-content">
-    <div class="top-bar">
-        <h1>📢 Telegram Рассылка</h1>
-        <div class="top-bar-right">
-            <div class="admin-badge">👑 ADMIN</div>
-        </div>
-    </div>
-
-    <div class="page-content">
-        <div class="broadcast-grid">
+<div class="page-content"><div class="broadcast-grid">
             <!-- Left: Compose -->
             <div>
                 <!-- Audience -->
@@ -287,6 +282,7 @@
     </div>
 </div>
 
+<script src="../auth-utils.js"></script>
 <script>
     const API = '';
     const token = localStorage.getItem('access_token');
@@ -328,7 +324,7 @@
                     badge.style.display = '';
                 }
             }
-        } catch(e) { console.error(e); }
+        } catch(e) { showToast('Ошибка загрузки данных', 'error'); }
     }
 
     function selectAudience(aud, el) {
@@ -398,11 +394,11 @@
 
     async function sendBroadcast() {
         const message = document.getElementById('msgEditor').value.trim();
-        if (!message) { alert('Введите текст сообщения'); return; }
+        if (!message) { showToast('Введите текст сообщения', 'error'); return; }
         
         const count = audienceCounts[selectedAudience];
         if (count === 0) {
-            alert('Нет получателей с привязанным Telegram в выбранной аудитории');
+            showToast('Нет получателей с привязанным Telegram в выбранной аудитории', 'error');
             return;
         }
         
@@ -429,9 +425,9 @@
                 addToHistory(message, selectedAudience, data.sent, data.failed);
             } else {
                 const err = await res.json();
-                alert('Ошибка: ' + (err.detail || 'Неизвестная ошибка'));
+                showToast('Ошибка: ' + (err.detail || 'Неизвестная ошибка'), 'error');
             }
-        } catch(e) { alert('Ошибка сети'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
         
         btn.disabled = false;
         btn.innerHTML = '<span>📤</span> Отправить рассылку';
@@ -474,12 +470,12 @@
             const res = await fetch(`${API}/api/admin/remind-debts`, { method: 'POST', headers: authH() });
             if (res.ok) {
                 const data = await res.json();
-                alert(`Напоминания отправлены: ${data.reminded} пользователей`);
+                showToast(`Напоминания отправлены: ${data.reminded} пользователей`, 'success');
                 addToHistory('Напоминание о долгах (авто)', 'student', data.reminded, 0);
             } else {
-                alert('Ошибка отправки');
+                showToast('Ошибка отправки', 'error');
             }
-        } catch(e) { alert('Ошибка сети'); }
+        } catch(e) { showToast('Ошибка сети', 'error'); }
         btn.disabled = false;
         btn.textContent = '🔔 Напомнить о долгах';
     }
@@ -487,6 +483,7 @@
     renderHistory();
     loadCounts();
 </script>
-<script src="../auth-utils.js"></script>
+
+<div class="sidebar-overlay" ></div>
 </body>
 </html>

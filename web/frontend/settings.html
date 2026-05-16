@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="app.css">
     <style>
         .settings-container {
-            background: var(--card-bg, white);
+            background: var(--card-bg, var(--surface));
             border-radius: 24px;
             border: 1px solid var(--border);
             padding: 40px;
@@ -35,7 +35,7 @@
             border: 1px solid var(--border);
             border-radius: 12px;
             font-family: inherit;
-            background: var(--bg-color, #fff);
+            background: var(--bg-color, var(--surface));
             color: var(--text);
         }
         .form-group input:focus { outline: none; border-color: var(--primary); }
@@ -62,7 +62,7 @@
             gap: 8px;
         }
         .avatar-upload-label input[type="file"] { display: none; }
-        .upload-hint { font-size: 12px; color: var(--text-muted, #6B7280); }
+        .upload-hint { font-size: 12px; color: var(--text-muted); }
         .save-toast {
             position: fixed;
             bottom: 30px;
@@ -128,7 +128,7 @@
                             </div>
                             <div class="form-group">
                                 <label>🤖 Telegram ID</label>
-                                <input type="text" id="profileTelegram" disabled style="background:var(--bg-color,#F8FAFC);color:var(--text-muted);">
+                                <input type="text" id="profileTelegram" disabled style="background:var(--bg-color);color:var(--text-muted);">
                             </div>
                         </div>
                         <button type="submit" class="btn-primary" style="margin-top: 25px;">Сохранить изменения</button>
@@ -224,12 +224,18 @@
     
     sidebar.innerHTML = sidebarHtml;
 
-    document.getElementById('logoutBtn')?.addEventListener('click', (e) => {
+        document.getElementById('logoutBtn')?.addEventListener('click', (e) => {
         e.preventDefault();
-        logout();
+        if (confirm('Вы уверены, что хотите выйти?')) {
+            logout();
+        }
     });
 
     async function loadProfile() {
+        const nameField = document.getElementById('profileName');
+        const emailField = document.getElementById('profileEmail');
+        const phoneField = document.getElementById('profilePhone');
+        const fields = [nameField, emailField, phoneField].forEach(el => { if (el) el.placeholder = 'Загрузка...'; });
         try {
             const res = await fetch('/auth/me', {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -270,7 +276,7 @@
             const file = e.target.files[0];
             if (!file) return;
             if (file.size > 2 * 1024 * 1024) {
-                alert('Файл слишком большой. Максимум 2MB.');
+                showToast('Файл слишком большой. Максимум 2MB.');
                 return;
             }
             const statusEl = document.getElementById('avatarStatus');
@@ -334,10 +340,10 @@
                 localStorage.setItem('user_email', user.email || '');
                 showToast('Профиль обновлен + синхронизирован!');
             } else {
-                alert('Ошибка при обновлении профиля');
+                showToast('Ошибка при обновлении профиля');
             }
         } catch(e) {
-            alert('Ошибка сети');
+            showToast('Ошибка сети');
         }
     });
 
@@ -345,6 +351,7 @@
         e.preventDefault();
         const pw = document.getElementById('newPassword').value;
         if (!pw) return;
+        if (!confirm('Вы уверены, что хотите изменить пароль?')) return;
         try {
             const res = await fetch('/auth/me', {
                 method: 'PATCH',
@@ -355,13 +362,13 @@
                 body: JSON.stringify({ password: pw })
             });
             if (res.ok) {
-                alert('Пароль успешно обновлен!');
+                showToast('Пароль успешно обновлен!');
                 document.getElementById('newPassword').value = '';
             } else {
-                alert('Ошибка при обновлении пароля');
+                showToast('Ошибка при обновлении пароля');
             }
         } catch(e) {
-            alert('Ошибка сети');
+            showToast('Ошибка сети');
         }
     });
 

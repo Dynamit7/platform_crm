@@ -268,6 +268,120 @@ def sync_bot_to_web():
     except Exception as e:
         print(f"  Reviews skipped: {e}")
 
+    # ── 8. Teachers ──
+    try:
+        bot_cur.execute("""
+            SELECT t.id as tid, t.specialization, t.is_active, u.telegram_id
+            FROM teachers t
+            JOIN users u ON t.user_id = u.id
+        """)
+        web_cur.execute("SELECT id FROM teachers WHERE user_id IN (SELECT id FROM users WHERE telegram_id IS NOT NULL)")
+        existing_teacher_user_ids = {r[0] for r in web_cur.fetchall()}
+        t_added = 0
+
+        for t in bot_cur.fetchall():
+            web_cur.execute("SELECT id FROM users WHERE telegram_id = ?", (t['telegram_id'],))
+            wu = web_cur.fetchone()
+            if not wu:
+                continue
+            web_cur.execute("SELECT id FROM teachers WHERE user_id = ?", (wu['id'],))
+            if web_cur.fetchone():
+                continue
+            web_cur.execute("""
+                INSERT INTO teachers (name, bio, subjects, user_id)
+                VALUES (?, ?, ?, ?)
+            """, (wu['name'] or 'Teacher', t['specialization'] or '', t['specialization'] or '', wu['id']))
+            t_added += 1
+
+        web.commit()
+        print(f"  Teachers: added {t_added}")
+    except Exception as e:
+        print(f"  Teachers skipped: {e}")
+
+    # ── 9. Attendance ──
+    try:
+        bot_cur.execute("""
+            SELECT a.id as aid, a.status, l.id as bot_lesson_id, u.telegram_id
+            FROM attendance a
+            JOIN lessons l ON a.lesson_id = l.id
+            JOIN students s ON a.student_id = s.id
+            JOIN users u ON s.user_id = u.id
+        """)
+        a_added = 0
+
+        for a in bot_cur.fetchall():
+            web_cur.execute("SELECT id FROM users WHERE telegram_id = ?", (a['telegram_id'],))
+            wu = web_cur.fetchone()
+            if not wu:
+                continue
+            web_cur.execute("SELECT id FROM lessons WHERE bot_lesson_id = ?", (a['bot_lesson_id'],))
+            wl = web_cur.fetchone()
+            if not wl:
+                continue
+            web_cur.execute("SELECT id FROM lesson_attendance WHERE lesson_id = ? AND student_id = ?",
+                            (wl['id'], wu['id']))
+            if web_cur.fetchone():
+                continue
+            web_cur.execute("""
+                INSERT INTO lesson_attendance (lesson_id, student_id, attended)
+                VALUES (?, ?, ?)
+            """, (wl['id'], wu['id'], a['status'] == 'present'))
+            a_added += 1
+
+        web.commit()
+        print(f"  Attendance: added {a_added}")
+    except Exception as e:
+        print(f"  Attendance skipped: {e}")
+
+    # ── 10. Homework Submissions ──
+    try:
+        bot_cur.execute("""
+            SELECT hs.id as hid, hs.status, hs.grade, hs.text, l.id as bot_lesson_id, u.telegram_id
+            FROM homework_submissions hs
+            JOIN lessons l ON hs.lesson_id = l.id
+            JOIN students s ON hs.student_id = s.id
+            JOIN users u ON s.user_id = u.id
+        """)
+        h_added = 0
+
+        for h in bot_cur.fetchall():
+            web_cur.execute("SELECT id FROM users WHERE telegram_id = ?", (h['telegram_id'],))
+            wu = web_cur.fetchone()
+            if not wu:
+                continue
+            web_cur.execute("SELECT id, course_id FROM lessons WHERE bot_lesson_id = ?", (h['bot_lesson_id'],))
+            wl = web_cur.fetchone()
+            if not wl:
+                continue
+            # Find or create homework record
+            web_cur.execute("""
+                SELECT id FROM homeworks WHERE group_id = (SELECT group_id FROM lessons WHERE id = ?) AND course_id = ?
+            """, (wl['id'], wl['course_id']))
+            wh = web_cur.fetchone()
+            if not wh:
+                web_cur.execute("""
+                    INSERT INTO homeworks (course_id, title, description, due_date)
+                    VALUES (?, 'Homework', 'Synced from bot', datetime('now', '+7 days'))
+                """, (wl['course_id'],))
+                wh_id = web_cur.lastrowid
+            else:
+                wh_id = wh['id']
+
+            web_cur.execute("SELECT id FROM homework_submissions WHERE homework_id = ? AND student_id = ?",
+                            (wh_id, wu['id']))
+            if web_cur.fetchone():
+                continue
+            web_cur.execute("""
+                INSERT INTO homework_submissions (homework_id, student_id, content, grade, status)
+                VALUES (?, ?, ?, ?, ?)
+            """, (wh_id, wu['id'], h['text'] or '', str(h['grade']) if h['grade'] else None, h['status']))
+            h_added += 1
+
+        web.commit()
+        print(f"  Homework Submissions: added {h_added}")
+    except Exception as e:
+        print(f"  Homework Submissions skipped: {e}")
+
     bot.close()
     web.close()
     print("  Sync BOT -> WEB complete")

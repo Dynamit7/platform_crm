@@ -12,7 +12,7 @@
         .analytics-grid.three { grid-template-columns: 1fr 1fr 1fr; }
         .chart-wrap { position: relative; height: 280px; }
         .metric-card {
-            background: white;
+            background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 20px;
             padding: 24px;
@@ -25,11 +25,11 @@
             display: flex; align-items: center; justify-content: center;
             font-size: 24px; flex-shrink: 0;
         }
-        .metric-icon.blue { background: #EFF6FF; }
-        .metric-icon.green { background: #ECFDF5; }
-        .metric-icon.yellow { background: #FFFBEB; }
-        .metric-icon.red { background: #FFF1F2; }
-        .metric-icon.purple { background: #F5F3FF; }
+        .metric-icon.blue { background: var(--surface); }
+        .metric-icon.green { background: var(--surface); }
+        .metric-icon.yellow { background: var(--surface); }
+        .metric-icon.red { background: var(--surface); }
+        .metric-icon.purple { background: var(--surface); }
         .metric-value { font-size: 28px; font-weight: 800; color: var(--primary); font-family: 'Outfit', sans-serif; }
         .metric-label { font-size: 13px; color: var(--muted); margin-top: 2px; }
         .metric-trend { font-size: 12px; font-weight: 600; margin-top: 6px; }
@@ -79,7 +79,7 @@
 </head>
 <body>
 
-<aside class="sidebar">
+<aside id="main-sidebar" class="sidebar">
     <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>ADMIN CRM</small></div>
         <nav class="sidebar-nav">
         <div class="section-label">Главное</div>
@@ -103,22 +103,16 @@
         <a href="reviews.html" ><span class="icon">⭐</span> Отзывы</a>
     </nav>
     <div class="sidebar-bottom">
-        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
-        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
-    </div>
+    <button class="notif-bell" onclick="toggleNotifDropdown()" title="Уведомления">🔔 <span class="badge-dot"></span></button>
+    <div class="notif-dropdown" id="notifDropdown"></div>
+
+
+
+    <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+    <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+</div>
 </aside>
-
-<div class="main-content">
-    <div class="top-bar">
-        <h1>📈 Аналитика и отчёты</h1>
-        <div class="top-bar-right">
-            <button class="btn btn-outline btn-sm" onclick="refreshAll()">🔄 Обновить</button>
-            <div class="admin-badge">👑 ADMIN</div>
-        </div>
-    </div>
-
-    <div class="page-content">
-        <!-- Export strip -->
+<div class="page-content"><!-- Export strip -->
         <div class="export-strip">
             <span>📥 Экспорт:</span>
             <button class="export-btn" onclick="exp('students')">👨‍🎓 Студенты (Excel)</button>
@@ -185,6 +179,7 @@
     </div>
 </div>
 
+<script src="../auth-utils.js"></script>
 <script>
     const API = '';
     const token = localStorage.getItem('access_token');
@@ -203,7 +198,12 @@
     }
 
     async function loadStats() {
-        const res = await fetch(`${API}/api/admin/stats`, { headers: authH() });
+        showLoading('topStudents', 'Загрузка...');
+        showLoading('courseSummary', 'Загрузка...');
+        let res;
+        try {
+            res = await fetch(`${API}/api/admin/stats`, { headers: authH() });
+        } catch (e) { return; }
         if (!res.ok) return;
         const s = await res.json();
         document.getElementById('mStudents').textContent = s.total_students;
@@ -240,11 +240,16 @@
         if (coursesRes.ok) {
             const courses = await coursesRes.json();
             renderCourseSummary(courses);
+        } else {
+            showError('courseSummary', 'Ошибка', 'Не удалось загрузить сводку по курсам');
         }
     }
 
     async function loadRevenue() {
-        const res = await fetch(`${API}/api/payments/monthly-revenue`, { headers: authH() });
+        let res;
+        try {
+            res = await fetch(`${API}/api/payments/monthly-revenue`, { headers: authH() });
+        } catch (e) { return; }
         const data = res.ok ? await res.json() : [];
         const labels = data.length ? data.map(d => MONTHS[d.month - 1]) : MONTHS.slice(0, 6);
         const values = data.length ? data.map(d => d.total) : [0,0,0,0,0,0];
@@ -385,11 +390,16 @@
     async function refreshAll() {
         Object.values(charts).forEach(c => c?.destroy());
         charts = {};
-        await Promise.all([loadStats(), loadRevenue()]);
+        try {
+            await Promise.all([loadStats(), loadRevenue()]);
+        } catch (e) {
+            showToast('Ошибка обновления данных', 'error');
+        }
     }
 
     refreshAll();
 </script>
-<script src="../auth-utils.js"></script>
+
+<div class="sidebar-overlay" ></div>
 </body>
 </html>

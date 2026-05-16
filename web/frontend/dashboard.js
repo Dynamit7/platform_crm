@@ -19,8 +19,27 @@ function authHeaders() {
 }
 
 function logout() {
-    localStorage.clear();
-    window.location.href = 'login.html';
+    if (confirm('Вы уверены, что хотите выйти?')) {
+        localStorage.clear();
+        window.location.href = 'login.html';
+    }
+}
+
+function showToast(msg) {
+    let t = document.getElementById('toastMsg');
+    if (!t) {
+        t = document.createElement('div');
+        t.id = 'toastMsg';
+        t.style.cssText = 'position:fixed;bottom:30px;right:30px;background:#10B981;color:white;padding:14px 24px;border-radius:14px;font-weight:700;font-size:15px;box-shadow:0 8px 24px rgba(16,185,129,0.3);z-index:9999;animation:slideInRight 0.3s ease;display:none;';
+        document.body.appendChild(t);
+        const s = document.createElement('style');
+        s.textContent = '@keyframes slideInRight{from{transform:translateX(60px);opacity:0}to{transform:translateX(0);opacity:1}}';
+        document.head.appendChild(s);
+    }
+    t.textContent = '✅ ' + msg;
+    t.style.display = 'block';
+    clearTimeout(t._hide);
+    t._hide = setTimeout(() => t.style.display = 'none', 3000);
 }
 
 // ── Init ────────────────────────────────────────────────
@@ -46,6 +65,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const logoutEl = document.querySelector('.logout');
     if (logoutEl) logoutEl.onclick = (e) => { e.preventDefault(); logout(); };
 
+    // Loading state
+    document.querySelector('.welcome-text h1').innerText = `Загрузка... 👋`;
+    document.querySelector('.welcome-text p').innerText = 'Загружаем данные вашего профиля...';
+    
     try {
         const response = await fetch(`${API}/api/dashboard/${userId}`, { headers: authHeaders() });
         if (response.status === 401 || response.status === 403) {
@@ -282,10 +305,10 @@ function initHomeworkModal() {
                     successMsg.style.display = 'block';
                     setTimeout(() => location.reload(), 1800);
                 } else {
-                    alert('Ошибка отправки задания');
+                    showToast('Ошибка отправки задания');
                 }
             } catch (e) {
-                alert('Нет соединения с сервером');
+                showToast('Нет соединения с сервером');
             } finally {
                 submitBtn.innerText = 'Отправить на проверку';
                 submitBtn.disabled = false;

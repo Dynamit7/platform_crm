@@ -77,7 +77,7 @@ class Settings(BaseSettings):
         if v.startswith("sqlite://") and not v.startswith("sqlite+aiosqlite://"):
             v = v.replace("sqlite://", "sqlite+aiosqlite://")
             
-        if "sqlite" in v and "///./" in v:
+        if "sqlite" in v and "///./" in v and v.count("/") < 5:
             # Resolve to absolute path in project root
             project_root = Path(__file__).parent.parent.absolute().as_posix()
             v = v.replace("///./", f"///{project_root}/")

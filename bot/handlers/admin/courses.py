@@ -24,7 +24,6 @@ async def list_courses(callback: types.CallbackQuery, session: AsyncSession):
     else:
         for c in courses:
             text += f"\n🔹 *{c.name}* — {c.price_group or 'Не указана'} сум"
-            text += f"\n🔹 *{c.name}* — {c.price_group or 'Не указана'} сум"
             buttons.append([
                 types.InlineKeyboardButton(text=f"⚙️ Управление: {c.name}", callback_data=f"course_manage:{c.id}")
             ])

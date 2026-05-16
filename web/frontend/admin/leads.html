@@ -9,7 +9,7 @@
 </head>
 <body>
 
-<aside class="sidebar">
+<aside id="main-sidebar" class="sidebar">
     <div class="sidebar-logo"><img src="../logo.png" alt="Logo" style="height:32px;"> TIL <span>USER</span><small>ADMIN CRM</small></div>
         <nav class="sidebar-nav">
         <div class="section-label">Главное</div>
@@ -33,21 +33,15 @@
         <a href="reviews.html" ><span class="icon">⭐</span> Отзывы</a>
     </nav>
     <div class="sidebar-bottom">
-        <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
-        <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
-    </div>
-</aside>
+    <button class="notif-bell" onclick="toggleNotifDropdown()" title="Уведомления">🔔 <span class="badge-dot"></span></button>
+    <div class="notif-dropdown" id="notifDropdown"></div>
 
-<div class="main-content">
-    <div class="top-bar">
-        <h1>🎯 Воронка заявок</h1>
-        <div class="top-bar-right">
-            <span id="totalLeadsCount" style="font-size: 13px; color: var(--muted);">Загрузка...</span>
-            <div class="admin-badge">👑 ADMIN</div>
-        </div>
-    </div>
 
-    <!-- Search & Filter Bar -->
+
+    <a href="../index.html"><span class="icon">🌐</span> На сайт</a>
+    <a href="../login.html" class="logout" id="logoutBtn"><span class="icon">🚪</span> Выйти</a>
+</div>
+</aside><!-- Search & Filter Bar -->
     <div style="padding:0 24px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
         <input type="text" id="leadSearch" placeholder="🔍 Поиск по имени, телефону..." class="search-input" style="max-width:300px;" oninput="filterLeads()">
         <select id="leadCourseFilter" class="filter-select" onchange="filterLeads()" style="min-width:180px;">
@@ -99,6 +93,7 @@
 .modal-overlay.active { display: flex !important; }
 </style>
 
+<script src="../auth-utils.js"></script>
 <script>
     const API = '';
     const token = localStorage.getItem('access_token');
@@ -290,9 +285,10 @@
     }
 
     async function loadLeads() {
+        showLoading('kanbanBoard', 'Загрузка заявок...');
         try {
             const res = await fetch(`${API}/api/leads`, { headers: authHeaders() });
-            if (!res.ok) return;
+            if (!res.ok) { showError('kanbanBoard', 'Ошибка загрузки'); return; }
             allLeads = await res.json();
 
             // Populate course filter
@@ -310,12 +306,16 @@
                     allGroups.filter(g=>g.is_active).map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
             }
 
+            if (!allLeads.length) {
+                showEmpty('kanbanBoard', 'Заявок пока нет', '🎯');
+                return;
+            }
             renderKanban(allLeads);
-        } catch(e) { console.error(e); }
+        } catch(e) { showError('kanbanBoard', 'Ошибка сети', 'Проверьте подключение'); }
     }
 
     loadLeads();
 </script>
-<script src="../auth-utils.js"></script>
+<div class="sidebar-overlay" ></div>
 </body>
 </html>
