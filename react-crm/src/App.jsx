@@ -10,12 +10,31 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
 import StudentDashboard from './pages/student/StudentDashboard';
 import ChatPage from './pages/Chat';
-import Placeholder from './pages/Placeholder';
+import StudentCourses from './pages/student/Courses';
+import StudentHomeworks from './pages/student/Homeworks';
+import StudentSchedule from './pages/student/Schedule';
+import StudentAchievements from './pages/student/Achievements';
+import StudentSettings from './pages/student/Settings';
+import TeacherStudents from './pages/teacher/Students';
+import TeacherGroups from './pages/teacher/Groups';
+import TeacherHomeworks from './pages/teacher/Homeworks';
+import TeacherLessons from './pages/teacher/Lessons';
+import TeacherAttendance from './pages/teacher/Attendance';
+import AdminLeads from './pages/admin/Leads';
+import AdminStudents from './pages/admin/Students';
+import AdminTeachers from './pages/admin/Teachers';
+import AdminGroups from './pages/admin/Groups';
+import AdminCourses from './pages/admin/Courses';
+import AdminPayments from './pages/admin/Payments';
+import AdminReports from './pages/admin/Reports';
+import Broadcast from './pages/admin/Broadcast';
+import PendingUsers from './pages/admin/PendingUsers';
+import AdminReviews from './pages/admin/Reviews';
 
 function HomeRedirect() {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role === 'admin') return <Navigate to="/admin/dashboard" replace />;
+  if (user.role === 'super_admin' || user.role === 'admin') return <Navigate to="/admin/dashboard" replace />;
   if (user.role === 'teacher') return <Navigate to="/teacher/dashboard" replace />;
   return <Navigate to="/dashboard" replace />;
 }
@@ -31,35 +50,38 @@ export default function App() {
 
         {/* Student pages */}
         <Route path="/dashboard" element={<ProtectedRoute roles={['student']}><StudentDashboard /></ProtectedRoute>} />
-        <Route path="/courses" element={<ProtectedRoute roles={['student']}><Placeholder title="Мои курсы" /></ProtectedRoute>} />
-        <Route path="/homeworks" element={<ProtectedRoute roles={['student']}><Placeholder title="Домашние задания" /></ProtectedRoute>} />
-        <Route path="/schedule" element={<ProtectedRoute roles={['student']}><Placeholder title="Расписание" /></ProtectedRoute>} />
-        <Route path="/achievements" element={<ProtectedRoute roles={['student']}><Placeholder title="Достижения" /></ProtectedRoute>} />
-        <Route path="/settings" element={<ProtectedRoute roles={['student']}><Placeholder title="Настройки" /></ProtectedRoute>} />
+        <Route path="/courses" element={<ProtectedRoute roles={['student']}><StudentCourses /></ProtectedRoute>} />
+        <Route path="/homeworks" element={<ProtectedRoute roles={['student']}><StudentHomeworks /></ProtectedRoute>} />
+        <Route path="/schedule" element={<ProtectedRoute roles={['student']}><StudentSchedule /></ProtectedRoute>} />
+        <Route path="/achievements" element={<ProtectedRoute roles={['student']}><StudentAchievements /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute roles={['student', 'teacher', 'admin', 'super_admin']}><StudentSettings /></ProtectedRoute>} />
 
         {/* Teacher pages */}
-        <Route path="/teacher/dashboard" element={<ProtectedRoute roles={['teacher', 'admin']}><TeacherDashboard /></ProtectedRoute>} />
-        <Route path="/teacher/students" element={<ProtectedRoute roles={['teacher', 'admin']}><Placeholder title="Мои студенты" /></ProtectedRoute>} />
-        <Route path="/teacher/groups" element={<ProtectedRoute roles={['teacher', 'admin']}><Placeholder title="Мои группы" /></ProtectedRoute>} />
-        <Route path="/teacher/homeworks" element={<ProtectedRoute roles={['teacher', 'admin']}><Placeholder title="ДЗ учеников" /></ProtectedRoute>} />
-        <Route path="/teacher/lessons" element={<ProtectedRoute roles={['teacher', 'admin']}><Placeholder title="Уроки" /></ProtectedRoute>} />
-        <Route path="/teacher/attendance" element={<ProtectedRoute roles={['teacher', 'admin']}><Placeholder title="Посещаемость" /></ProtectedRoute>} />
+        <Route path="/teacher/dashboard" element={<ProtectedRoute roles={['teacher', 'admin', 'super_admin']}><TeacherDashboard /></ProtectedRoute>} />
+        <Route path="/teacher/students" element={<ProtectedRoute roles={['teacher', 'admin', 'super_admin']}><TeacherStudents /></ProtectedRoute>} />
+        <Route path="/teacher/groups" element={<ProtectedRoute roles={['teacher', 'admin', 'super_admin']}><TeacherGroups /></ProtectedRoute>} />
+        <Route path="/teacher/homeworks" element={<ProtectedRoute roles={['teacher', 'admin', 'super_admin']}><TeacherHomeworks /></ProtectedRoute>} />
+        <Route path="/teacher/lessons" element={<ProtectedRoute roles={['teacher', 'admin', 'super_admin']}><TeacherLessons /></ProtectedRoute>} />
+        <Route path="/teacher/attendance" element={<ProtectedRoute roles={['teacher', 'admin', 'super_admin']}><TeacherAttendance /></ProtectedRoute>} />
 
-        {/* Admin pages */}
-        <Route path="/admin/dashboard" element={<ProtectedRoute roles={['admin']}><AdminDashboard /></ProtectedRoute>} />
-        <Route path="/admin/leads" element={<ProtectedRoute roles={['admin']}><Placeholder title="Заявки" /></ProtectedRoute>} />
-        <Route path="/admin/students" element={<ProtectedRoute roles={['admin']}><Placeholder title="Студенты" /></ProtectedRoute>} />
-        <Route path="/admin/teachers" element={<ProtectedRoute roles={['admin']}><Placeholder title="Преподаватели" /></ProtectedRoute>} />
-        <Route path="/admin/groups" element={<ProtectedRoute roles={['admin']}><Placeholder title="Группы" /></ProtectedRoute>} />
-        <Route path="/admin/courses" element={<ProtectedRoute roles={['admin']}><Placeholder title="Курсы" /></ProtectedRoute>} />
-        <Route path="/admin/payments" element={<ProtectedRoute roles={['admin']}><Placeholder title="Платежи" /></ProtectedRoute>} />
-        <Route path="/admin/reports" element={<ProtectedRoute roles={['admin']}><Placeholder title="Отчёты" /></ProtectedRoute>} />
-        <Route path="/admin/broadcast" element={<ProtectedRoute roles={['admin']}><Placeholder title="Рассылка" /></ProtectedRoute>} />
-        <Route path="/admin/pending-users" element={<ProtectedRoute roles={['admin']}><Placeholder title="Заявки на регистрацию" /></ProtectedRoute>} />
-        <Route path="/admin/reviews" element={<ProtectedRoute roles={['admin']}><Placeholder title="Отзывы" /></ProtectedRoute>} />
+        {/* Admin pages – admin и super_admin */}
+        <Route path="/admin/dashboard" element={<ProtectedRoute roles={['admin', 'super_admin']}><AdminDashboard /></ProtectedRoute>} />
+        <Route path="/admin/leads" element={<ProtectedRoute roles={['admin', 'super_admin']}><AdminLeads /></ProtectedRoute>} />
+        <Route path="/admin/students" element={<ProtectedRoute roles={['admin', 'super_admin']}><AdminStudents /></ProtectedRoute>} />
+        <Route path="/admin/teachers" element={<ProtectedRoute roles={['admin', 'super_admin']}><AdminTeachers /></ProtectedRoute>} />
+        <Route path="/admin/groups" element={<ProtectedRoute roles={['admin', 'super_admin']}><AdminGroups /></ProtectedRoute>} />
+        <Route path="/admin/courses" element={<ProtectedRoute roles={['admin', 'super_admin']}><AdminCourses /></ProtectedRoute>} />
+
+        {/* Только super_admin */}
+        <Route path="/admin/payments" element={<ProtectedRoute roles={['super_admin']}><AdminPayments /></ProtectedRoute>} />
+        <Route path="/admin/reports" element={<ProtectedRoute roles={['super_admin']}><AdminReports /></ProtectedRoute>} />
+
+        <Route path="/admin/broadcast" element={<ProtectedRoute roles={['admin', 'super_admin']}><Broadcast /></ProtectedRoute>} />
+        <Route path="/admin/pending-users" element={<ProtectedRoute roles={['admin', 'super_admin']}><PendingUsers /></ProtectedRoute>} />
+        <Route path="/admin/reviews" element={<ProtectedRoute roles={['admin', 'super_admin']}><AdminReviews /></ProtectedRoute>} />
 
         {/* Chat – любой авторизованный */}
-        <Route path="/chat" element={<ProtectedRoute roles={['admin', 'teacher', 'student']}><ChatPage /></ProtectedRoute>} />
+        <Route path="/chat" element={<ProtectedRoute roles={['admin', 'super_admin', 'teacher', 'student']}><ChatPage /></ProtectedRoute>} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -72,6 +94,7 @@ function RegisterPage() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
+  const { login } = useAuth();
   const { add } = useToast();
   const navigate = useNavigate();
 
@@ -79,10 +102,8 @@ function RegisterPage() {
     e.preventDefault();
     setBusy(true);
     try {
-      const { data } = await api.post('/auth/register', { name, email, password });
-      localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('refresh_token', data.refresh_token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      await api.post('/auth/register', { name, email, password });
+      await login(email, password);
       if (add) add('Регистрация успешна!', 'success');
       navigate('/dashboard');
     } catch {

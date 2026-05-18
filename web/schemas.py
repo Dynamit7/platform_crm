@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Any, Dict
-from datetime import datetime
+from datetime import datetime, date
 
 
 # ──────────────────────────────────────
@@ -78,6 +78,22 @@ class UserSummary(BaseModel):
 
 Token.model_rebuild()
 
+class StudentProfile(BaseModel):
+    id: int
+    user_id: int
+    student_code: Optional[str] = None
+    enrollment_date: Optional[date] = None
+    frozen_until: Optional[date] = None
+    freeze_reason: Optional[str] = None
+    is_active: bool = True
+    xp: int = 0
+    level: int = 1
+    streak_days: int = 0
+    last_activity_date: Optional[date] = None
+
+    class Config:
+        from_attributes = True
+
 class BotUserSync(BaseModel):
     telegram_id: int
     name: str
@@ -120,6 +136,13 @@ class CourseBase(BaseModel):
 class CourseCreate(CourseBase):
     pass
 
+class CourseUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    duration: Optional[str] = None
+    price: Optional[float] = None
+    is_active: Optional[bool] = None
+
 class Course(CourseBase):
     id: int
     is_active: bool = True
@@ -157,6 +180,13 @@ class GroupCreate(BaseModel):
     max_students: int = 8
     schedule_json: Optional[Any] = None
 
+class GroupUpdate(BaseModel):
+    name: Optional[str] = None
+    course_id: Optional[int] = None
+    teacher_id: Optional[int] = None
+    max_students: Optional[int] = None
+    is_active: Optional[bool] = None
+
 class Group(GroupCreate):
     id: int
     is_active: bool
@@ -177,6 +207,9 @@ class LessonCreate(BaseModel):
     description: Optional[str] = None
     scheduled_at: datetime
     zoom_link: Optional[str] = None
+    homework: Optional[str] = None
+    lesson_date: Optional[date] = None
+    lesson_time: Optional[str] = None
 
 class Lesson(LessonCreate):
     id: int
@@ -221,10 +254,12 @@ class Homework(HomeworkCreate):
     class Config:
         from_attributes = True
 
-class HomeworkSubmissionBase(BaseModel):
+class HomeworkSubmissionCreate(BaseModel):
     homework_id: int
     student_id: int
     content: str
+
+class HomeworkSubmissionBase(HomeworkSubmissionCreate):
     grade: Optional[str] = None
     status: str = "submitted"
 
@@ -291,7 +326,13 @@ class LeadBase(BaseModel):
     notes: Optional[str] = None
 
 class LeadCreate(LeadBase):
-    pass
+    source: Optional[str] = "manual"
+
+class LeadFilter(BaseModel):
+    status: Optional[str] = None
+    search: Optional[str] = None
+    course_id: Optional[int] = None
+    source: Optional[str] = None
 
 class LeadStatusUpdate(BaseModel):
     status: str
@@ -362,3 +403,17 @@ class BotMessage(BaseModel):
 
 class BulkAction(BaseModel):
     ids: List[int]
+
+class AdminTeacherCreate(BaseModel):
+    name: str
+    email: str
+    phone: Optional[str] = None
+    password: str
+    subjects: str
+    bio: str = ""
+
+class StudentStatusUpdate(BaseModel):
+    status: str  # active, vacation, inactive
+    freeze_reason: Optional[str] = None
+    level: Optional[int] = None
+    xp: Optional[int] = None

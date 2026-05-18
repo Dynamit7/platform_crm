@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, BigInteger, String, Text, ForeignKey, DateTime, Float, Boolean, JSON
+from sqlalchemy import Column, Integer, BigInteger, String, Text, ForeignKey, DateTime, Float, Boolean, JSON, Date
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -84,6 +84,27 @@ class User(Base):
     vocabulary = relationship("VocabularyWord", back_populates="student")
     achievements = relationship("Achievement", back_populates="student")
 
+    student_profile = relationship("Student", back_populates="user", uselist=False)
+
+
+class Student(Base):
+    __tablename__ = "students"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, index=True)
+    student_code = Column(String(50), unique=True, nullable=True)
+    enrollment_date = Column(Date)
+    frozen_until = Column(Date, nullable=True)
+    freeze_reason = Column(String(255), nullable=True)
+    last_debt_reminder = Column(Date, nullable=True)
+    is_active = Column(Boolean, default=True)
+    xp = Column(Integer, default=0)
+    level = Column(Integer, default=1)
+    streak_days = Column(Integer, default=0)
+    last_activity_date = Column(Date, nullable=True)
+
+    user = relationship("User", back_populates="student_profile")
+
 
 class Group(Base):
     __tablename__ = "groups"
@@ -128,6 +149,9 @@ class Lesson(Base):
     description = Column(Text, nullable=True)
     scheduled_at = Column(DateTime(timezone=True))
     zoom_link = Column(String, nullable=True)
+    homework = Column(String, nullable=True)
+    lesson_date = Column(Date, nullable=True)
+    lesson_time = Column(String, nullable=True)
     is_recorded = Column(Boolean, default=False)
     recording_url = Column(String, nullable=True)
     is_completed = Column(Boolean, default=False)

@@ -11,9 +11,16 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem('access_token');
     const stored = localStorage.getItem('user');
     if (token && stored) {
-      try { setUser(JSON.parse(stored)); } catch { setUser(null); }
+      api.get('/auth/me').then(({ data }) => {
+        localStorage.setItem('user', JSON.stringify(data));
+        setUser(data);
+      }).catch(() => {
+        localStorage.clear();
+        setUser(null);
+      }).finally(() => setLoading(false));
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   const login = async (email, password) => {

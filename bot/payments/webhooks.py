@@ -67,13 +67,10 @@ async def sync_web_user_handler(request: web.Request):
             user = (await session.execute(stmt)).scalar_one_or_none()
             
         if not user:
-            # Generate a negative telegram ID to avoid conflicts but satisfy unique constraint
-            # Let's just use the website user's ID but negative, or a random negative
-            dummy_telegram_id = -abs(int(data.get("id", random.randint(1000000, 9999999))))
-            
-            # Make sure it doesn't exist
-            while (await session.execute(select(User).where(User.telegram_id == dummy_telegram_id))).scalar_one_or_none():
-                dummy_telegram_id -= 1
+            # Generate a negative telegram ID using user's web ID (guaranteed unique)
+            dummy_telegram_id = -abs(int(data.get("id", 0)))
+            if dummy_telegram_id >= 0:
+                dummy_telegram_id = -random.randint(10000000, 99999999)
                 
             user = User(
                 telegram_id=dummy_telegram_id,

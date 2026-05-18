@@ -3,13 +3,10 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from bot.config import config
-from bot.middlewares.auth import AuthMiddleware
 import aiohttp
 
 logger = logging.getLogger(__name__)
-router = Router()
-router.message.middleware(AuthMiddleware())
-router.callback_query.middleware(AuthMiddleware())
+router = Router(name="admin_leads_handler")
 
 API = config.API_URL.rstrip("/")
 BOT_SECRET = config.BOT_TOKEN

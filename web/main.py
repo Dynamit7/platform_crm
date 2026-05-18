@@ -1,10 +1,10 @@
-from fastapi import FastAPI, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query, Body, UploadFile, File, Header
+from fastapi import FastAPI, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Body, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Dict, Optional
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, date
 import asyncio, io, openpyxl, json, os, requests
 from uuid import uuid4
 from dotenv import load_dotenv
@@ -12,10 +12,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import crud, models, schemas
-from database import engine, get_db
+from database import engine, get_db, SessionLocal
 from auth import (
     create_access_token, create_refresh_token,
-    get_current_user, require_admin, require_teacher, require_student,
+    get_current_user, require_admin, require_super_admin, require_teacher, require_student,
     ACCESS_TOKEN_EXPIRE_MINUTES, decode_token
 )
 
@@ -504,8 +504,16 @@ def create_course(course: schemas.CourseCreate, db: Session = Depends(get_db),
                   _=Depends(require_admin)):
     return crud.create_course(db=db, course=course)
 
+@app.put("/api/courses/{course_id}", response_model=schemas.Course)
+def update_course(course_id: int, data: schemas.CourseUpdate, db: Session = Depends(get_db),
+                  _=Depends(require_admin)):
+    result = crud.update_course(db, course_id, data)
+    if not result:
+        raise HTTPException(status_code=404, detail="Курс не найден")
+    return result
 
-# ──────────────────────────────────────
+
+# ─────────────────────────────────────
 # TEACHERS
 # ──────────────────────────────────────
 @app.get("/api/teachers", response_model=List[schemas.Teacher])
@@ -541,8 +549,26 @@ def create_group(group: schemas.GroupCreate, db: Session = Depends(get_db),
                  _=Depends(require_admin)):
     return crud.create_group(db=db, group=group)
 
+@app.put("/api/groups/{group_id}", response_model=schemas.Group)
+def update_group(group_id: int, data: schemas.GroupUpdate, db: Session = Depends(get_db),
+                 _=Depends(require_admin)):
+    result = crud.update_group(db, group_id, data)
+    if not result:
+        raise HTTPException(status_code=404, detail="Группа не найдена")
+    return result
 
-# ──────────────────────────────────────
+@app.post("/api/admin/groups/{group_id}/toggle-active")
+def toggle_group_active(group_id: int, db: Session = Depends(get_db),
+                        _=Depends(require_admin)):
+    group = db.query(models.Group).filter(models.Group.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Группа не найдена")
+    group.is_active = not group.is_active
+    db.commit()
+    return {"is_active": group.is_active}
+
+
+# ─────────────────────────────────────
 # LESSONS
 # ──────────────────────────────────────
 @app.post("/api/lessons", response_model=schemas.Lesson)
@@ -557,15 +583,24 @@ def get_lessons(group_id: int, db: Session = Depends(get_db), _=Depends(require_
 
 @app.get("/api/groups/{group_id}/students")
 def get_group_students(group_id: int, db: Session = Depends(get_db), _=Depends(require_teacher)):
-    """Return students enrolled in a specific group with their progress."""
+    """Return students enrolled in a specific group with their progress and profile."""
     enrollments = db.query(models.Enrollment).filter(
         models.Enrollment.group_id == group_id
     ).all()
     result = []
+    today = date.today()
     for e in enrollments:
         student = db.query(models.User).filter(models.User.id == e.student_id).first()
         if not student:
             continue
+        profile = crud.get_or_create_student_profile(db, student.id)
+        # Compute status
+        if not profile.is_active:
+            status = "inactive"
+        elif profile.frozen_until and profile.frozen_until > today:
+            status = "vacation"
+        else:
+            status = "active"
         result.append({
             "student_id": student.id,
             "id": student.id,
@@ -576,8 +611,37 @@ def get_group_students(group_id: int, db: Session = Depends(get_db), _=Depends(r
             "progress": e.progress or 0,
             "xp": e.xp or 0,
             "enrolled_at": str(e.enrolled_at)[:10] if e.enrolled_at else None,
+            "level": profile.level or 1,
+            "status": status,
+            "last_visit": str(profile.last_activity_date) if profile.last_activity_date else None,
+            "streak_days": profile.streak_days or 0,
+            "student_code": profile.student_code,
         })
     return result
+
+
+@app.patch("/api/students/{student_id}/status")
+def update_student_status(student_id: int, data: schemas.StudentStatusUpdate, db: Session = Depends(get_db), _=Depends(require_teacher)):
+    profile = crud.get_or_create_student_profile(db, student_id)
+    if data.status == "inactive":
+        profile.is_active = False
+        profile.frozen_until = None
+        profile.freeze_reason = None
+    elif data.status == "vacation":
+        profile.is_active = True
+        profile.frozen_until = date.today() + timedelta(days=30)
+        profile.freeze_reason = data.freeze_reason or "Отпуск"
+    else:
+        profile.is_active = True
+        profile.frozen_until = None
+        profile.freeze_reason = None
+    if data.level is not None:
+        profile.level = data.level
+    if data.xp is not None:
+        profile.xp = data.xp
+    db.commit()
+    db.refresh(profile)
+    return {"ok": True, "status": data.status}
 
 
 @app.get("/api/groups/{group_id}/gradebook")
@@ -661,7 +725,7 @@ def create_homework(hw: schemas.HomeworkCreate, db: Session = Depends(get_db),
     return result
 
 @app.post("/api/homework/submit")
-def submit_homework(submission: schemas.HomeworkSubmissionBase, db: Session = Depends(get_db),
+def submit_homework(submission: schemas.HomeworkSubmissionCreate, db: Session = Depends(get_db),
                     _=Depends(require_student)):
     return crud.create_homework_submission(db=db, submission=submission)
 
@@ -700,7 +764,7 @@ def pending_homeworks(db: Session = Depends(get_db), _=Depends(require_teacher))
 # ──────────────────────────────────────
 @app.post("/api/payments", response_model=schemas.Payment)
 def create_payment(payment: schemas.PaymentCreate, db: Session = Depends(get_db),
-                   _=Depends(require_admin)):
+                   _=Depends(require_super_admin)):
     return crud.create_payment(db=db, payment=payment)
 
 @app.get("/api/payments", response_model=List[schemas.Payment])
@@ -708,7 +772,7 @@ def get_payments(
     status: str = None,
     search: str = None,
     db: Session = Depends(get_db),
-    _=Depends(require_admin)
+    _=Depends(require_super_admin)
 ):
     """List payments. Optional ?status=paid|pending|failed&search=name"""
     q = db.query(models.Payment)
@@ -726,7 +790,7 @@ def student_payments(student_id: int, db: Session = Depends(get_db),
     return crud.get_student_payments(db, student_id)
 
 @app.get("/api/payments/monthly-revenue")
-def monthly_revenue(db: Session = Depends(get_db), _=Depends(require_admin)):
+def monthly_revenue(db: Session = Depends(get_db), _=Depends(require_super_admin)):
     return crud.get_monthly_revenue(db)
 
 @app.patch("/api/payments/{payment_id}/status")
@@ -734,7 +798,7 @@ def update_payment_status(
     payment_id: int,
     body: dict,
     db: Session = Depends(get_db),
-    _=Depends(require_admin)
+    _=Depends(require_super_admin)
 ):
     """Confirm or reject a pending payment. body: {status: 'paid'|'failed'|'refunded'}"""
     payment = db.query(models.Payment).filter(models.Payment.id == payment_id).first()
@@ -915,12 +979,12 @@ def get_attendance(group_id: int, db: Session = Depends(get_db), _=Depends(requi
 
 @app.post("/api/groups/{group_id}/attendance")
 def save_attendance(group_id: int, body: dict, db: Session = Depends(get_db), _=Depends(require_teacher)):
-    """Save attendance. body: {lesson_id: int, records: [{student_id: int, attended: bool}]}"""
-    lesson_id = body.get("lesson_id")
+    """Save attendance. body: {records: [{lesson_id: int, student_id: int, attended: bool}]}"""
     records = body.get("records", [])
-    if not lesson_id:
-        raise HTTPException(status_code=400, detail="lesson_id обязателен")
+    if not records:
+        raise HTTPException(status_code=400, detail="records обязательны")
     for rec in records:
+        lesson_id = rec["lesson_id"]
         student_id = rec["student_id"]
         attended = rec["attended"]
         existing = db.query(models.LessonAttendance).filter(
@@ -933,14 +997,16 @@ def save_attendance(group_id: int, body: dict, db: Session = Depends(get_db), _=
             db.add(models.LessonAttendance(lesson_id=lesson_id, student_id=student_id, attended=attended))
     db.commit()
 
-    # Trigger achievements check for all students in records
+    # Trigger achievements check for all students
+    seen_students = set()
     for rec in records:
-        try:
-            # We call the function directly. Note: Depends(get_current_user) is mocked by passing None
-            # since check_and_award_achievements uses it only for auth when called as an endpoint.
-            check_and_award_achievements(rec["student_id"], db, None)
-        except Exception as e:
-            print(f"Error awarding achievements for {rec['student_id']}: {e}")
+        sid = rec["student_id"]
+        if sid not in seen_students:
+            seen_students.add(sid)
+            try:
+                check_and_award_achievements(sid, db, None)
+            except Exception as e:
+                print(f"Error awarding achievements for {sid}: {e}")
 
     return {"ok": True, "saved": len(records)}
 
@@ -1021,18 +1087,30 @@ def get_student_homeworks(
 # ──────────────────────────────────────
 # LEADS
 # ──────────────────────────────────────
+@app.get("/api/leads/counts")
+def lead_counts(db: Session = Depends(get_db), _=Depends(require_admin)):
+    """Return counts per status and total."""
+    total = db.query(models.Lead).count()
+    new = db.query(models.Lead).filter(models.Lead.status == "new").count()
+    contacted = db.query(models.Lead).filter(models.Lead.status == "contacted").count()
+    enrolled = db.query(models.Lead).filter(models.Lead.status == "enrolled").count()
+    lost = db.query(models.Lead).filter(models.Lead.status == "lost").count()
+    return {"total": total, "new": new, "contacted": contacted, "enrolled": enrolled, "lost": lost}
+
 @app.post("/api/leads", response_model=schemas.Lead)
 def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db)):
     return crud.create_lead(db=db, lead=lead)
 
-@app.get("/api/leads", response_model=List[schemas.Lead])
+@app.get("/api/leads")
 def read_leads(
     status: str = None,
     search: str = None,
+    course_id: int = None,
+    source: str = None,
     db: Session = Depends(get_db),
     _=Depends(require_admin)
 ):
-    """List leads. Optional ?status=new|contacted|enrolled|lost&search=name"""
+    """List leads with enriched data. Filters: status, search, course_id, source"""
     q = db.query(models.Lead)
     if status:
         q = q.filter(models.Lead.status == status)
@@ -1042,7 +1120,27 @@ def read_leads(
             models.Lead.phone.ilike(f"%{search}%") |
             models.Lead.notes.ilike(f"%{search}%")
         )
-    return q.order_by(models.Lead.created_at.desc()).limit(300).all()
+    if course_id:
+        q = q.filter(models.Lead.course_id == course_id)
+    if source:
+        q = q.filter(models.Lead.source == source)
+    leads = q.order_by(models.Lead.created_at.desc()).limit(300).all()
+    return [
+        {
+            "id": l.id,
+            "name": l.name,
+            "phone": l.phone,
+            "email": l.email,
+            "status": l.status,
+            "notes": l.notes,
+            "source": l.source or "manual",
+            "course_id": l.course_id,
+            "course": {"id": l.course.id, "title": l.course.title} if l.course else None,
+            "created_at": l.created_at.isoformat() if l.created_at else None,
+            "updated_at": l.updated_at.isoformat() if l.updated_at else None,
+        }
+        for l in leads
+    ]
 
 @app.patch("/api/leads/{lead_id}")
 def update_lead(lead_id: int, update: schemas.LeadStatusUpdate,
@@ -1429,9 +1527,13 @@ def get_teacher_dashboard(
 # ──────────────────────────────────────
 # ADMIN
 # ──────────────────────────────────────
-@app.get("/api/admin/stats", response_model=schemas.AdminStats)
+@app.get("/api/admin/stats")
 def admin_stats(db: Session = Depends(get_db), _=Depends(require_admin)):
     return crud.get_admin_stats(db)
+
+@app.get("/api/admin/reports")
+def admin_reports(db: Session = Depends(get_db), _=Depends(require_super_admin)):
+    return crud.get_admin_reports(db)
 
 @app.get("/api/admin/students", response_model=List[schemas.UserPublic])
 def admin_students(
@@ -1440,7 +1542,7 @@ def admin_students(
     db: Session = Depends(get_db),
     _=Depends(require_admin)
 ):
-    """List students. Optional ?search=name_or_email&group_id=N"""
+    """List students with their group names. Optional ?search=name_or_email&group_id=N"""
     q = db.query(models.User).filter(models.User.role == "student")
     if search:
         q = q.filter(
@@ -1454,7 +1556,20 @@ def admin_students(
             .filter(models.Enrollment.group_id == group_id).all()
         ]
         q = q.filter(models.User.id.in_(enrolled_ids))
-    return q.order_by(models.User.name).all()
+    students = q.order_by(models.User.name).all()
+    result = []
+    for s in students:
+        groups = db.query(models.Group).join(models.Enrollment).filter(
+            models.Enrollment.student_id == s.id
+        ).all()
+        result.append({
+            "id": s.id, "name": s.name, "email": s.email, "phone": s.phone,
+            "is_active": s.is_active, "role": s.role, "avatar_url": s.avatar_url,
+            "created_at": s.created_at,
+            "groups": [g.name for g in groups],
+            "group_ids": [g.id for g in groups],
+        })
+    return result
 
 @app.get("/api/admin/teachers", response_model=List[schemas.UserPublic])
 def admin_teachers(
@@ -1470,6 +1585,17 @@ def admin_teachers(
             models.User.email.ilike(f"%{search}%")
         )
     return q.order_by(models.User.name).all()
+
+@app.post("/api/admin/teachers", response_model=schemas.UserPublic)
+def admin_create_teacher(
+    data: schemas.AdminTeacherCreate,
+    db: Session = Depends(get_db),
+    _=Depends(require_admin),
+):
+    existing = crud.get_user_by_email(db, data.email)
+    if existing:
+        raise HTTPException(status_code=400, detail="Email уже используется")
+    return crud.create_admin_teacher(db, data)
 
 @app.get("/api/admin/users/summary", response_model=List[schemas.UserSummary])
 def admin_users_summary(db: Session = Depends(get_db), _=Depends(require_admin)):
@@ -1688,7 +1814,7 @@ def get_user_minimal(user_id: int, db: Session = Depends(get_db), _=Depends(get_
     return {"id": user.id, "name": user.name, "role": user.role}
 
 @app.get("/api/admin/export/students")
-def export_students(db: Session = Depends(get_db), _=Depends(require_admin)):
+def export_students(db: Session = Depends(get_db), _=Depends(require_super_admin)):
     """Export students list as Excel file."""
     students = crud.get_all_students(db)
     wb = openpyxl.Workbook()
@@ -1714,7 +1840,7 @@ def export_students(db: Session = Depends(get_db), _=Depends(require_admin)):
 
 
 @app.get("/api/admin/export/leads")
-def export_leads(db: Session = Depends(get_db), _=Depends(require_admin)):
+def export_leads(db: Session = Depends(get_db), _=Depends(require_super_admin)):
     """Export leads (applications) as Excel file."""
     leads = crud.get_leads(db)
     wb = openpyxl.Workbook()
@@ -1740,7 +1866,7 @@ def export_leads(db: Session = Depends(get_db), _=Depends(require_admin)):
 
 
 @app.get("/api/admin/export/payments")
-def export_payments(db: Session = Depends(get_db), _=Depends(require_admin)):
+def export_payments(db: Session = Depends(get_db), _=Depends(require_super_admin)):
     """Export payments as Excel file."""
     payments = crud.get_payments(db)
     wb = openpyxl.Workbook()
@@ -1778,12 +1904,13 @@ class ConnectionManager:
         self.active: Dict[int, list] = {}
 
     async def connect(self, user_id: int, ws: WebSocket):
-        await ws.accept()
         self.active.setdefault(user_id, []).append(ws)
 
     def disconnect(self, user_id: int, ws: WebSocket):
         if user_id in self.active:
             self.active[user_id] = [c for c in self.active[user_id] if c != ws]
+            if not self.active[user_id]:
+                del self.active[user_id]
 
     async def send_to(self, user_id: int, data: dict):
         for ws in self.active.get(user_id, []):
@@ -1799,7 +1926,6 @@ manager = ConnectionManager()
 async def websocket_chat(
     ws: WebSocket,
     user_id: int,
-    db: Session = Depends(get_db)
 ):
     # Принимаем соединение и ждём auth handshake
     await ws.accept()
@@ -1821,12 +1947,18 @@ async def websocket_chat(
     if not token_user_id or int(token_user_id) != user_id:
         await ws.close(code=4003, reason="Недействительный токен")
         return
-    db_user = db.query(models.User).filter(
-        models.User.id == user_id, models.User.is_active == True
-    ).first()
-    if not db_user:
-        await ws.close(code=4004, reason="Пользователь не найден")
-        return
+
+    # Auth-запрос: используем кратковременную сессию
+    db = SessionLocal()
+    try:
+        db_user = db.query(models.User).filter(
+            models.User.id == user_id, models.User.is_active == True
+        ).first()
+        if not db_user:
+            await ws.close(code=4004, reason="Пользователь не найден")
+            return
+    finally:
+        db.close()
 
     await manager.connect(user_id, ws)
     try:
@@ -1842,34 +1974,39 @@ async def websocket_chat(
             file_name = data.get("file_name") or None
             if not content and not file_url:
                 continue
-            # Persist to DB
-            msg = crud.create_message(db, sender_id=user_id, receiver_id=receiver_id, content=content or None, file_url=file_url, file_type=file_type, file_name=file_name)
-            payload_out = {
-                "id": msg.id,
-                "sender_id": user_id,
-                "sender_name": db_user.name,
-                "receiver_id": receiver_id,
-                "content": content,
-                "file_url": file_url,
-                "file_type": file_type,
-                "file_name": file_name,
-                "created_at": str(msg.created_at)[:16],
-                "is_read": False,
-            }
-            # Echo to sender
+
+            # Кратковременная сессия на каждое сообщение
+            db = SessionLocal()
+            try:
+                msg = crud.create_message(db, sender_id=user_id, receiver_id=receiver_id, content=content or None, file_url=file_url, file_type=file_type, file_name=file_name)
+                db.commit()
+                payload_out = {
+                    "id": msg.id,
+                    "sender_id": user_id,
+                    "sender_name": db_user.name,
+                    "receiver_id": receiver_id,
+                    "content": content,
+                    "file_url": file_url,
+                    "file_type": file_type,
+                    "file_name": file_name,
+                    "created_at": str(msg.created_at)[:16],
+                    "is_read": False,
+                }
+                receiver_user = db.query(models.User).filter(models.User.id == receiver_id).first()
+                if receiver_user and receiver_user.telegram_id:
+                    try:
+                        crud.send_telegram_notification(
+                            receiver_user.telegram_id,
+                            f"💬 *{db_user.name}*:\n{content[:200]}"
+                        )
+                    except Exception:
+                        pass
+            finally:
+                db.close()
+
+            # Отправляем после закрытия сессии (не блокирует БД)
             await manager.send_to(user_id, payload_out)
-            # Deliver to receiver if online
             await manager.send_to(receiver_id, payload_out)
-            # Push to receiver via Telegram if offline
-            receiver_user = db.query(models.User).filter(models.User.id == receiver_id).first()
-            if receiver_user and receiver_user.telegram_id:
-                try:
-                    crud.send_telegram_notification(
-                        receiver_user.telegram_id,
-                        f"💬 *{db_user.name}*:\n{content[:200]}"
-                    )
-                except Exception:
-                    pass
     except WebSocketDisconnect:
         manager.disconnect(user_id, ws)
 
@@ -1958,14 +2095,26 @@ def search_chat_users(
     return [{"id": u.id, "name": u.name, "role": u.role} for u in users]
 
 # ──────────────────────────────────────
-# Static Frontend (Root)
+# Static Frontend (Root) — React SPA
 # ──────────────────────────────────────
-# Mount static files at the root to handle app.css, logo.png, etc. directly.
-# This MUST be the last route so it doesn't shadow API routes.
-# Mount uploads for file access (must be before root static mount)
+# Custom SPAStaticFiles: serves index.html for any unmatched path
+# so React Router handles client-side routing.
+REACT_DIST = os.path.join(os.path.dirname(__file__), "..", "react-crm", "dist")
+
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+class SPAStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except (HTTPException, StarletteHTTPException) as e:
+            if e.status_code == 404:
+                return await super().get_response("index.html", scope)
+            raise
+
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+app.mount("/", SPAStaticFiles(directory=REACT_DIST, html=True), name="frontend")
 
 
 

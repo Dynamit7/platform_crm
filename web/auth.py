@@ -73,6 +73,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         headers={"WWW-Authenticate": "Bearer"},
     )
     payload = decode_token(token)
+    if payload.get("type") != "access":
+        raise credentials_exception
     user_id: int = payload.get("sub")
     if user_id is None:
         raise credentials_exception
@@ -96,6 +98,7 @@ def require_role(*roles: str):
 
 
 # Shortcuts
-require_admin = require_role("admin")
-require_teacher = require_role("admin", "teacher")
-require_student = require_role("admin", "teacher", "student")
+require_admin = require_role("admin", "super_admin")
+require_super_admin = require_role("super_admin")
+require_teacher = require_role("admin", "super_admin", "teacher")
+require_student = require_role("admin", "super_admin", "teacher", "student")

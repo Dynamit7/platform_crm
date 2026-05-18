@@ -11,8 +11,14 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
+  const getDashboard = (role) => {
+    if (role === 'super_admin' || role === 'admin') return '/admin/dashboard';
+    if (role === 'teacher') return '/teacher/dashboard';
+    return '/dashboard';
+  };
+
   if (user) {
-    const target = user.role === 'admin' ? '/admin/dashboard' : user.role === 'teacher' ? '/teacher/dashboard' : '/dashboard';
+    const target = user.role === 'admin' || user.role === 'super_admin' ? '/admin/dashboard' : user.role === 'teacher' ? '/teacher/dashboard' : '/dashboard';
     return <Navigate to={target} replace />;
   }
 
@@ -22,7 +28,8 @@ export default function Login() {
     try {
       const u = await login(email, password);
       add('Успешный вход!', 'success');
-      navigate(u.role === 'admin' ? '/admin/dashboard' : u.role === 'teacher' ? '/teacher/dashboard' : '/dashboard');
+      const target = u.role === 'admin' || u.role === 'super_admin' ? '/admin/dashboard' : u.role === 'teacher' ? '/teacher/dashboard' : '/dashboard';
+      navigate(target);
     } catch {
       add('Ошибка входа. Проверьте email и пароль.', 'error');
     } finally {

@@ -165,6 +165,21 @@ def bulk_delete_users(db: Session, user_ids: list[int]) -> int:
     db.commit()
     return deleted
 
+def get_or_create_student_profile(db: Session, user_id: int):
+    student = db.query(models.Student).filter(models.Student.user_id == user_id).first()
+    if not student:
+        student = models.Student(
+            user_id=user_id,
+            is_active=True,
+            level=1,
+            xp=0,
+            streak_days=0,
+        )
+        db.add(student)
+        db.commit()
+        db.refresh(student)
+    return student
+
 def get_user_minimal(db: Session, user_id: int):
     return db.query(models.User.id, models.User.name, models.User.role).filter(models.User.id == user_id).first()
 
@@ -241,6 +256,17 @@ def create_course(db: Session, course: schemas.CourseCreate):
     db.refresh(db_course)
     return db_course
 
+def update_course(db: Session, course_id: int, data: schemas.CourseUpdate):
+    db_course = db.query(models.Course).filter(models.Course.id == course_id).first()
+    if not db_course:
+        return None
+    update_data = data.model_dump(exclude_unset=True)
+    for key, val in update_data.items():
+        setattr(db_course, key, val)
+    db.commit()
+    db.refresh(db_course)
+    return db_course
+
 
 # ─────────────────────────────────────
 # Teachers
@@ -255,6 +281,49 @@ def create_teacher(db: Session, teacher: schemas.TeacherCreate):
     db.refresh(db_teacher)
     return db_teacher
 
+def create_admin_teacher(db: Session, data: schemas.AdminTeacherCreate):
+    """Create a User with role='teacher' and a linked Teacher record."""
+    user = models.User(
+        name=data.name,
+        email=data.email,
+        phone=data.phone,
+        password_hash=get_password_hash(data.password),
+        role="teacher",
+        registration_source="web",
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    teacher = models.Teacher(
+        name=data.name,
+        bio=data.bio,
+        subjects=data.subjects,
+        user_id=user.id,
+    )
+    db.add(teacher)
+    db.commit()
+    db.refresh(teacher)
+
+    # Sync to bot
+    try:
+        requests.post(
+            os.getenv("BOT_SYNC_URL", "http://127.0.0.1:8080/api/web/sync-user"),
+            json={
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "phone": user.phone,
+                "role": user.role,
+            },
+            timeout=3,
+        )
+    except Exception as e:
+        print(f"Failed to sync teacher to bot: {e}")
+
+    return user
+
 
 # ─────────────────────────────────────
 # Groups
@@ -268,6 +337,17 @@ def get_group(db: Session, group_id: int):
 def create_group(db: Session, group: schemas.GroupCreate):
     db_group = models.Group(**group.model_dump())
     db.add(db_group)
+    db.commit()
+    db.refresh(db_group)
+    return db_group
+
+def update_group(db: Session, group_id: int, data: schemas.GroupUpdate):
+    db_group = db.query(models.Group).filter(models.Group.id == group_id).first()
+    if not db_group:
+        return None
+    update_data = data.model_dump(exclude_unset=True)
+    for key, val in update_data.items():
+        setattr(db_group, key, val)
     db.commit()
     db.refresh(db_group)
     return db_group
@@ -360,7 +440,7 @@ def create_homework(db: Session, hw: schemas.HomeworkCreate):
 def get_homeworks_by_course(db: Session, course_id: int):
     return db.query(models.Homework).filter(models.Homework.course_id == course_id).all()
 
-def create_homework_submission(db: Session, submission: schemas.HomeworkSubmissionBase):
+def create_homework_submission(db: Session, submission: schemas.HomeworkSubmissionCreate):
     # Check if already submitted
     existing = db.query(models.HomeworkSubmission).filter(
         models.HomeworkSubmission.homework_id == submission.homework_id,
@@ -726,6 +806,10 @@ def get_chat_contacts(db: Session, user_id: int):
 # ─────────────────────────────────────
 def get_admin_stats(db: Session) -> dict:
     today = date.today()
+    now = datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start.replace(hour=23, minute=59, second=59)
+
     total_students = db.query(models.User).filter(models.User.role == "student").count()
     total_teachers = db.query(models.User).filter(models.User.role == "teacher").count()
     total_courses = db.query(models.Course).filter(models.Course.is_active == True).count()
@@ -747,6 +831,141 @@ def get_admin_stats(db: Session) -> dict:
     ).count()
     active_enrollments = db.query(models.Enrollment).count()
 
+    # ── Lead conversion rate ──
+    lead_conversion_rate = 0
+    if total_leads > 0:
+        enrolled_leads = db.query(models.Lead).filter(models.Lead.status == "enrolled").count()
+        lead_conversion_rate = round(enrolled_leads / total_leads * 100, 1)
+
+    # ── Retention rate (active in last 30d / total students) ──
+    retention_rate = 0
+    if total_students > 0:
+        thirty_days_ago = today - timedelta(days=30)
+        active_students = db.query(models.Student).filter(
+            models.Student.last_activity_date >= thirty_days_ago,
+            models.Student.is_active == True,
+        ).count()
+        retention_rate = round(active_students / total_students * 100, 1)
+
+    # ── Online now (active in last 15 minutes) ──
+    fifteen_min_ago = now - timedelta(minutes=15)
+    online_now = db.query(models.Student).filter(
+        models.Student.last_activity_date >= fifteen_min_ago.date(),
+        models.Student.is_active == True,
+    ).count()
+
+    # ── Daily revenue for last 30 days ──
+    daily_revenue = []
+    for i in range(29, -1, -1):
+        day = today - timedelta(days=i)
+        day_total = db.query(func.sum(models.Payment.amount)).filter(
+            func.date(models.Payment.created_at) == day,
+            models.Payment.status == "paid"
+        ).scalar() or 0
+        daily_revenue.append({
+            "date": day.isoformat(),
+            "total": float(day_total),
+        })
+
+    # ── Today's schedule (ALL lessons today across all groups) ──
+    today_lessons = db.query(models.Lesson).filter(
+        models.Lesson.scheduled_at >= today_start,
+        models.Lesson.scheduled_at <= today_end
+    ).order_by(models.Lesson.scheduled_at.asc()).all()
+    today_schedule = []
+    for lesson in today_lessons:
+        group = db.query(models.Group).filter(models.Group.id == lesson.group_id).first()
+        student_count = db.query(models.Enrollment).filter(
+            models.Enrollment.group_id == lesson.group_id
+        ).distinct(models.Enrollment.student_id).count()
+        teacher_name = ""
+        if group and group.teacher_id:
+            t = db.query(models.Teacher).filter(models.Teacher.id == group.teacher_id).first()
+            teacher_name = t.name if t else ""
+        today_schedule.append({
+            "id": lesson.id,
+            "time": lesson.scheduled_at.strftime("%H:%M") if lesson.scheduled_at else "--:--",
+            "topic": lesson.topic,
+            "group_name": group.name if group else "—",
+            "group_id": lesson.group_id,
+            "students": student_count,
+            "teacher_name": teacher_name,
+            "is_completed": lesson.is_completed,
+            "zoom_link": lesson.zoom_link,
+        })
+
+    # ── Active groups with details ──
+    active_groups = []
+    all_active_groups = db.query(models.Group).filter(models.Group.is_active == True).all()
+    for g in all_active_groups:
+        student_count = db.query(models.Enrollment).filter(
+            models.Enrollment.group_id == g.id
+        ).distinct(models.Enrollment.student_id).count()
+        course_name = g.course.title if g.course else "—"
+        teacher_name = g.teacher.name if g.teacher else "—"
+        active_groups.append({
+            "id": g.id,
+            "name": g.name,
+            "course_name": course_name,
+            "teacher_name": teacher_name,
+            "students": student_count,
+            "max_students": g.max_students,
+        })
+
+    # ── Overall attendance rate ──
+    attendance_rate = 0
+    total_att_records = db.query(models.LessonAttendance).count()
+    if total_att_records > 0:
+        attended_count = db.query(models.LessonAttendance).filter(
+            models.LessonAttendance.attended == True
+        ).count()
+        attendance_rate = round(attended_count / total_att_records * 100)
+
+    # ── Unread messages (system-wide aggregate) ──
+    unread_messages = db.query(models.Message).filter(
+        models.Message.is_read == False
+    ).count()
+
+    # ── Recent activity ──
+    activity = []
+    new_lead_entries = db.query(models.Lead).filter(
+        func.date(models.Lead.created_at) >= today - timedelta(days=7)
+    ).order_by(models.Lead.created_at.desc()).limit(8).all()
+    for l in new_lead_entries:
+        activity.append({
+            "type": "lead",
+            "text": f"Новая заявка: {l.name} ({l.phone})",
+            "time": l.created_at.isoformat() if l.created_at else "",
+        })
+    pending_subs = db.query(models.HomeworkSubmission).filter(
+        models.HomeworkSubmission.status == "submitted"
+    ).order_by(models.HomeworkSubmission.submitted_at.desc()).limit(6).all()
+    for sub in pending_subs:
+        hw = db.query(models.Homework).filter(models.Homework.id == sub.homework_id).first()
+        student_name = db.query(models.User.name).filter(models.User.id == sub.student_id).scalar() or "—"
+        activity.append({
+            "type": "homework",
+            "text": f"ДЗ на проверку: {student_name} — {hw.title if hw else '—'}",
+            "time": sub.submitted_at.isoformat() if sub.submitted_at else "",
+        })
+    activity.sort(key=lambda x: x["time"], reverse=True)
+    activity = activity[:10]
+
+    # ── Recent leads (for "Новые заявки" cards) ──
+    recent_leads = []
+    latest_leads = db.query(models.Lead).order_by(models.Lead.created_at.desc()).limit(10).all()
+    for l in latest_leads:
+        recent_leads.append({
+            "id": l.id,
+            "name": l.name,
+            "phone": l.phone,
+            "status": l.status,
+            "course_name": l.course.title if l.course else "—",
+            "created_at": l.created_at.isoformat()[:16] if l.created_at else "",
+        })
+
+    today_lessons_count = len(today_schedule)
+
     return {
         "total_students": total_students,
         "total_teachers": total_teachers,
@@ -757,7 +976,265 @@ def get_admin_stats(db: Session) -> dict:
         "monthly_revenue": float(monthly_revenue_result or 0),
         "total_revenue": float(total_revenue_result or 0),
         "pending_homeworks": pending_homeworks,
-        "active_enrollments": active_enrollments
+        "active_enrollments": active_enrollments,
+        "today_lessons": today_lessons_count,
+        "today_schedule": today_schedule,
+        "active_groups": active_groups,
+        "attendance_rate": attendance_rate,
+        "unread_messages": unread_messages,
+        "activity": activity,
+        "recent_leads": recent_leads,
+        "lead_conversion_rate": lead_conversion_rate,
+        "retention_rate": retention_rate,
+        "online_now": online_now,
+        "daily_revenue": daily_revenue,
+    }
+
+
+# ─────────────────────────────────────
+# Admin Reports (Super Admin)
+# ─────────────────────────────────────
+def get_admin_reports(db: Session):
+    today = date.today()
+    now = datetime.now()
+    first_of_month = today.replace(day=1)
+    last_month_end = first_of_month - timedelta(days=1)
+    last_month_start = last_month_end.replace(day=1)
+
+    # ── Summary ──
+    total_revenue = db.query(func.sum(models.Payment.amount)).filter(
+        models.Payment.status == "paid"
+    ).scalar() or 0
+
+    this_month_revenue = db.query(func.sum(models.Payment.amount)).filter(
+        models.Payment.status == "paid",
+        func.date(models.Payment.created_at) >= first_of_month,
+    ).scalar() or 0
+
+    last_month_revenue = db.query(func.sum(models.Payment.amount)).filter(
+        models.Payment.status == "paid",
+        func.date(models.Payment.created_at) >= last_month_start,
+        func.date(models.Payment.created_at) <= last_month_end,
+    ).scalar() or 0
+
+    revenue_growth = 0
+    if last_month_revenue > 0:
+        revenue_growth = round((this_month_revenue - last_month_revenue) / last_month_revenue * 100, 1)
+
+    total_students = db.query(models.User).filter(models.User.role == "student").count()
+    this_month_students = db.query(models.User).filter(
+        models.User.role == "student",
+        func.date(models.User.created_at) >= first_of_month,
+    ).count()
+    last_month_students = db.query(models.User).filter(
+        models.User.role == "student",
+        func.date(models.User.created_at) >= last_month_start,
+        func.date(models.User.created_at) <= last_month_end,
+    ).count()
+
+    student_growth = 0
+    if last_month_students > 0:
+        student_growth = round((this_month_students - last_month_students) / last_month_students * 100, 1)
+
+    total_leads = db.query(models.Lead).count()
+    enrolled_leads = db.query(models.Lead).filter(models.Lead.status == "enrolled").count()
+    lead_conversion_rate = round(enrolled_leads / total_leads * 100, 1) if total_leads > 0 else 0
+
+    attendance_total = db.query(func.count(models.LessonAttendance.id)).filter(
+        models.LessonAttendance.lesson_id.isnot(None)
+    ).scalar() or 1
+    attendance_present = db.query(func.count(models.LessonAttendance.id)).filter(
+        models.LessonAttendance.attended == True,
+        models.LessonAttendance.lesson_id.isnot(None)
+    ).scalar() or 0
+    avg_attendance = round(attendance_present / attendance_total * 100, 1)
+
+    active_groups_count = db.query(models.Group).filter(models.Group.is_active == True).count()
+    ltv = round(total_revenue / total_students, 0) if total_students > 0 else 0
+
+    # ── Monthly revenue for chart (last 12 months) ──
+    revenue_monthly = []
+    for i in range(11, -1, -1):
+        m = today.month - i
+        y = today.year
+        while m < 1:
+            m += 12
+            y -= 1
+        while m > 12:
+            m -= 12
+            y += 1
+        m_start = date(y, m, 1)
+        if m == 12:
+            m_end = date(y + 1, 1, 1) - timedelta(days=1)
+        else:
+            m_end = date(y, m + 1, 1) - timedelta(days=1)
+        month_total = db.query(func.sum(models.Payment.amount)).filter(
+            models.Payment.status == "paid",
+            func.date(models.Payment.created_at) >= m_start,
+            func.date(models.Payment.created_at) <= m_end,
+        ).scalar() or 0
+        revenue_monthly.append({
+            "month": f"{y}-{m:02d}",
+            "label": ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"][m - 1],
+            "total": float(month_total),
+        })
+
+    # ── Student growth (last 30 days cumulative) ──
+    student_growth_data = []
+    cumul = db.query(models.User).filter(
+        models.User.role == "student",
+        func.date(models.User.created_at) < today - timedelta(days=30),
+    ).count()
+    for i in range(29, -1, -1):
+        day = today - timedelta(days=i)
+        day_new = db.query(models.User).filter(
+            models.User.role == "student",
+            func.date(models.User.created_at) == day,
+        ).count()
+        cumul += day_new
+        student_growth_data.append({
+            "date": day.isoformat(),
+            "new": day_new,
+            "total": cumul,
+        })
+
+    # ── Top courses ──
+    courses_raw = db.query(models.Course).filter(models.Course.is_active == True).all()
+    top_courses = []
+    for c in courses_raw:
+        student_count = db.query(models.Enrollment).filter(
+            models.Enrollment.course_id == c.id,
+            models.Enrollment.student_id.isnot(None),
+        ).distinct(models.Enrollment.student_id).count()
+        course_revenue = db.query(func.sum(models.Payment.amount)).filter(
+            models.Payment.course_id == c.id,
+            models.Payment.status == "paid",
+        ).scalar() or 0
+        if student_count > 0:
+            top_courses.append({
+                "id": c.id,
+                "title": c.title,
+                "students": student_count,
+                "revenue": float(course_revenue),
+            })
+    top_courses.sort(key=lambda x: x["students"], reverse=True)
+
+    # ── Attendance by group ──
+    groups = db.query(models.Group).filter(models.Group.is_active == True).all()
+    attendance_by_group = []
+    for g in groups:
+        lesson_ids = db.query(models.Lesson.id).filter(models.Lesson.group_id == g.id).subquery()
+        total_att = db.query(func.count(models.LessonAttendance.id)).filter(
+            models.LessonAttendance.lesson_id.in_(lesson_ids)
+        ).scalar() or 0
+        present_att = db.query(func.count(models.LessonAttendance.id)).filter(
+            models.LessonAttendance.lesson_id.in_(lesson_ids),
+            models.LessonAttendance.attended == True,
+        ).scalar() or 0
+        rate = round(present_att / total_att * 100, 1) if total_att > 0 else 0
+        course_name = db.query(models.Course.title).filter(models.Course.id == g.course_id).scalar() or ""
+        attendance_by_group.append({
+            "id": g.id,
+            "name": g.name,
+            "course_name": course_name,
+            "attended": present_att,
+            "total": total_att,
+            "rate": rate,
+        })
+
+    # ── Conversion by source ──
+    sources = db.query(models.Lead.source, func.count(models.Lead.id).label("total")).filter(
+        models.Lead.source.isnot(None),
+        models.Lead.source != "",
+    ).group_by(models.Lead.source).all()
+    conversion_by_source = []
+    for src, cnt in sources:
+        conv = db.query(models.Lead).filter(
+            models.Lead.source == src,
+            models.Lead.status == "enrolled",
+        ).count()
+        cr = round(conv / cnt * 100, 1) if cnt > 0 else 0
+        conversion_by_source.append({
+            "source": src,
+            "total": cnt,
+            "converted": conv,
+            "rate": cr,
+        })
+
+    # ── Teacher effectiveness ──
+    teachers_raw = db.query(models.Teacher).all()
+    teacher_ratings = []
+    for t in teachers_raw:
+        teacher_groups = db.query(models.Group).filter(
+            models.Group.teacher_id == t.id,
+            models.Group.is_active == True,
+        ).all()
+        group_ids = [g.id for g in teacher_groups]
+        student_ids = db.query(models.Enrollment.student_id).filter(
+            models.Enrollment.group_id.in_(group_ids),
+        ).distinct().count() if group_ids else 0
+        total_lessons = db.query(models.Lesson).filter(
+            models.Lesson.group_id.in_(group_ids),
+        ).count() if group_ids else 0
+        reviews = db.query(models.Review).filter(
+            models.Review.student_name.ilike(f"%{t.name}%"),
+        ).all()
+        avg_rating = round(sum(r.rating for r in reviews) / len(reviews), 1) if reviews else 0
+        teacher_ratings.append({
+            "id": t.id,
+            "name": t.name,
+            "groups": len(teacher_groups),
+            "students": student_ids,
+            "lessons": total_lessons,
+            "rating": avg_rating,
+            "reviews": len(reviews),
+        })
+
+    teacher_ratings.sort(key=lambda x: x["students"], reverse=True)
+
+    # ── Month comparison ──
+    month_comparison = {
+        "this_month": {
+            "revenue": float(this_month_revenue),
+            "new_students": this_month_students,
+            "new_leads": db.query(models.Lead).filter(
+                func.date(models.Lead.created_at) >= first_of_month,
+            ).count(),
+        },
+        "last_month": {
+            "revenue": float(last_month_revenue),
+            "new_students": last_month_students,
+            "new_leads": db.query(models.Lead).filter(
+                func.date(models.Lead.created_at) >= last_month_start,
+                func.date(models.Lead.created_at) <= last_month_end,
+            ).count(),
+        },
+    }
+
+    return {
+        "summary": {
+            "total_revenue": float(total_revenue),
+            "this_month_revenue": float(this_month_revenue),
+            "revenue_growth": revenue_growth,
+            "new_students": this_month_students,
+            "total_students": total_students,
+            "student_growth": student_growth,
+            "lead_conversion_rate": lead_conversion_rate,
+            "avg_attendance": avg_attendance,
+            "active_groups": active_groups_count,
+            "ltv": float(ltv),
+        },
+        "revenue_daily": [{"date": d.isoformat(), "total": float(db.query(func.sum(models.Payment.amount)).filter(
+            func.date(models.Payment.created_at) == (today - timedelta(days=i)),
+            models.Payment.status == "paid",
+        ).scalar() or 0)} for i in range(29, -1, -1) for d in [today - timedelta(days=i)]],
+        "revenue_monthly": revenue_monthly,
+        "student_growth": student_growth_data,
+        "top_courses": top_courses,
+        "attendance_by_group": attendance_by_group,
+        "conversion_by_source": conversion_by_source,
+        "teacher_ratings": teacher_ratings,
+        "month_comparison": month_comparison,
     }
 
 
@@ -768,55 +1245,158 @@ def get_teacher_groups_by_user(db: Session, user_id: int):
     """Return groups linked to the teacher profile of the given user."""
     teacher = db.query(models.Teacher).filter(models.Teacher.user_id == user_id).first()
     if teacher:
-        return db.query(models.Group).filter(models.Group.teacher_id == teacher.id).all()
-    # Fallback: return all groups if teacher profile not linked yet
-    return db.query(models.Group).all()
+        groups = db.query(models.Group).filter(models.Group.teacher_id == teacher.id).all()
+    else:
+        groups = db.query(models.Group).all()
+    for g in groups:
+        g.current_students = db.query(models.Enrollment).filter(
+            models.Enrollment.group_id == g.id
+        ).distinct(models.Enrollment.student_id).count()
+    return groups
 
 
 def get_teacher_dashboard_data(db: Session, user_id: int):
     teacher = db.query(models.Teacher).filter(models.Teacher.user_id == user_id).first()
     group_ids = [g.id for g in teacher.groups] if teacher else []
 
+    now = datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start.replace(hour=23, minute=59, second=59)
+
+    # ── Groups & Students ──
+    groups_count = len(group_ids)
+    t_students = 0
     if group_ids:
         t_students = db.query(models.Enrollment).filter(
             models.Enrollment.group_id.in_(group_ids)
         ).distinct(models.Enrollment.student_id).count()
-        t_lessons = db.query(models.Lesson).filter(
-            models.Lesson.group_id.in_(group_ids)
-        ).count()
-        next_lesson = db.query(models.Lesson).filter(
+
+    # ── Today's lessons ──
+    today_lessons_count = 0
+    today_schedule = []
+    if group_ids:
+        today_lessons = db.query(models.Lesson).filter(
             models.Lesson.group_id.in_(group_ids),
-            models.Lesson.scheduled_at >= datetime.utcnow()
-        ).order_by(models.Lesson.scheduled_at.asc()).first()
-    else:
-        t_students = 0
-        t_lessons = 0
-        next_lesson = db.query(models.Lesson).filter(
-            models.Lesson.scheduled_at >= datetime.utcnow()
-        ).order_by(models.Lesson.scheduled_at.asc()).first()
+            models.Lesson.scheduled_at >= today_start,
+            models.Lesson.scheduled_at <= today_end
+        ).order_by(models.Lesson.scheduled_at.asc()).all()
+        today_lessons_count = len(today_lessons)
+        for lesson in today_lessons:
+            group = db.query(models.Group).filter(models.Group.id == lesson.group_id).first()
+            student_count = db.query(models.Enrollment).filter(
+                models.Enrollment.group_id == lesson.group_id
+            ).distinct(models.Enrollment.student_id).count()
+            today_schedule.append({
+                "id": lesson.id,
+                "time": lesson.scheduled_at.strftime("%H:%M") if lesson.scheduled_at else "--:--",
+                "topic": lesson.topic,
+                "group_name": group.name if group else "—",
+                "group_id": lesson.group_id,
+                "students": student_count,
+                "is_completed": lesson.is_completed,
+                "zoom_link": lesson.zoom_link,
+            })
 
-    t_pending = db.query(models.HomeworkSubmission).filter(
-        models.HomeworkSubmission.status == "submitted"
-    ).count()
-    t_graded = db.query(models.HomeworkSubmission).filter(
-        models.HomeworkSubmission.status == "graded"
+    # ── Attendance rate ──
+    attendance_rate = 0
+    if group_ids:
+        total_attendance = db.query(models.LessonAttendance).join(
+            models.Lesson, models.LessonAttendance.lesson_id == models.Lesson.id
+        ).filter(models.Lesson.group_id.in_(group_ids)).count()
+        if total_attendance > 0:
+            attended = db.query(models.LessonAttendance).join(
+                models.Lesson, models.LessonAttendance.lesson_id == models.Lesson.id
+            ).filter(
+                models.Lesson.group_id.in_(group_ids),
+                models.LessonAttendance.attended == True
+            ).count()
+            attendance_rate = round(attended / total_attendance * 100)
+
+    # ── Pending homeworks (for teacher's groups) ──
+    t_pending = 0
+    if group_ids:
+        hw_ids = db.query(models.Homework.id).filter(
+            models.Homework.group_id.in_(group_ids)
+        ).subquery()
+        t_pending = db.query(models.HomeworkSubmission).filter(
+            models.HomeworkSubmission.homework_id.in_(
+                db.query(hw_ids.c.id)
+            ),
+            models.HomeworkSubmission.status == "submitted"
+        ).count()
+
+    # ── Unread messages ──
+    unread_messages = db.query(models.Message).filter(
+        models.Message.receiver_id == user_id,
+        models.Message.is_read == False
     ).count()
 
-    next_lesson_out = None
-    if next_lesson:
-        next_lesson_out = {
-            "time": next_lesson.scheduled_at.strftime("%H:%M") if next_lesson.scheduled_at else "--:--",
-            "date": next_lesson.scheduled_at.strftime("%d.%m.%Y") if next_lesson.scheduled_at else "---",
-            "title": next_lesson.topic,
-            "teacher": "Преподаватель"
-        }
+    # ── Groups detail ──
+    groups_out = []
+    for gid in group_ids:
+        group = db.query(models.Group).filter(models.Group.id == gid).first()
+        if group:
+            student_count = db.query(models.Enrollment).filter(
+                models.Enrollment.group_id == gid
+            ).distinct(models.Enrollment.student_id).count()
+            course_name = group.course.title if group.course else "—"
+            groups_out.append({
+                "id": group.id,
+                "name": group.name,
+                "course_name": course_name,
+                "students": student_count,
+                "max_students": group.max_students,
+                "schedule": group.schedule_json,
+                "is_active": group.is_active,
+            })
+
+    # ── Recent activity ──
+    activity = []
+
+    # Pending submissions
+    if group_ids:
+        hw_ids_2 = db.query(models.Homework.id).filter(
+            models.Homework.group_id.in_(group_ids)
+        ).subquery()
+        pending_subs = db.query(models.HomeworkSubmission).filter(
+            models.HomeworkSubmission.homework_id.in_(
+                db.query(hw_ids_2.c.id)
+            ),
+            models.HomeworkSubmission.status == "submitted"
+        ).order_by(models.HomeworkSubmission.submitted_at.desc()).limit(10).all()
+        for sub in pending_subs:
+            hw = db.query(models.Homework).filter(models.Homework.id == sub.homework_id).first()
+            student_name = db.query(models.User.name).filter(models.User.id == sub.student_id).scalar() or "—"
+            activity.append({
+                "type": "homework",
+                "text": f"{student_name} отправил(а) ДЗ: {hw.title if hw else '—'}",
+                "time": sub.submitted_at.isoformat() if sub.submitted_at else "",
+            })
+
+    # Recent notifications
+    notifs = db.query(models.Notification).filter(
+        models.Notification.user_id == user_id
+    ).order_by(models.Notification.created_at.desc()).limit(5).all()
+    for n in notifs:
+        activity.append({
+            "type": "notification",
+            "text": n.message or n.title,
+            "time": n.created_at.isoformat() if n.created_at else "",
+        })
+
+    activity.sort(key=lambda x: x["time"], reverse=True)
+    activity = activity[:8]
 
     return {
+        "groups_count": groups_count,
         "t_students": t_students,
+        "today_lessons": today_lessons_count,
+        "attendance_rate": attendance_rate,
         "t_pending": t_pending,
-        "t_graded": t_graded,
-        "t_lessons": t_lessons,
-        "next_lesson": next_lesson_out
+        "unread_messages": unread_messages,
+        "today_schedule": today_schedule,
+        "groups": groups_out,
+        "activity": activity,
     }
 
 def get_student_homeworks(db: Session, student_id: int):

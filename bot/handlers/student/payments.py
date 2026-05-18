@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from bot.models.user import User, Student
+from bot.models.user import UserRole
 from bot.models.education import StudentGroup, Group, Course
 from bot.models.finance import Finance
 from datetime import datetime, timedelta
@@ -118,7 +119,7 @@ async def process_payment_receipt(message: types.Message, state: FSMContext, ses
     
     # Сохраняем финансы со статусом pending (ожидает проверки)
     new_fin = Finance(
-        user_id=message.from_user.id,
+        user_id=db_user.id,
         amount=amount,
         status="pending",
         payment_method="Bank Transfer",

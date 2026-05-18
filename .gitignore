@@ -182,3 +182,5 @@ web.err
 # local certs (not committed)
 certs/
 uploads/
+react-crm/node_modules/
+*.db

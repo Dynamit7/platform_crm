@@ -1,4 +1,4 @@
-.chat-page { display: flex; height: calc(100vh - var(--topbar-height, 0px)); }
+.chat-page { display: flex; height: calc(100vh - var(--topbar-h, 0px)); }
 .chat-contacts { width: 320px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--surface); flex-shrink: 0; }
 .chat-contacts-hdr { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
 .chat-contacts-hdr h2 { font-size: 16px; font-weight: 700; margin: 0; }

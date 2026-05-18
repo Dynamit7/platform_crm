@@ -64,7 +64,7 @@ class Settings(BaseSettings):
                 import json
                 try:
                     return json.loads(v)
-                except:
+                except json.JSONDecodeError:
                     pass
             # Handle comma-separated string "1, 2, 3"
             return [int(x.strip()) for x in v.split(",") if x.strip().isdigit()]

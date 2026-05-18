@@ -10,6 +10,9 @@ TEMPLATES = {
         "⏳ *Осталось 30 минут!*\n\n"
         "Урок \"{topic}\" начнется совсем скоро. Проверьте интернет и заходите в кабинет."
     ),
+    NotificationType.LESSON_REMINDER: (
+        "⏰ *Напоминание об уроке!*\n\n📖 Тема: {topic}\n🕒 Время: {time}\n\nЖдем вас на занятии!"
+    ),
     NotificationType.STATUS_CHANGE: (
         "🔔 *Изменение статуса*\n\n"
         "Ваш статус в системе изменен на: *{status}*."
@@ -25,6 +28,9 @@ TEMPLATES = {
         "{description}\n"
         "Спасибо, что вы с нами! 🙌"
     ),
+    NotificationType.NEW_HOMEWORK: (
+        "📝 *Новое домашнее задание!*\n\n🎓 Курс: {course}\n📖 Урок: {topic}\n\nЗадание уже доступно в личном кабинете."
+    ),
     NotificationType.HOMEWORK_NEW: (
         "📝 *Новое домашнее задание*\n\n"
         "Преподаватель добавил ДЗ к уроку \"{topic}\". Срок сдачи: {deadline}."
@@ -32,6 +38,12 @@ TEMPLATES = {
     NotificationType.HOMEWORK_GRADED: (
         "⭐ *ДЗ проверено!*\n\n"
         "Ваше задание по теме \"{topic}\" проверено. Оценка: *{grade}*."
+    ),
+    NotificationType.GRADE_REVIEW: (
+        "⭐ *Ваше задание проверено!*\n\n📊 Оценка: *{grade}*\n💬 Отзыв: _{comment}_\n\nПосмотреть детали можно в кабинете."
+    ),
+    NotificationType.FEEDBACK_REQUEST: (
+        "🎬 *Урок «{topic}» завершён!*\n\nКак всё прошло? Пожалуйста, оцените занятие — это займёт не более 30 секунд. ⭐"
     ),
     NotificationType.SCHEDULE_DAILY: (
         "📅 *Расписание на завтра*\n\n"

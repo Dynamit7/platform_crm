@@ -7,7 +7,12 @@ export default function ProtectedRoute({ roles, children }) {
 
   if (loading) return <div className="page-loading"><div className="spinner" /></div>;
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
-  if (roles && !roles.includes(user.role)) return <Navigate to={`/${user.role}/dashboard`} replace />;
+  if (roles && !roles.includes(user.role)) {
+    const fallback = user.role === 'super_admin' || user.role === 'admin' ? '/admin/dashboard'
+      : user.role === 'student' ? '/dashboard'
+      : `/${user.role}/dashboard`;
+    return <Navigate to={fallback} replace />;
+  }
 
   return children;
 }

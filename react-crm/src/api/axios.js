@@ -15,13 +15,21 @@ api.interceptors.response.use(
   (res) => res,
   async (err) => {
     if (err.response?.status === 401) {
+      const originalRequest = err.config;
+      if (originalRequest._retry) {
+        localStorage.clear();
+        window.location.href = '/login';
+        return Promise.reject(err);
+      }
       const refresh = localStorage.getItem('refresh_token');
-      if (refresh) {
+      if (refresh && !originalRequest._retry) {
+        originalRequest._retry = true;
         try {
-          const { data } = await axios.post('/auth/refresh', { refresh_token: refresh });
+          const { data } = await api.post('/auth/refresh', { refresh_token: refresh });
           localStorage.setItem('access_token', data.access_token);
-          err.config.headers.Authorization = `Bearer ${data.access_token}`;
-          return api(err.config);
+          localStorage.setItem('refresh_token', data.refresh_token);
+          originalRequest.headers.Authorization = `Bearer ${data.access_token}`;
+          return api(originalRequest);
         } catch {
           localStorage.clear();
           window.location.href = '/login';
