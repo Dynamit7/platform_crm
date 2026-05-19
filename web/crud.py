@@ -548,8 +548,19 @@ def update_lead_status(db: Session, lead_id: int, update: schemas.LeadStatusUpda
 # ─────────────────────────────────────
 # Reviews
 # ─────────────────────────────────────
-def get_reviews(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.Review).offset(skip).limit(limit).all()
+def get_reviews(db: Session, skip: int = 0, limit: int = 100,
+                course_id: int = None, teacher_id: int = None, status: str = None,
+                search: str = None):
+    q = db.query(models.Review)
+    if course_id:
+        q = q.filter(models.Review.course_id == course_id)
+    if teacher_id:
+        q = q.filter(models.Review.teacher_id == teacher_id)
+    if status:
+        q = q.filter(models.Review.status == status)
+    if search:
+        q = q.filter(models.Review.student_name.ilike(f"%{search}%") | models.Review.text.ilike(f"%{search}%"))
+    return q.order_by(models.Review.created_at.desc()).offset(skip).limit(limit).all()
 
 def create_review(db: Session, review: schemas.ReviewCreate):
     db_review = models.Review(**review.model_dump())
@@ -557,6 +568,33 @@ def create_review(db: Session, review: schemas.ReviewCreate):
     db.commit()
     db.refresh(db_review)
     return db_review
+
+def update_review(db: Session, review_id: int, data: schemas.ReviewUpdate):
+    db_review = db.query(models.Review).filter(models.Review.id == review_id).first()
+    if not db_review:
+        return None
+    for key, val in data.model_dump(exclude_unset=True).items():
+        setattr(db_review, key, val)
+    db.commit()
+    db.refresh(db_review)
+    return db_review
+
+def get_review_stats(db: Session):
+    """Return aggregate stats for admin panel"""
+    total = db.query(models.Review).count()
+    avg = db.query(func.avg(models.Review.rating)).scalar() or 0
+    positive = db.query(models.Review).filter(models.Review.rating >= 4).count()
+    negative = db.query(models.Review).filter(models.Review.rating <= 2).count()
+    published = db.query(models.Review).filter(models.Review.status == "published").count()
+    moderation = db.query(models.Review).filter(models.Review.status == "moderation").count()
+    return {
+        "total": total,
+        "avg_rating": round(float(avg), 1),
+        "positive": positive,
+        "negative": negative,
+        "published": published,
+        "moderation": moderation,
+    }
 
 
 # ─────────────────────────────────────
@@ -1463,7 +1501,6 @@ def get_dashboard_data(db: Session, user_id: int):
         models.Enrollment.student_id == user_id
     ).all()
 
-    # Real XP and lesson stats
     total_xp = sum(e.xp for e in enrollments)
     group_ids = [e.group_id for e in enrollments if e.group_id]
 
@@ -1478,12 +1515,65 @@ def get_dashboard_data(db: Session, user_id: int):
             models.Lesson.is_completed == True
         ).count()
 
+    level_val = 1
+    xp_val = 0
+    streak_val = 0
+    student = db.query(models.Student).filter(models.Student.user_id == user_id).first()
+    if student:
+        level_val = student.level or 1
+        xp_val = student.xp or 0
+        streak_val = student.streak_days or 0
+
     stats = {
-        "level": user.role.capitalize(),
+        "level": level_val,
         "lessons_completed": completed_lessons,
         "lessons_total": total_lessons,
-        "xp": total_xp
+        "xp": xp_val or total_xp
     }
+
+    # Attendance rate + trend (last 7 lessons)
+    attendance_rate = None
+    attendance_trend = []
+    if group_ids:
+        lessons_with_attendance = []
+        all_lessons = db.query(models.Lesson).filter(
+            models.Lesson.group_id.in_(group_ids)
+        ).order_by(models.Lesson.scheduled_at.desc()).limit(14).all()
+        for l in reversed(all_lessons[-7:]):
+            att = db.query(models.LessonAttendance).filter(
+                models.LessonAttendance.lesson_id == l.id,
+                models.LessonAttendance.student_id == user_id
+            ).first()
+            attended = att.attended if att else False
+            lessons_with_attendance.append({
+                "date": l.scheduled_at.strftime("%d.%m") if l.scheduled_at else "",
+                "attended": attended
+            })
+        attendance_trend = lessons_with_attendance
+        total_attended = db.query(models.LessonAttendance).filter(
+            models.LessonAttendance.student_id == user_id,
+            models.LessonAttendance.attended == True
+        ).count()
+        total_all = db.query(models.LessonAttendance).filter(
+            models.LessonAttendance.student_id == user_id
+        ).count()
+        attendance_rate = round(total_attended / total_all * 100, 1) if total_all > 0 else None
+
+    # Recent payments
+    recent_payments = []
+    payments = db.query(models.Payment).filter(
+        models.Payment.student_id == user_id
+    ).order_by(models.Payment.created_at.desc()).limit(5).all()
+    for p in payments:
+        recent_payments.append({
+            "id": p.id,
+            "amount": float(p.amount),
+            "currency": p.currency,
+            "method": p.method,
+            "status": p.status,
+            "description": p.description or "",
+            "date": p.created_at.strftime("%d.%m.%Y") if p.created_at else ""
+        })
 
     # Upcoming lesson from DB
     upcoming_lesson = None
@@ -1555,5 +1645,11 @@ def get_dashboard_data(db: Session, user_id: int):
         "homeworks": homeworks,
         "vocabulary": vocabulary,
         "schedule": schedule,
-        "notifications_count": notifications_count
+        "notifications_count": notifications_count,
+        "attendance_rate": attendance_rate,
+        "attendance_trend": attendance_trend,
+        "recent_payments": recent_payments,
+        "streak_days": streak_val,
+        "level": level_val,
+        "xp": xp_val,
     }

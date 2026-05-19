@@ -37,9 +37,22 @@ class Review(Base):
     __tablename__ = "reviews"
 
     id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     student_name = Column(String)
     text = Column(Text)
     rating = Column(Integer)
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=True, index=True)
+    teacher_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    group_name = Column(String, nullable=True)
+    media_urls = Column(Text, nullable=True)  # JSON array of URLs
+    status = Column(String, default="moderation")  # moderation, published, rejected
+    admin_reply = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    student = relationship("User", foreign_keys=[student_id], lazy="joined")
+    course = relationship("Course", foreign_keys=[course_id], lazy="joined")
+    teacher = relationship("User", foreign_keys=[teacher_id], lazy="joined")
 
 
 class Lead(Base):
@@ -73,6 +86,7 @@ class User(Base):
     avatar_url = Column(String, nullable=True)
     registration_source = Column(String, default="web")
     referral_code = Column(String(20), nullable=True, unique=True)
+    date_of_birth = Column(Date, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     enrollments = relationship("Enrollment", back_populates="student")
@@ -329,3 +343,19 @@ class LeadHistory(Base):
     changed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     comment = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class BroadcastCampaign(Base):
+    __tablename__ = "broadcast_campaigns"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255))
+    channel = Column(String(20), default="telegram")  # telegram, email, sms
+    message = Column(Text)
+    audience_config = Column(JSON, default=dict)  # {type: "all"|"role"|"group"|"course", value: ...}
+    status = Column(String(20), default="draft")  # draft, scheduled, sent, cancelled
+    scheduled_at = Column(DateTime(timezone=True), nullable=True)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    stats = Column(JSON, default=dict)  # {total: 0, sent: 0, failed: 0, opened: 0, clicked: 0}
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

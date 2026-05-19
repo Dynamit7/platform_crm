@@ -2,7 +2,8 @@ from fastapi import FastAPI, Depends, HTTPException, status, WebSocket, WebSocke
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
 from typing import List, Dict, Optional
 from datetime import timedelta, datetime, date
 import asyncio, io, openpyxl, json, os, requests
@@ -39,6 +40,68 @@ except Exception:
 try:
     with engine.connect() as conn:
         conn.execute(sa.text("ALTER TABLE messages ADD COLUMN file_name VARCHAR"))
+        conn.commit()
+except Exception:
+    pass
+try:
+    with engine.connect() as conn:
+        conn.execute(sa.text("ALTER TABLE users ADD COLUMN date_of_birth DATE"))
+        conn.commit()
+except Exception:
+    pass
+
+# Migration: add new columns to reviews table
+try:
+    with engine.connect() as conn:
+        conn.execute(sa.text("ALTER TABLE reviews ADD COLUMN student_id INTEGER REFERENCES users(id)"))
+        conn.commit()
+except Exception:
+    pass
+try:
+    with engine.connect() as conn:
+        conn.execute(sa.text("ALTER TABLE reviews ADD COLUMN course_id INTEGER REFERENCES courses(id)"))
+        conn.commit()
+except Exception:
+    pass
+try:
+    with engine.connect() as conn:
+        conn.execute(sa.text("ALTER TABLE reviews ADD COLUMN teacher_id INTEGER REFERENCES users(id)"))
+        conn.commit()
+except Exception:
+    pass
+try:
+    with engine.connect() as conn:
+        conn.execute(sa.text("ALTER TABLE reviews ADD COLUMN group_name VARCHAR"))
+        conn.commit()
+except Exception:
+    pass
+try:
+    with engine.connect() as conn:
+        conn.execute(sa.text("ALTER TABLE reviews ADD COLUMN media_urls TEXT"))
+        conn.commit()
+except Exception:
+    pass
+try:
+    with engine.connect() as conn:
+        conn.execute(sa.text("ALTER TABLE reviews ADD COLUMN status VARCHAR DEFAULT 'moderation'"))
+        conn.commit()
+except Exception:
+    pass
+try:
+    with engine.connect() as conn:
+        conn.execute(sa.text("ALTER TABLE reviews ADD COLUMN admin_reply TEXT"))
+        conn.commit()
+except Exception:
+    pass
+try:
+    with engine.connect() as conn:
+        conn.execute(sa.text("ALTER TABLE reviews ADD COLUMN created_at TIMESTAMP"))
+        conn.commit()
+except Exception:
+    pass
+try:
+    with engine.connect() as conn:
+        conn.execute(sa.text("ALTER TABLE reviews ADD COLUMN updated_at TIMESTAMP"))
         conn.commit()
 except Exception:
     pass
@@ -154,12 +217,18 @@ def update_me(update_data: schemas.UserProfileUpdate, db: Session = Depends(get_
         name=update_data.name,
         email=update_data.email,
         phone=update_data.phone,
-        password=update_data.password
+        password=update_data.password,
     )
     if update_data.avatar_url is not None:
         current_user.avatar_url = update_data.avatar_url
-        db.commit()
-    
+    if update_data.telegram_id is not None:
+        current_user.telegram_id = update_data.telegram_id
+    if update_data.birthday is not None:
+        try:
+            current_user.date_of_birth = update_data.birthday if isinstance(update_data.birthday, date) else datetime.strptime(update_data.birthday, "%Y-%m-%d").date()
+        except Exception:
+            pass
+    db.commit()
     updated_user = crud.update_user(db, current_user.id, user_update)
     if not updated_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -644,6 +713,73 @@ def update_student_status(student_id: int, data: schemas.StudentStatusUpdate, db
     return {"ok": True, "status": data.status}
 
 
+@app.get("/api/students/me/profile", response_model=schemas.StudentProfileResponse)
+def get_my_student_profile(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Только для студентов")
+    profile = db.query(models.Student).filter(models.Student.user_id == current_user.id).first()
+    if not profile:
+        profile = crud.get_or_create_student_profile(db, current_user.id)
+    total_paid = db.query(func.coalesce(func.sum(models.Payment.amount), 0)).filter(
+        models.Payment.student_id == current_user.id,
+        models.Payment.status == "paid"
+    ).scalar()
+    total_lessons = db.query(func.count(models.Lesson.id)).join(models.Group).join(
+        models.Enrollment, models.Enrollment.group_id == models.Group.id
+    ).filter(models.Enrollment.student_id == current_user.id).scalar()
+    lessons_attended = db.query(func.count(models.LessonAttendance.id)).filter(
+        models.LessonAttendance.student_id == current_user.id,
+        models.LessonAttendance.attended == True
+    ).scalar()
+    attendance_rate = round((lessons_attended / total_lessons * 100), 1) if total_lessons > 0 else None
+    enrollments = db.query(models.Enrollment).filter(
+        models.Enrollment.student_id == current_user.id
+    ).options(joinedload(models.Enrollment.group).joinedload(models.Group.course)).all()
+    courses = []
+    groups = []
+    seen_courses = set()
+    for e in enrollments:
+        if e.group:
+            g_name = e.group.name
+            if g_name not in seen_courses:
+                groups.append({"id": e.group.id, "name": g_name, "course_name": e.group.course.title if e.group.course else ""})
+                seen_courses.add(g_name)
+            if e.group.course and e.group.course.title not in {c.get("title") for c in courses}:
+                courses.append({"id": e.group.course.id, "title": e.group.course.title})
+    payments_data = db.query(models.Payment).filter(
+        models.Payment.student_id == current_user.id
+    ).order_by(models.Payment.created_at.desc()).limit(20).all()
+    achievements = [{"id": a.id, "title": a.title, "type": a.achievement_type, "description": a.description or "", "xp_reward": a.xp_reward, "earned_at": str(a.earned_at)[:10] if a.earned_at else None}
+                    for a in (current_user.achievements or [])]
+    return schemas.StudentProfileResponse(
+        id=current_user.id,
+        telegram_id=current_user.telegram_id,
+        name=current_user.name,
+        email=current_user.email,
+        phone=current_user.phone,
+        role=current_user.role,
+        avatar_url=current_user.avatar_url,
+        registration_source=current_user.registration_source,
+        created_at=current_user.created_at,
+        is_active=current_user.is_active,
+        student_code=profile.student_code,
+        enrollment_date=profile.enrollment_date,
+        level=profile.level,
+        xp=profile.xp,
+        streak_days=profile.streak_days,
+        last_activity_date=profile.last_activity_date,
+        total_paid=float(total_paid),
+        total_lessons=total_lessons,
+        lessons_attended=lessons_attended,
+        attendance_rate=attendance_rate,
+        birthday=current_user.date_of_birth,
+        courses=courses,
+        groups=groups,
+        payments=[{"id": p.id, "date": str(p.created_at)[:10] if p.created_at else "", "amount": p.amount, "method": p.method, "status": p.status, "description": p.description or p.course.title if p.course else ""} for p in payments_data],
+        achievements=achievements,
+    )
+
+
 @app.get("/api/groups/{group_id}/gradebook")
 def get_group_gradebook(group_id: int, db: Session = Depends(get_db), _=Depends(require_teacher)):
     """Return full gradebook for a group: students, lessons, homeworks, grades, attendance."""
@@ -764,17 +900,17 @@ def pending_homeworks(db: Session = Depends(get_db), _=Depends(require_teacher))
 # ──────────────────────────────────────
 @app.post("/api/payments", response_model=schemas.Payment)
 def create_payment(payment: schemas.PaymentCreate, db: Session = Depends(get_db),
-                   _=Depends(require_super_admin)):
+                   _=Depends(require_admin)):
     return crud.create_payment(db=db, payment=payment)
 
-@app.get("/api/payments", response_model=List[schemas.Payment])
+@app.get("/api/payments")
 def get_payments(
     status: str = None,
     search: str = None,
     db: Session = Depends(get_db),
-    _=Depends(require_super_admin)
+    _=Depends(require_admin)
 ):
-    """List payments. Optional ?status=paid|pending|failed&search=name"""
+    """List payments with student & course info. Optional ?status=&search="""
     q = db.query(models.Payment)
     if status:
         q = q.filter(models.Payment.status == status)
@@ -782,7 +918,31 @@ def get_payments(
         q = q.join(models.User, models.User.id == models.Payment.student_id, isouter=True).filter(
             models.User.name.ilike(f"%{search}%") | models.Payment.description.ilike(f"%{search}%")
         )
-    return q.order_by(models.Payment.created_at.desc()).limit(300).all()
+    results = q.order_by(models.Payment.created_at.desc()).limit(300).all()
+    out = []
+    for p in results:
+        student_name = ""
+        course_name = ""
+        if p.student:
+            student_name = p.student.name
+        if p.course:
+            course_name = p.course.title
+        out.append({
+            "id": p.id,
+            "student_id": p.student_id,
+            "student_name": student_name,
+            "course_id": p.course_id,
+            "course_name": course_name,
+            "amount": float(p.amount),
+            "currency": p.currency,
+            "method": p.method,
+            "status": p.status,
+            "description": p.description or "",
+            "period_month": p.period_month,
+            "period_year": p.period_year,
+            "created_at": str(p.created_at)[:16] if p.created_at else "",
+        })
+    return out
 
 @app.get("/api/payments/student/{student_id}")
 def student_payments(student_id: int, db: Session = Depends(get_db),
@@ -790,7 +950,7 @@ def student_payments(student_id: int, db: Session = Depends(get_db),
     return crud.get_student_payments(db, student_id)
 
 @app.get("/api/payments/monthly-revenue")
-def monthly_revenue(db: Session = Depends(get_db), _=Depends(require_super_admin)):
+def monthly_revenue(db: Session = Depends(get_db), _=Depends(require_admin)):
     return crud.get_monthly_revenue(db)
 
 @app.patch("/api/payments/{payment_id}/status")
@@ -798,7 +958,7 @@ def update_payment_status(
     payment_id: int,
     body: dict,
     db: Session = Depends(get_db),
-    _=Depends(require_super_admin)
+    _=Depends(require_admin)
 ):
     """Confirm or reject a pending payment. body: {status: 'paid'|'failed'|'refunded'}"""
     payment = db.query(models.Payment).filter(models.Payment.id == payment_id).first()
@@ -867,19 +1027,231 @@ def admin_broadcast(body: dict, db: Session = Depends(get_db), _=Depends(require
     return {"ok": True, "sent": success, "failed": fail, "total": len(users)}
 
 
+# ──────────────────────────────────────
+# BROADCAST CAMPAIGNS
+# ──────────────────────────────────────
+@app.get("/api/admin/broadcast/campaigns")
+def list_campaigns(db: Session = Depends(get_db), _=Depends(require_admin)):
+    campaigns = db.query(models.BroadcastCampaign).order_by(models.BroadcastCampaign.created_at.desc()).all()
+    out = []
+    for c in campaigns:
+        out.append({
+            "id": c.id,
+            "title": c.title,
+            "channel": c.channel,
+            "message": c.message[:200] if c.message else "",
+            "audience_config": c.audience_config or {},
+            "status": c.status,
+            "scheduled_at": str(c.scheduled_at)[:16] if c.scheduled_at else None,
+            "sent_at": str(c.sent_at)[:16] if c.sent_at else None,
+            "stats": c.stats or {},
+            "created_at": str(c.created_at)[:16] if c.created_at else "",
+            "created_by": c.created_by,
+        })
+    return out
+
+
+@app.post("/api/admin/broadcast/campaigns")
+def create_campaign(body: dict, db: Session = Depends(get_db),
+                    current_user: models.User = Depends(get_current_user),
+                    _=Depends(require_admin)):
+    c = models.BroadcastCampaign(
+        title=body.get("title", "Без названия"),
+        channel=body.get("channel", "telegram"),
+        message=body.get("message", ""),
+        audience_config=body.get("audience_config", {"type": "all"}),
+        status=body.get("status", "draft"),
+        scheduled_at=datetime.fromisoformat(body["scheduled_at"]) if body.get("scheduled_at") else None,
+        created_by=current_user.id,
+    )
+    db.add(c); db.commit(); db.refresh(c)
+    return {"ok": True, "id": c.id}
+
+
+@app.put("/api/admin/broadcast/campaigns/{campaign_id}")
+def update_campaign(campaign_id: int, body: dict, db: Session = Depends(get_db), _=Depends(require_admin)):
+    c = db.query(models.BroadcastCampaign).filter(models.BroadcastCampaign.id == campaign_id).first()
+    if not c: raise HTTPException(status_code=404)
+    if "title" in body: c.title = body["title"]
+    if "channel" in body: c.channel = body["channel"]
+    if "message" in body: c.message = body["message"]
+    if "audience_config" in body: c.audience_config = body["audience_config"]
+    if "status" in body: c.status = body["status"]
+    if "scheduled_at" in body:
+        c.scheduled_at = datetime.fromisoformat(body["scheduled_at"]) if body["scheduled_at"] else None
+    db.commit()
+    return {"ok": True}
+
+
+@app.delete("/api/admin/broadcast/campaigns/{campaign_id}")
+def delete_campaign(campaign_id: int, db: Session = Depends(get_db), _=Depends(require_admin)):
+    c = db.query(models.BroadcastCampaign).filter(models.BroadcastCampaign.id == campaign_id).first()
+    if not c: raise HTTPException(status_code=404)
+    db.delete(c); db.commit()
+    return {"ok": True}
+
+
+@app.post("/api/admin/broadcast/campaigns/{campaign_id}/send")
+def send_campaign(campaign_id: int, db: Session = Depends(get_db), _=Depends(require_admin)):
+    c = db.query(models.BroadcastCampaign).filter(models.BroadcastCampaign.id == campaign_id).first()
+    if not c: raise HTTPException(status_code=404, detail="Кампания не найдена")
+    if c.status == "sent":
+        raise HTTPException(status_code=400, detail="Кампания уже отправлена")
+
+    bot_token = os.getenv("BOT_TOKEN")
+    if not bot_token:
+        raise HTTPException(status_code=500, detail="BOT_TOKEN не настроен")
+
+    config = c.audience_config or {}
+    audience_type = config.get("type", "all")
+    q = db.query(models.User).filter(models.User.telegram_id.isnot(None), models.User.is_active == True)
+    if audience_type == "role":
+        q = q.filter(models.User.role == config.get("value", "student"))
+    elif audience_type == "group":
+        group_id = config.get("value")
+        if group_id:
+            q = q.join(models.Enrollment).filter(models.Enrollment.group_id == group_id)
+    elif audience_type == "course":
+        course_id = config.get("value")
+        if course_id:
+            q = q.join(models.Enrollment).filter(models.Enrollment.course_id == course_id)
+
+    users = q.all()
+    message = c.message
+    sent_count = 0; fail_count = 0
+    for u in users:
+        msg = message.replace("{Имя}", u.name or "")
+        try:
+            r = requests.post(
+                f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                json={"chat_id": u.telegram_id, "text": msg, "parse_mode": "Markdown"},
+                timeout=5
+            )
+            if r.status_code == 200: sent_count += 1
+            else: fail_count += 1
+        except: fail_count += 1
+
+    c.status = "sent"
+    c.sent_at = datetime.utcnow()
+    c.stats = {"total": len(users), "sent": sent_count, "failed": fail_count, "opened": 0, "clicked": 0}
+    db.commit()
+    return {"ok": True, "total": len(users), "sent": sent_count, "failed": fail_count}
+
+
+@app.get("/api/admin/broadcast/groups")
+def broadcast_groups(db: Session = Depends(get_db), _=Depends(require_admin)):
+    """Return groups for campaign audience config."""
+    groups = db.query(models.Group).filter(models.Group.is_active == True).order_by(models.Group.name).all()
+    return [{"id": g.id, "name": g.name, "course_name": g.course.title if g.course else ""} for g in groups]
+
+
+@app.get("/api/admin/broadcast/courses")
+def broadcast_courses(db: Session = Depends(get_db), _=Depends(require_admin)):
+    courses = db.query(models.Course).filter(models.Course.is_active == True).order_by(models.Course.title).all()
+    return [{"id": c.id, "title": c.title} for c in courses]
+
+
 @app.get("/api/admin/pending-users")
-def get_pending_users(db: Session = Depends(get_db), _=Depends(require_admin)):
-    """Return users with role='pending' waiting for admin approval."""
-    users = db.query(models.User).filter(models.User.role == "pending").order_by(models.User.created_at.desc()).all()
-    return [
-        {
-            "id": u.id, "name": u.name, "email": u.email,
-            "phone": u.phone, "role": u.role,
-            "registration_source": getattr(u, "registration_source", "web"),
-            "telegram_id": u.telegram_id,
-            "created_at": str(u.created_at)[:10] if u.created_at else None,
-        } for u in users
-    ]
+def get_pending_users(
+    source: str = None,
+    period: str = None,
+    search: str = None,
+    db: Session = Depends(get_db),
+    _=Depends(require_admin)
+):
+    """Return users with role='pending'. Filters: ?source=&period=&search="""
+    q = db.query(models.User).filter(models.User.role == "pending")
+    if source:
+        q = q.filter(models.User.registration_source == source)
+    if period == "today":
+        q = q.filter(models.User.created_at >= datetime.utcnow().replace(hour=0, minute=0, second=0))
+    elif period == "week":
+        q = q.filter(models.User.created_at >= datetime.utcnow() - timedelta(days=7))
+    elif period == "month":
+        q = q.filter(models.User.created_at >= datetime.utcnow() - timedelta(days=30))
+    if search:
+        q = q.filter(
+            models.User.name.ilike(f"%{search}%") |
+            models.User.email.ilike(f"%{search}%") |
+            models.User.phone.ilike(f"%{search}%")
+        )
+    users = q.order_by(models.User.created_at.desc()).limit(200).all()
+
+    # Stats
+    now = datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0)
+    week_start = now - timedelta(days=7)
+    total_pending = db.query(models.User).filter(models.User.role == "pending").count()
+    today_count = db.query(models.User).filter(models.User.role == "pending", models.User.created_at >= today_start).count()
+    week_count = db.query(models.User).filter(models.User.role == "pending", models.User.created_at >= week_start).count()
+    # Converted (recently approved students)
+    converted_count = db.query(models.User).filter(
+        models.User.role.in_(["student", "teacher"]),
+        models.User.created_at >= week_start
+    ).count()
+    total_this_week = week_count + converted_count
+    conversion_rate = round(converted_count / total_this_week * 100, 1) if total_this_week > 0 else 0
+
+    return {
+        "stats": {
+            "total": total_pending,
+            "today": today_count,
+            "week": week_count,
+            "conversion_rate": conversion_rate,
+        },
+        "users": [
+            {
+                "id": u.id, "name": u.name, "email": u.email,
+                "phone": u.phone or "",
+                "registration_source": getattr(u, "registration_source", "web") or "web",
+                "telegram_id": u.telegram_id,
+                "is_active": u.is_active,
+                "created_at": str(u.created_at)[:16] if u.created_at else "",
+            } for u in users
+        ],
+    }
+
+
+@app.post("/api/admin/pending-users/bulk")
+def bulk_pending_users(body: dict, db: Session = Depends(get_db), _=Depends(require_admin)):
+    """Bulk action: approve or reject multiple users. body: {ids: [1,2,3], action: 'approve'|'reject', role?: 'student'}"""
+    ids = body.get("ids", [])
+    action = body.get("action", "approve")
+    role = body.get("role", "student")
+    if not ids:
+        raise HTTPException(status_code=400, detail="Нет ID")
+    users = db.query(models.User).filter(models.User.id.in_(ids)).all()
+    count = 0
+    for u in users:
+        if action == "approve":
+            u.role = role
+            u.is_active = True
+            if u.telegram_id:
+                try:
+                    role_names = {"student": "Студент", "teacher": "Преподаватель"}
+                    bot_token = os.getenv("BOT_TOKEN")
+                    if bot_token:
+                        requests.post(
+                            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                            json={"chat_id": u.telegram_id, "text": f"✅ *Ваша заявка одобрена!*\n\nРоль: *{role_names.get(role, role)}*\n\nДобро пожаловать в TIL USER!", "parse_mode": "Markdown"},
+                            timeout=5
+                        )
+                except: pass
+        elif action == "reject":
+            if u.telegram_id:
+                try:
+                    bot_token = os.getenv("BOT_TOKEN")
+                    if bot_token:
+                        requests.post(
+                            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                            json={"chat_id": u.telegram_id, "text": "❌ *Ваша заявка отклонена.*", "parse_mode": "Markdown"},
+                            timeout=5
+                        )
+                except: pass
+            db.delete(u)
+        count += 1
+    db.commit()
+    return {"ok": True, "affected": count}
 
 
 @app.patch("/api/admin/pending-users/{user_id}/approve")
@@ -1426,13 +1798,75 @@ def check_and_award_achievements(
 # ──────────────────────────────────────
 # REVIEWS
 # ──────────────────────────────────────
-@app.get("/api/reviews", response_model=List[schemas.Review])
-def read_reviews(db: Session = Depends(get_db)):
-    return crud.get_reviews(db)
+@app.get("/api/reviews")
+def read_reviews(
+    skip: int = 0, limit: int = 100,
+    course_id: int = None, teacher_id: int = None,
+    status: str = None, search: str = None,
+    db: Session = Depends(get_db)
+):
+    reviews = crud.get_reviews(db, skip=skip, limit=limit, course_id=course_id, teacher_id=teacher_id, status=status, search=search)
+    out = []
+    for r in reviews:
+        course_name = r.course.title if r.course else None
+        teacher_name = r.teacher.name if r.teacher else None
+        student_avatar = r.student.avatar_url if r.student else None
+        out.append(schemas.ReviewOut(
+            id=r.id, student_id=r.student_id, student_name=r.student_name,
+            student_avatar=student_avatar,
+            text=r.text, rating=r.rating,
+            course_id=r.course_id, course_name=course_name,
+            teacher_id=r.teacher_id, teacher_name=teacher_name,
+            group_name=r.group_name, media_urls=r.media_urls,
+            status=r.status or "moderation", admin_reply=r.admin_reply,
+            created_at=str(r.created_at)[:16] if r.created_at else None,
+            updated_at=str(r.updated_at)[:16] if r.updated_at else None,
+        ))
+    return out
 
 @app.post("/api/reviews", response_model=schemas.Review)
 def create_review(review: schemas.ReviewCreate, db: Session = Depends(get_db)):
     return crud.create_review(db=db, review=review)
+
+@app.get("/api/admin/reviews/stats")
+def admin_review_stats(db: Session = Depends(get_db), _=Depends(require_admin)):
+    return crud.get_review_stats(db)
+
+@app.get("/api/admin/reviews/{review_id}")
+def admin_get_review(review_id: int, db: Session = Depends(get_db), _=Depends(require_admin)):
+    r = db.query(models.Review).filter(models.Review.id == review_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Отзыв не найден")
+    course_name = r.course.title if r.course else None
+    teacher_name = r.teacher.name if r.teacher else None
+    student_avatar = r.student.avatar_url if r.student else None
+    return schemas.ReviewOut(
+        id=r.id, student_id=r.student_id, student_name=r.student_name,
+        student_avatar=student_avatar,
+        text=r.text, rating=r.rating,
+        course_id=r.course_id, course_name=course_name,
+        teacher_id=r.teacher_id, teacher_name=teacher_name,
+        group_name=r.group_name, media_urls=r.media_urls,
+        status=r.status or "moderation", admin_reply=r.admin_reply,
+        created_at=str(r.created_at)[:16] if r.created_at else None,
+        updated_at=str(r.updated_at)[:16] if r.updated_at else None,
+    )
+
+@app.patch("/api/admin/reviews/{review_id}")
+def admin_update_review(review_id: int, body: schemas.ReviewUpdate, db: Session = Depends(get_db), _=Depends(require_admin)):
+    r = crud.update_review(db, review_id, body)
+    if not r:
+        raise HTTPException(status_code=404, detail="Отзыв не найден")
+    return {"ok": True, "review_id": r.id, "status": r.status}
+
+@app.delete("/api/admin/reviews/{review_id}")
+def admin_delete_review(review_id: int, db: Session = Depends(get_db), _=Depends(require_admin)):
+    r = db.query(models.Review).filter(models.Review.id == review_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Отзыв не найден")
+    db.delete(r)
+    db.commit()
+    return {"ok": True}
 
 
 # ──────────────────────────────────────
@@ -1535,14 +1969,14 @@ def admin_stats(db: Session = Depends(get_db), _=Depends(require_admin)):
 def admin_reports(db: Session = Depends(get_db), _=Depends(require_super_admin)):
     return crud.get_admin_reports(db)
 
-@app.get("/api/admin/students", response_model=List[schemas.UserPublic])
+@app.get("/api/admin/students", response_model=List[schemas.AdminStudentPublic])
 def admin_students(
     search: str = None,
     group_id: int = None,
     db: Session = Depends(get_db),
     _=Depends(require_admin)
 ):
-    """List students with their group names. Optional ?search=name_or_email&group_id=N"""
+    """List students with real data (groups, level, payments, attendance, course)."""
     q = db.query(models.User).filter(models.User.role == "student")
     if search:
         q = q.filter(
@@ -1557,17 +1991,74 @@ def admin_students(
         ]
         q = q.filter(models.User.id.in_(enrolled_ids))
     students = q.order_by(models.User.name).all()
+    user_ids = [s.id for s in students]
+
+    # Prefetch student profiles
+    profiles = {
+        p.user_id: p for p in db.query(models.Student)
+        .filter(models.Student.user_id.in_(user_ids)).all()
+    }
+
+    # Prefetch payment totals
+    payment_rows = db.query(
+        models.Payment.student_id,
+        func.sum(models.Payment.amount)
+    ).filter(
+        models.Payment.student_id.in_(user_ids),
+        models.Payment.status == "paid"
+    ).group_by(models.Payment.student_id).all()
+    payments = dict(payment_rows)
+
+    # Prefetch attendance
+    att_rows = db.query(
+        models.LessonAttendance.student_id,
+        func.count(models.LessonAttendance.id)
+    ).filter(
+        models.LessonAttendance.student_id.in_(user_ids),
+        models.LessonAttendance.attended == True
+    ).group_by(models.LessonAttendance.student_id).all()
+    attended_counts = dict(att_rows)
+
+    total_rows = db.query(
+        models.LessonAttendance.student_id,
+        func.count(models.LessonAttendance.id)
+    ).filter(
+        models.LessonAttendance.student_id.in_(user_ids)
+    ).group_by(models.LessonAttendance.student_id).all()
+    total_lessons = dict(total_rows)
+
+    # Prefetch course name from first enrollment per student
+    enrollments = db.query(models.Enrollment).options(
+        joinedload(models.Enrollment.course)
+    ).filter(
+        models.Enrollment.student_id.in_(user_ids)
+    ).all()
+    course_names = {}
+    for e in enrollments:
+        if e.student_id not in course_names and e.course:
+            course_names[e.student_id] = e.course.title
+
     result = []
     for s in students:
         groups = db.query(models.Group).join(models.Enrollment).filter(
             models.Enrollment.student_id == s.id
         ).all()
+        prof = profiles.get(s.id)
+        att_count = attended_counts.get(s.id, 0)
+        tot_lessons = total_lessons.get(s.id, 0)
         result.append({
             "id": s.id, "name": s.name, "email": s.email, "phone": s.phone,
             "is_active": s.is_active, "role": s.role, "avatar_url": s.avatar_url,
             "created_at": s.created_at,
-            "groups": [g.name for g in groups],
-            "group_ids": [g.id for g in groups],
+            "groups": [g.name for g in groups if g.name and g.id],
+            "group_ids": [g.id for g in groups if g.id],
+            "level": prof.level if prof else None,
+            "last_activity_date": str(prof.last_activity_date) if prof and prof.last_activity_date else None,
+            "registration_date": str(prof.enrollment_date) if prof and prof.enrollment_date else (str(s.created_at.date()) if s.created_at else None),
+            "total_paid": payments.get(s.id, 0) or 0,
+            "attendance_rate": round(att_count / tot_lessons * 100, 1) if tot_lessons > 0 else None,
+            "lessons_attended": att_count,
+            "course_name": course_names.get(s.id),
         })
     return result
 

@@ -33,9 +33,21 @@ class UserPublic(BaseModel):
     avatar_url: Optional[str] = None
     registration_source: str = "web"
     created_at: Optional[datetime] = None
+    is_active: Optional[bool] = True
 
     class Config:
         from_attributes = True
+
+class AdminStudentPublic(UserPublic):
+    groups: List[str] = []
+    group_ids: List[int] = []
+    level: Optional[int] = None
+    last_activity_date: Optional[date] = None
+    registration_date: Optional[date] = None
+    total_paid: float = 0
+    attendance_rate: Optional[float] = None
+    lessons_attended: int = 0
+    course_name: Optional[str] = None
 
 class UserCreate(BaseModel):
     name: str
@@ -59,6 +71,8 @@ class UserProfileUpdate(BaseModel):
     phone: Optional[str] = None
     password: Optional[str] = None
     avatar_url: Optional[str] = None
+    telegram_id: Optional[int] = None
+    birthday: Optional[date] = None
 
 class UserSummary(BaseModel):
     id: int
@@ -90,6 +104,26 @@ class StudentProfile(BaseModel):
     level: int = 1
     streak_days: int = 0
     last_activity_date: Optional[date] = None
+
+    class Config:
+        from_attributes = True
+
+class StudentProfileResponse(UserPublic):
+    student_code: Optional[str] = None
+    enrollment_date: Optional[date] = None
+    level: int = 1
+    xp: int = 0
+    streak_days: int = 0
+    last_activity_date: Optional[date] = None
+    total_paid: float = 0
+    total_lessons: int = 0
+    lessons_attended: int = 0
+    attendance_rate: Optional[float] = None
+    birthday: Optional[date] = None
+    courses: List[Dict] = []
+    groups: List[Dict] = []
+    payments: List[Dict] = []
+    achievements: List[Dict] = []
 
     class Config:
         from_attributes = True
@@ -356,15 +390,54 @@ class ReviewBase(BaseModel):
     student_name: str
     text: str
     rating: int
+    course_id: Optional[int] = None
+    teacher_id: Optional[int] = None
+    group_name: Optional[str] = None
+    media_urls: Optional[str] = None
 
 class ReviewCreate(ReviewBase):
     pass
 
+class ReviewUpdate(BaseModel):
+    status: Optional[str] = None
+    admin_reply: Optional[str] = None
+    student_id: Optional[int] = None
+    course_id: Optional[int] = None
+    teacher_id: Optional[int] = None
+    group_name: Optional[str] = None
+    media_urls: Optional[str] = None
+
 class Review(ReviewBase):
     id: int
+    student_id: Optional[int] = None
+    status: str = "moderation"
+    admin_reply: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+    student_name: str
+    student_id: Optional[int] = None
 
     class Config:
         from_attributes = True
+
+class ReviewOut(BaseModel):
+    id: int
+    student_id: Optional[int] = None
+    student_name: str
+    student_avatar: Optional[str] = None
+    text: str
+    rating: int
+    course_id: Optional[int] = None
+    course_name: Optional[str] = None
+    teacher_id: Optional[int] = None
+    teacher_name: Optional[str] = None
+    group_name: Optional[str] = None
+    media_urls: Optional[str] = None
+    status: str
+    admin_reply: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
 
 # ──────────────────────────────────────

@@ -4,28 +4,41 @@ import { useAuth } from './AuthContext';
 
 const ChatContext = createContext(null);
 
+const MAX_RECONNECT_ATTEMPTS = 10;
+
 export function ChatProvider({ children }) {
   const [contacts, setContacts] = useState([]);
   const [activeChat, setActiveChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [typingUsers, setTypingUsers] = useState({});
+  const [isConnected, setIsConnected] = useState(false);
   const ws = useRef(null);
   const reconnectTimeout = useRef(null);
+  const reconnectAttempt = useRef(0);
+  const intentionalClose = useRef(false);
+  const mountedRef = useRef(true);
   const { user } = useAuth();
   const activeChatRef = useRef(null);
   activeChatRef.current = activeChat;
 
   const connect = useCallback(() => {
     if (!user?.id) return;
+    if (ws.current?.readyState === WebSocket.OPEN || ws.current?.readyState === WebSocket.CONNECTING) return;
+    if (reconnectTimeout.current) { clearTimeout(reconnectTimeout.current); reconnectTimeout.current = null; }
+
     const token = localStorage.getItem('access_token');
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws.current = new WebSocket(`${proto}//${location.host}/ws/chat/${user.id}`);
+    const socket = new WebSocket(`${proto}//${location.host}/ws/chat/${user.id}`);
+    ws.current = socket;
 
-    ws.current.onopen = () => {
-      ws.current.send(JSON.stringify({ type: 'auth', token }));
+    socket.onopen = () => {
+      if (!mountedRef.current) { socket.close(); return; }
+      reconnectAttempt.current = 0;
+      setIsConnected(true);
+      socket.send(JSON.stringify({ type: 'auth', token }));
     };
 
-    ws.current.onmessage = (e) => {
+    socket.onmessage = (e) => {
       let msg;
       try { msg = JSON.parse(e.data); } catch { return; }
       if (msg.type === 'typing') {
@@ -42,20 +55,32 @@ export function ChatProvider({ children }) {
       });
     };
 
-    ws.current.onclose = () => {
-      reconnectTimeout.current = setTimeout(connect, 3000);
+    socket.onclose = () => {
+      if (!mountedRef.current) return;
+      setIsConnected(false);
+      ws.current = null;
+      if (intentionalClose.current) { intentionalClose.current = false; return; }
+      reconnectAttempt.current += 1;
+      if (reconnectAttempt.current > MAX_RECONNECT_ATTEMPTS) return;
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttempt.current - 1), 30000);
+      reconnectTimeout.current = setTimeout(connect, delay);
     };
 
-    ws.current.onerror = () => {
-      ws.current?.close();
+    socket.onerror = () => {
+      socket.close();
     };
   }, [user?.id]);
 
   useEffect(() => {
+    mountedRef.current = true;
+    intentionalClose.current = false;
     connect();
     return () => {
+      mountedRef.current = false;
+      intentionalClose.current = true;
+      if (reconnectTimeout.current) { clearTimeout(reconnectTimeout.current); reconnectTimeout.current = null; }
       ws.current?.close();
-      if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
+      ws.current = null;
     };
   }, [connect]);
 
@@ -121,7 +146,7 @@ export function ChatProvider({ children }) {
 
   return (
     <ChatContext.Provider value={{
-      contacts, activeChat, messages, typingUsers,
+      contacts, activeChat, messages, typingUsers, isConnected,
       loadContacts, openChat, sendMessage, sendTyping, uploadFile, searchUsers,
     }}>
       {children}

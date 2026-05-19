@@ -27,9 +27,12 @@ import AdminGroups from './pages/admin/Groups';
 import AdminCourses from './pages/admin/Courses';
 import AdminPayments from './pages/admin/Payments';
 import AdminReports from './pages/admin/Reports';
+import AdminProfitLoss from './pages/admin/ProfitLoss';
 import Broadcast from './pages/admin/Broadcast';
 import PendingUsers from './pages/admin/PendingUsers';
 import AdminReviews from './pages/admin/Reviews';
+import AdminRoles from './pages/admin/Roles';
+import AdminAttendance from './pages/admin/Attendance';
 
 function HomeRedirect() {
   const { user } = useAuth();
@@ -73,12 +76,15 @@ export default function App() {
         <Route path="/admin/courses" element={<ProtectedRoute roles={['admin', 'super_admin']}><AdminCourses /></ProtectedRoute>} />
 
         {/* Только super_admin */}
-        <Route path="/admin/payments" element={<ProtectedRoute roles={['super_admin']}><AdminPayments /></ProtectedRoute>} />
+        <Route path="/admin/payments" element={<ProtectedRoute roles={['admin', 'super_admin']}><AdminPayments /></ProtectedRoute>} />
+        <Route path="/admin/profit-loss" element={<ProtectedRoute roles={['super_admin']}><AdminProfitLoss /></ProtectedRoute>} />
         <Route path="/admin/reports" element={<ProtectedRoute roles={['super_admin']}><AdminReports /></ProtectedRoute>} />
 
+        <Route path="/admin/roles" element={<ProtectedRoute roles={['super_admin']}><AdminRoles /></ProtectedRoute>} />
         <Route path="/admin/broadcast" element={<ProtectedRoute roles={['admin', 'super_admin']}><Broadcast /></ProtectedRoute>} />
         <Route path="/admin/pending-users" element={<ProtectedRoute roles={['admin', 'super_admin']}><PendingUsers /></ProtectedRoute>} />
         <Route path="/admin/reviews" element={<ProtectedRoute roles={['admin', 'super_admin']}><AdminReviews /></ProtectedRoute>} />
+        <Route path="/admin/attendance" element={<ProtectedRoute roles={['admin', 'super_admin']}><AdminAttendance /></ProtectedRoute>} />
 
         {/* Chat – любой авторизованный */}
         <Route path="/chat" element={<ProtectedRoute roles={['admin', 'super_admin', 'teacher', 'student']}><ChatPage /></ProtectedRoute>} />
