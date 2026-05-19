@@ -6,6 +6,7 @@ import api from './api/axios';
 import Layout from './components/Layout/Layout';
 import ProtectedRoute from './components/Guards/ProtectedRoute';
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
 import StudentDashboard from './pages/student/StudentDashboard';
@@ -46,6 +47,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/register" element={<RegisterPage />} />
 
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>

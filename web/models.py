@@ -85,9 +85,16 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     avatar_url = Column(String, nullable=True)
     registration_source = Column(String, default="web")
+    google_id = Column(String, nullable=True, unique=True)
     referral_code = Column(String(20), nullable=True, unique=True)
     date_of_birth = Column(Date, nullable=True)
+    reset_token = Column(String, nullable=True)
+    reset_token_expires = Column(DateTime(timezone=True), nullable=True)
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    login_attempts = relationship("LoginAttempt", back_populates="user")
+    sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
 
     enrollments = relationship("Enrollment", back_populates="student")
     submissions = relationship("HomeworkSubmission", back_populates="student")
@@ -359,3 +366,27 @@ class BroadcastCampaign(Base):
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class LoginAttempt(Base):
+    __tablename__ = "login_attempts"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    email = Column(String, index=True)
+    success = Column(Boolean, default=False)
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="login_attempts")
+
+
+class Session(Base):
+    __tablename__ = "sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    refresh_token = Column(String, unique=True, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="sessions")

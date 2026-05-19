@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Body, UploadFile, File, Header
+from fastapi import FastAPI, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Body, UploadFile, File, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse
@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import List, Dict, Optional
 from datetime import timedelta, datetime, date
-import asyncio, io, openpyxl, json, os, requests
+import asyncio, io, openpyxl, json, os, secrets, hashlib, hmac, time, requests
 from uuid import uuid4
 from dotenv import load_dotenv
 
@@ -17,7 +17,9 @@ from database import engine, get_db, SessionLocal
 from auth import (
     create_access_token, create_refresh_token,
     get_current_user, require_admin, require_super_admin, require_teacher, require_student,
-    ACCESS_TOKEN_EXPIRE_MINUTES, decode_token
+    ACCESS_TOKEN_EXPIRE_MINUTES, decode_token,
+    get_client_ip, check_rate_limit,
+    create_db_session, rotate_db_session
 )
 
 # Create database tables
@@ -46,6 +48,20 @@ except Exception:
 try:
     with engine.connect() as conn:
         conn.execute(sa.text("ALTER TABLE users ADD COLUMN date_of_birth DATE"))
+        conn.commit()
+except Exception:
+    pass
+
+# Migration: add reset_token/reset_token_expires columns to users table
+try:
+    with engine.connect() as conn:
+        conn.execute(sa.text("ALTER TABLE users ADD COLUMN reset_token VARCHAR"))
+        conn.commit()
+except Exception:
+    pass
+try:
+    with engine.connect() as conn:
+        conn.execute(sa.text("ALTER TABLE users ADD COLUMN reset_token_expires TIMESTAMP"))
         conn.commit()
 except Exception:
     pass
@@ -106,6 +122,20 @@ try:
 except Exception:
     pass
 
+# Migration: add google_id, last_login_at to users
+try:
+    with engine.connect() as conn:
+        conn.execute(sa.text("ALTER TABLE users ADD COLUMN google_id VARCHAR"))
+        conn.commit()
+except Exception:
+    pass
+try:
+    with engine.connect() as conn:
+        conn.execute(sa.text("ALTER TABLE users ADD COLUMN last_login_at TIMESTAMP"))
+        conn.commit()
+except Exception:
+    pass
+
 # Ensure uploads directory exists
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -162,6 +192,15 @@ async def forbidden_handler(request: Request, exc):
 
 
 # ──────────────────────────────────────
+# Auth helpers
+# ──────────────────────────────────────
+def log_attempt(db: Session, email: str, success: bool, ip: str = "", ua: str = "", user_id: int = None):
+    attempt = models.LoginAttempt(user_id=user_id, email=email, success=success, ip_address=ip, user_agent=ua)
+    db.add(attempt)
+    db.commit()
+
+
+# ──────────────────────────────────────
 # AUTH
 # ──────────────────────────────────────
 @app.post("/auth/register", response_model=schemas.Token)
@@ -175,17 +214,46 @@ def register(user_data: schemas.UserRegister, db: Session = Depends(get_db)):
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer", "user": user}
 
 
-@app.post("/auth/login", response_model=schemas.Token)
-def login(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
+@app.post("/auth/login")
+def login(
+    credentials: schemas.UserLogin,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    ip = get_client_ip(request)
+    ua = request.headers.get("user-agent", "")
+
+    # Rate limit check
+    rate_key = f"login:{get_client_ip(request)}"
+    if not check_rate_limit(rate_key, max_attempts=20, window_seconds=60):
+        log_attempt(db, email=credentials.email, success=False, ip=ip, ua=ua)
+        raise HTTPException(status_code=429, detail="Слишком много попыток. Попробуйте через минуту.")
+
     user = crud.authenticate_user(db, credentials.email, credentials.password)
     if not user:
+        log_attempt(db, email=credentials.email, success=False, ip=ip, ua=ua)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Неверный email или пароль"
         )
-    access_token = create_access_token({"sub": str(user.id)})
-    refresh_token = create_refresh_token({"sub": str(user.id)})
-    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer", "user": user}
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Аккаунт заблокирован")
+
+    log_attempt(db, user_id=user.id, email=credentials.email, success=True, ip=ip, ua=ua)
+
+    access_token = create_access_token({"sub": str(user.id), "role": user.role})
+    refresh_token = create_db_session(db, user.id)
+
+    # Update last login
+    user.last_login_at = datetime.utcnow()
+    db.commit()
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": schemas.UserPublic.model_validate(user)
+    }
 
 
 @app.post("/auth/refresh")
@@ -193,18 +261,28 @@ def refresh_token(body: dict = Body(...), db: Session = Depends(get_db)):
     refresh = body.get("refresh_token")
     if not refresh:
         raise HTTPException(status_code=400, detail="refresh_token обязателен")
+
+    new_refresh = rotate_db_session(db, refresh)
+    if not new_refresh:
+        raise HTTPException(status_code=401, detail="Сессия истекла. Войдите снова.")
+
     payload = decode_token(refresh)
-    if not payload or payload.get("type") != "refresh":
-        raise HTTPException(status_code=401, detail="Невалидный refresh token")
     user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Невалидный refresh token")
-    user = db.query(models.User).filter(models.User.id == int(user_id)).first()
+    user = db.query(models.User).filter(models.User.id == int(user_id)).first() if user_id else None
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Пользователь не найден")
-    new_access = create_access_token({"sub": str(user.id)})
-    new_refresh = create_refresh_token({"sub": str(user.id)})
+
+    new_access = create_access_token({"sub": str(user.id), "role": user.role})
     return {"access_token": new_access, "refresh_token": new_refresh, "token_type": "bearer"}
+
+
+@app.post("/auth/logout")
+def logout(body: dict = Body(...), db: Session = Depends(get_db)):
+    token = body.get("refresh_token")
+    if token:
+        db.query(models.Session).filter(models.Session.refresh_token == token).delete()
+        db.commit()
+    return {"ok": True}
 
 
 @app.get("/auth/me", response_model=schemas.UserPublic)
@@ -234,6 +312,186 @@ def update_me(update_data: schemas.UserProfileUpdate, db: Session = Depends(get_
         raise HTTPException(status_code=404, detail="User not found")
     return updated_user
 
+
+
+# ──────────────────────────────────────
+# PASSWORD RESET
+# ──────────────────────────────────────
+@app.post("/api/auth/forgot-password")
+def forgot_password(body: dict = Body(...), db: Session = Depends(get_db)):
+    email = body.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email обязателен")
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь с таким email не найден")
+    token = secrets.token_urlsafe(32)
+    user.reset_token = token
+    user.reset_token_expires = datetime.utcnow() + timedelta(hours=1)
+    db.commit()
+    # Send reset link via Telegram if available
+    if user.telegram_id:
+        bot_token = os.getenv("BOT_TOKEN")
+        if bot_token:
+            reset_link = f"http://localhost:5173/reset-password?token={token}&email={email}"
+            msg = f"🔐 *Сброс пароля*\n\nВы запросили сброс пароля. Ссылка действительна 1 час:\n\n[{reset_link}]({reset_link})\n\nЕсли вы не запрашивали сброс, проигнорируйте это сообщение."
+            try:
+                requests.post(
+                    f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                    json={"chat_id": user.telegram_id, "text": msg, "parse_mode": "Markdown"},
+                    timeout=5
+                )
+            except Exception:
+                pass
+    return {"ok": True, "message": "Ссылка для сброса пароля отправлена на email и/или в Telegram"}
+
+
+@app.post("/api/auth/reset-password")
+def reset_password(body: dict = Body(...), db: Session = Depends(get_db)):
+    token = body.get("token")
+    password = body.get("password")
+    if not token or not password:
+        raise HTTPException(status_code=400, detail="Токен и новый пароль обязательны")
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="Пароль должен быть не менее 6 символов")
+    user = db.query(models.User).filter(models.User.reset_token == token).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Неверный или истёкший токен")
+    if user.reset_token_expires and user.reset_token_expires < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Токен истёк. Запросите сброс пароля заново.")
+    user.password_hash = auth.get_password_hash(password)
+    user.reset_token = None
+    user.reset_token_expires = None
+    db.commit()
+    return {"ok": True, "message": "Пароль успешно изменён"}
+
+
+# ──────────────────────────────────────
+# SOCIAL AUTH
+# ──────────────────────────────────────
+@app.post("/api/auth/google")
+def google_auth(body: dict = Body(...), db: Session = Depends(get_db)):
+    """Google OAuth — принимает idToken, верифицирует, создаёт/привязывает аккаунт."""
+    id_token = body.get("idToken")
+    if not id_token:
+        raise HTTPException(status_code=400, detail="idToken обязателен")
+    try:
+        resp = requests.get(
+            f"https://oauth2.googleapis.com/tokeninfo?id_token={id_token}",
+            timeout=10
+        )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=401, detail="Неверный токен Google")
+        payload = resp.json()
+    except requests.RequestException:
+        raise HTTPException(status_code=502, detail="Ошибка верификации Google")
+
+    google_id = payload.get("sub")
+    email = payload.get("email")
+    name = payload.get("name", "Google User")
+    picture = payload.get("picture")
+
+    if not google_id:
+        raise HTTPException(status_code=401, detail="Не удалось получить Google ID")
+
+    # Check rate limit
+    if not check_rate_limit(f"google:{google_id}", max_attempts=20, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Слишком много попыток")
+
+    # Find existing user by google_id or email
+    user = db.query(models.User).filter(models.User.google_id == google_id).first()
+    if not user and email:
+        user = db.query(models.User).filter(models.User.email == email).first()
+        if user:
+            user.google_id = google_id
+
+    if not user:
+        # Create new user
+        user = models.User(
+            name=name,
+            email=email,
+            google_id=google_id,
+            avatar_url=picture,
+            role="student",
+            is_active=True,
+            registration_source="google",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    access_token = create_access_token({"sub": str(user.id), "role": user.role})
+    refresh_token = create_db_session(db, user.id)
+
+    user.last_login_at = datetime.utcnow()
+    db.commit()
+
+    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer", "user": user}
+
+
+@app.post("/api/auth/telegram")
+def telegram_auth(body: dict = Body(...), db: Session = Depends(get_db)):
+    """Telegram Login Widget authentication."""
+    tg_id = body.get("id")
+    tg_hash = body.get("hash")
+    auth_date = body.get("auth_date")
+    first_name = body.get("first_name", "Telegram User")
+    username = body.get("username")
+    photo_url = body.get("photo_url")
+
+    if not tg_id or not tg_hash or not auth_date:
+        raise HTTPException(status_code=400, detail="Недостаточно данных для аутентификации")
+
+    # Check age (max 5 minutes)
+    if int(auth_date) < int(time.time()) - 300:
+        raise HTTPException(status_code=401, detail="Устаревшие данные аутентификации")
+
+    # Verify hash
+    bot_token = os.getenv("BOT_TOKEN")
+    if not bot_token:
+        raise HTTPException(status_code=500, detail="BOT_TOKEN не настроен")
+
+    secret_key = hashlib.sha256(bot_token.encode()).digest()
+    check_list = []
+    for k in ["auth_date", "first_name", "id", "last_name", "photo_url", "username"]:
+        v = body.get(k)
+        if v is not None:
+            check_list.append(f"{k}={v}")
+    check_list.sort()
+    check_string = "\n".join(check_list)
+    import hmac as hmac_mod
+    calculated_hash = hmac_mod.new(secret_key, check_string.encode(), hashlib.sha256).hexdigest()
+
+    if calculated_hash != tg_hash:
+        raise HTTPException(status_code=401, detail="Неверная подпись Telegram")
+
+    # Check rate limit
+    if not check_rate_limit(f"telegram:{tg_id}", max_attempts=20, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Слишком много попыток")
+
+    # Find or create user
+    user = db.query(models.User).filter(models.User.telegram_id == int(tg_id)).first()
+
+    if not user:
+        user = models.User(
+            name=first_name,
+            telegram_id=int(tg_id),
+            avatar_url=photo_url,
+            role="student",
+            is_active=True,
+            registration_source="telegram",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    access_token = create_access_token({"sub": str(user.id), "role": user.role})
+    refresh_token = create_db_session(db, user.id)
+
+    user.last_login_at = datetime.utcnow()
+    db.commit()
+
+    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer", "user": user}
 
 
 # ──────────────────────────────────────
@@ -950,7 +1208,7 @@ def student_payments(student_id: int, db: Session = Depends(get_db),
     return crud.get_student_payments(db, student_id)
 
 @app.get("/api/payments/monthly-revenue")
-def monthly_revenue(db: Session = Depends(get_db), _=Depends(require_admin)):
+def monthly_revenue(db: Session = Depends(get_db), _=Depends(require_super_admin)):
     return crud.get_monthly_revenue(db)
 
 @app.patch("/api/payments/{payment_id}/status")
@@ -2092,9 +2350,26 @@ def admin_create_teacher(
 def admin_users_summary(db: Session = Depends(get_db), _=Depends(require_admin)):
     return crud.get_users_summary(db)
 
+@app.get("/api/admin/admins")
+def admin_list_admins(db: Session = Depends(get_db), _=Depends(require_super_admin)):
+    users = db.query(models.User).filter(
+        models.User.role.in_(["super_admin", "admin"])
+    ).order_by(models.User.role, models.User.name).all()
+    return [{
+        "id": u.id, "name": u.name, "email": u.email,
+        "phone": u.phone, "role": u.role,
+        "is_active": u.is_active,
+        "created_at": str(u.created_at)[:10] if u.created_at else None,
+    } for u in users]
+
 @app.post("/api/admin/users", response_model=schemas.UserPublic)
 def admin_create_user(user_data: schemas.UserCreate, db: Session = Depends(get_db),
-                      _=Depends(require_admin)):
+                      current_user: models.User = Depends(require_admin)):
+    if user_data.role in ("admin", "super_admin") and current_user.role != "super_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Только Super Admin может создавать пользователей с ролью администратора"
+        )
     existing = crud.get_user_by_email(db, user_data.email)
     if existing:
         raise HTTPException(status_code=400, detail="Email уже используется")
@@ -2139,7 +2414,13 @@ def admin_get_user(user_id: int, db: Session = Depends(get_db), _=Depends(requir
 
 @app.patch("/api/admin/users/{user_id}", response_model=schemas.UserPublic)
 def admin_update_user(user_id: int, update: schemas.UserUpdate,
-                      db: Session = Depends(get_db), _=Depends(require_admin)):
+                      db: Session = Depends(get_db),
+                      current_user: models.User = Depends(require_admin)):
+    if update.role and update.role in ("admin", "super_admin") and current_user.role != "super_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Только Super Admin может назначать роль администратора"
+        )
     user = crud.update_user(db, user_id, update)
     if not user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")

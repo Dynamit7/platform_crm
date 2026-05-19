@@ -1,13 +1,15 @@
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from database import get_db
 import models
+import secrets
 import os
+import time
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -25,6 +27,30 @@ REFRESH_TOKEN_EXPIRE_DAYS = 30
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+# ──────────────────────────────────────
+# In-memory rate limiter (simple)
+# ──────────────────────────────────────
+_attempts: dict = {}
+
+def check_rate_limit(key: str, max_attempts: int = 20, window_seconds: int = 60):
+    """Returns True if under limit, False if rate limited."""
+    now = time.time()
+    window_start = now - window_seconds
+    if key in _attempts:
+        _attempts[key] = [t for t in _attempts[key] if t > window_start]
+        if len(_attempts[key]) >= max_attempts:
+            return False
+        _attempts[key].append(now)
+    else:
+        _attempts[key] = [now]
+    return True
+
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "0.0.0.0"
 
 
 # ──────────────────────────────────────
@@ -61,6 +87,40 @@ def decode_token(token: str) -> dict:
         return payload
     except JWTError:
         return {}
+
+
+# ──────────────────────────────────────
+# Session / Refresh Token helpers
+# ──────────────────────────────────────
+def create_db_session(db: Session, user_id: int) -> str:
+    """Create a refresh token + session record, returns refresh token."""
+    raw_token = secrets.token_urlsafe(48)
+    expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    session = models.Session(
+        user_id=user_id,
+        refresh_token=raw_token,
+        expires_at=expires_at,
+    )
+    db.add(session)
+    db.commit()
+    return raw_token
+
+
+def rotate_db_session(db: Session, old_token: str) -> Optional[str]:
+    """Delete old session and create new one. Returns new refresh token or None."""
+    session = db.query(models.Session).filter(models.Session.refresh_token == old_token).first()
+    if not session or session.expires_at < datetime.utcnow():
+        return None
+    user_id = session.user_id
+    db.delete(session)
+    db.commit()
+    return create_db_session(db, user_id)
+
+
+def cleanup_expired_sessions(db: Session):
+    """Remove expired sessions."""
+    db.query(models.Session).filter(models.Session.expires_at < datetime.utcnow()).delete()
+    db.commit()
 
 
 # ──────────────────────────────────────

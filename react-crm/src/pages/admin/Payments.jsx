@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 
 /* ── SVG Icons ── */
 const SSearch = () => (
@@ -249,6 +250,8 @@ function StatCard({ icon: Icon, label, value, color, bg, trend, trendLabel }) {
 /* ─────── Main ─────── */
 export default function AdminPayments() {
   const { add } = useToast();
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
 
   /* ─── Data ─── */
   const [payments, setPayments] = useState([]);
@@ -453,54 +456,53 @@ export default function AdminPayments() {
   return (
     <div className="page-content" style={{ padding: '24px 28px' }}>
 
-      {/* ═══════ TWO-COLUMN TOP: Stats + Chart ═══════ */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16, marginBottom: 24 }}>
-        {/* Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-          <StatCard icon={SWallet} label="Всего оплачено" value={formatPrice(stats.totalRevenue)}
-            color="#10b981" bg="rgba(16,185,129,0.1)" trend={15} trendLabel="к прошлому месяцу" />
-          <StatCard icon={SCal} label="Ожидает оплаты" value={formatPrice(stats.pendingAmount)}
-            color="#f59e0b" bg="rgba(245,158,11,0.1)" />
-          <StatCard icon={SX} label="Просрочено" value={formatPrice(stats.overdueAmount)}
-            color="#ef4444" bg="rgba(239,68,68,0.1)" trend={-5} trendLabel="за неделю" />
-          <StatCard icon={SBank} label="Средний чек" value={formatPrice(stats.avgCheck)}
-            color="#8b5cf6" bg="rgba(139,92,246,0.1)" />
-        </div>
-
-        {/* Mini Revenue Chart */}
-        <div style={{
-          background: 'var(--glass-bg)', backdropFilter: 'var(--backdrop-blur)', WebkitBackdropFilter: 'var(--backdrop-blur)',
-          border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--glass-shadow)', padding: '18px 20px',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Доход за 30 дней</span>
-            <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--success)' }}>
-              {revenueData.reduce((s, d) => s + d.value, 0).toLocaleString()} сум
-            </span>
+      {/* ═══════ TWO-COLUMN TOP: Stats + Chart (super_admin only) ═══════ */}
+      {isSuperAdmin && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16, marginBottom: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+            <StatCard icon={SWallet} label="Всего оплачено" value={formatPrice(stats.totalRevenue)}
+              color="#10b981" bg="rgba(16,185,129,0.1)" trend={15} trendLabel="к прошлому месяцу" />
+            <StatCard icon={SCal} label="Ожидает оплаты" value={formatPrice(stats.pendingAmount)}
+              color="#f59e0b" bg="rgba(245,158,11,0.1)" />
+            <StatCard icon={SX} label="Просрочено" value={formatPrice(stats.overdueAmount)}
+              color="#ef4444" bg="rgba(239,68,68,0.1)" trend={-5} trendLabel="за неделю" />
+            <StatCard icon={SBank} label="Средний чек" value={formatPrice(stats.avgCheck)}
+              color="#8b5cf6" bg="rgba(139,92,246,0.1)" />
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 72 }}>
-            {revenueData.map((d, i) => (
-              <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, position: 'relative' }}>
-                <div style={{
-                  width: '100%', height: `${Math.max(2, (d.value / maxRevenue) * 64)}px`,
-                  borderRadius: '2px 2px 0 0',
-                  background: i === revenueData.length - 1 ? 'var(--accent-gradient)' : 'var(--blue-400)',
-                  opacity: i === revenueData.length - 1 ? 1 : 0.4,
-                  transition: 'opacity 0.2s',
-                  cursor: 'pointer', position: 'relative',
-                }}
-                  onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                  onMouseLeave={e => { e.currentTarget.style.opacity = i === revenueData.length - 1 ? 1 : 0.4; }} />
-                {i % 5 === 0 && (
-                  <span style={{ fontSize: 8, color: 'var(--muted)', marginTop: 2, whiteSpace: 'nowrap' }}>
-                    {d.day}/{d.month}
-                  </span>
-                )}
-              </div>
-            ))}
+          <div style={{
+            background: 'var(--glass-bg)', backdropFilter: 'var(--backdrop-blur)', WebkitBackdropFilter: 'var(--backdrop-blur)',
+            border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--glass-shadow)', padding: '18px 20px',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Доход за 30 дней</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--success)' }}>
+                {revenueData.reduce((s, d) => s + d.value, 0).toLocaleString()} сум
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 72 }}>
+              {revenueData.map((d, i) => (
+                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, position: 'relative' }}>
+                  <div style={{
+                    width: '100%', height: `${Math.max(2, (d.value / maxRevenue) * 64)}px`,
+                    borderRadius: '2px 2px 0 0',
+                    background: i === revenueData.length - 1 ? 'var(--accent-gradient)' : 'var(--blue-400)',
+                    opacity: i === revenueData.length - 1 ? 1 : 0.4,
+                    transition: 'opacity 0.2s',
+                    cursor: 'pointer', position: 'relative',
+                  }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = i === revenueData.length - 1 ? 1 : 0.4; }} />
+                  {i % 5 === 0 && (
+                    <span style={{ fontSize: 8, color: 'var(--muted)', marginTop: 2, whiteSpace: 'nowrap' }}>
+                      {d.day}/{d.month}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ═══════ HEADER ═══════ */}
       <div style={s.header}>
