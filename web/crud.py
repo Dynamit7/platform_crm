@@ -386,7 +386,62 @@ def get_student_detail(db: Session, student_id: int):
 # Courses
 # ─────────────────────────────────────
 def get_courses(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.Course).offset(skip).limit(limit).all()
+    courses = db.query(models.Course).offset(skip).limit(limit).all()
+    if not courses:
+        return []
+
+    course_ids = [c.id for c in courses]
+
+    # Реальный доход по курсу — сумма оплаченных платежей
+    revenue_map = dict(
+        db.query(models.Payment.course_id, func.coalesce(func.sum(models.Payment.amount), 0))
+        .filter(models.Payment.course_id.in_(course_ids), models.Payment.status == "paid")
+        .group_by(models.Payment.course_id).all()
+    )
+    # Активные группы по курсу
+    groups_map = dict(
+        db.query(models.Group.course_id, func.count(models.Group.id))
+        .filter(models.Group.course_id.in_(course_ids), models.Group.is_active == True)
+        .group_by(models.Group.course_id).all()
+    )
+    # Всего записей (enrollments) по курсу
+    enroll_map = dict(
+        db.query(models.Enrollment.course_id, func.count(models.Enrollment.id))
+        .filter(models.Enrollment.course_id.in_(course_ids))
+        .group_by(models.Enrollment.course_id).all()
+    )
+    # Уникальные студенты по курсу
+    students_map = dict(
+        db.query(models.Enrollment.course_id, func.count(func.distinct(models.Enrollment.student_id)))
+        .filter(models.Enrollment.course_id.in_(course_ids))
+        .group_by(models.Enrollment.course_id).all()
+    )
+    # Средний рейтинг по отзывам курса
+    rating_map = dict(
+        db.query(models.Review.course_id, func.avg(models.Review.rating))
+        .filter(models.Review.course_id.in_(course_ids))
+        .group_by(models.Review.course_id).all()
+    )
+
+    result = []
+    for c in courses:
+        rating = rating_map.get(c.id)
+        result.append({
+            "id": c.id,
+            "title": c.title or c.name,
+            "description": c.description or "",
+            "duration": c.duration,
+            "price": float(c.price) if c.price is not None else None,
+            "image_url": c.image_url,
+            "is_active": c.is_active,
+            "revenue": float(revenue_map.get(c.id, 0) or 0),
+            "groups_count": int(groups_map.get(c.id, 0) or 0),
+            "students_count": int(students_map.get(c.id, 0) or 0),
+            "enrollments": int(enroll_map.get(c.id, 0) or 0),
+            "lessons_count": int(c.lessons_count or 0),
+            "rating": round(float(rating), 1) if rating is not None else None,
+        })
+    return result
 
 def get_course(db: Session, course_id: int):
     return db.query(models.Course).filter(models.Course.id == course_id).first()

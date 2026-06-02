@@ -20,6 +20,8 @@ SQLALCHEMY_DATABASE_URL = (
     _raw_url
     .replace("sqlite+aiosqlite:///./", f"sqlite:///{_web_dir}/")
     .replace("sqlite+aiosqlite://",    "sqlite://")
+    .replace("postgresql+asyncpg://",  "postgresql://")
+    .replace("postgres+asyncpg://",    "postgresql://")
 )
 
 # Resolve relative sqlite paths  sqlite:///./name.db → absolute

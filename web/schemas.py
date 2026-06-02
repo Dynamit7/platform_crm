@@ -183,6 +183,13 @@ class CourseUpdate(BaseModel):
 class Course(CourseBase):
     id: int
     is_active: bool = True
+    # Реальные агрегаты (заполняются в crud.get_courses; для остальных эндпоинтов — дефолты)
+    revenue: Optional[float] = None
+    groups_count: Optional[int] = None
+    students_count: Optional[int] = None
+    enrollments: Optional[int] = None
+    lessons_count: Optional[int] = None
+    rating: Optional[float] = None
 
     class Config:
         from_attributes = True

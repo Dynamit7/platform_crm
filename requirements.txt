@@ -6,7 +6,7 @@ pydantic==2.11.10
 pydantic-settings==2.2.1
 python-dotenv==1.1.1
 sqlalchemy[asyncio]>=2.0.0
-bcrypt>=4.0.0
+bcrypt==4.0.1  # 4.1+ ломает passlib 1.7.x (detect_wrap_bug → ValueError 72 bytes)
 structlog==24.1.0
 alembic==1.13.1
 fpdf==1.7.2

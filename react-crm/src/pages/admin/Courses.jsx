@@ -300,16 +300,16 @@ export default function AdminCourses() {
       const enriched = data.map((c, i) => ({
         ...c,
         status: c.status || (c.is_active ? 'active' : 'draft'),
-        groups_count: c.groups_count ?? Math.floor(Math.random() * 8 + 1),
-        students_count: c.students_count ?? Math.floor(Math.random() * 60 + 10),
+        groups_count: c.groups_count ?? 0,
+        students_count: c.students_count ?? 0,
         language: c.language || LANGUAGES[i % LANGUAGES.length],
         level: c.level || LEVELS[i % LEVELS.length],
-        revenue: c.revenue ?? Math.floor(Math.random() * 50000000 + 5000000),
-        rating: c.rating ?? (3.5 + Math.random() * 1.5),
-        lessons_count: c.lessons_count ?? Math.floor(Math.random() * 32 + 16),
+        revenue: c.revenue ?? 0,
+        rating: c.rating ?? 0,
+        lessons_count: c.lessons_count ?? 0,
         max_students: c.max_students ?? 20,
         full_description: c.full_description || c.description || '',
-        enrollments: c.enrollments ?? Math.floor(Math.random() * 40 + 5),
+        enrollments: c.enrollments ?? 0,
       }));
       setCourses(enriched);
       setLoading(false);
@@ -930,7 +930,7 @@ export default function AdminCourses() {
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 13, fontWeight: 600 }}>{names[i]}</div>
                           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                            {teachers[i]} · {Math.floor(Math.random() * 12 + 6)} студентов
+                            {teachers[i]}
                           </div>
                         </div>
                         <button style={s.rowBtn}
@@ -968,7 +968,7 @@ export default function AdminCourses() {
                     </div>
                     <div style={{ background: 'var(--bg)', borderRadius: 'var(--radius-sm)', padding: '14px 16px' }}>
                       <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500, marginBottom: 4 }}>Конверсия</div>
-                      <div style={{ fontSize: 22, fontWeight: 700, color: '#06b6d4' }}>{Math.floor(Math.random() * 25 + 10)}%</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: '#06b6d4' }}>—</div>
                     </div>
                   </div>
 

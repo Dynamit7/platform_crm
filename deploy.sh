@@ -78,7 +78,7 @@ ok "Зависимости установлены"
 
 # быстрая проверка, что критичные модули на месте
 "$VENV_PY" - <<'PYCHECK' || die "Не все модули установились — смотри вывод pip выше."
-import importlib, sys
+import importlib.util, sys
 missing = [m for m in ("structlog", "uvicorn", "aiogram", "fastapi") if importlib.util.find_spec(m) is None]
 if missing:
     print("Отсутствуют модули:", ", ".join(missing)); sys.exit(1)
