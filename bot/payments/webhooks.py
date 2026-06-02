@@ -1,8 +1,15 @@
 import base64
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
 import structlog
 from aiohttp import web
 from bot.database import async_session_factory
 from bot.payments.service import PaymentService
+from bot.config import config
+
+_FAILED_WEBHOOK_DIR = Path(__file__).resolve().parent.parent.parent / "logs" / "failed_webhooks"
 
 
 def _verify_yookassa_basic_auth(auth_header: str, shop_id: str, secret_key: str) -> bool:
@@ -26,20 +33,39 @@ async def yookassa_webhook_handler(request: web.Request):
         log.error("Failed to parse webhook JSON", error=str(e))
         return web.Response(status=400)
 
+    auth = request.headers.get("Authorization", "")
+    if not _verify_yookassa_basic_auth(auth, config.YOOKASSA_SHOP_ID, config.YOOKASSA_SECRET_KEY.get_secret_value()):
+        log.warning("Unauthorized webhook request")
+        return web.Response(status=401)
+
     log.info("Received ЮKassa webhook", event=data.get("event"))
 
-    # Process in a background session
+    # YooKassa expects 200 for any processed notification — иначе будет
+    # бесконечно ретраить (24 часа, с backoff). Если БД временно лежит,
+    # лучше принять и залогировать для ручного разбора, чем потерять
+    # уведомление через несколько 500-ответов.
     async with async_session_factory() as session:
-        # We need the bot instance to send notifications. 
-        # It's usually stored in the aiohttp app state.
         bot = request.app.get("bot")
         service = PaymentService(session, bot=bot)
-        
+
         try:
             await service.process_webhook_notification(data)
         except Exception as e:
-            log.error("Error processing webhook in service", error=str(e))
-            return web.Response(status=500)
+            log.error(
+                "Error processing webhook in service",
+                error=str(e),
+                event=data.get("event"),
+                payment_id=(data.get("object") or {}).get("id"),
+            )
+            # Возвращаем 200, но сохраняем raw payload для ретрая вручную
+            try:
+                _FAILED_WEBHOOK_DIR.mkdir(parents=True, exist_ok=True)
+                ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+                fp = _FAILED_WEBHOOK_DIR / f"yookassa_{ts}.json"
+                fp.write_text(json.dumps({"error": str(e), "payload": data}, ensure_ascii=False, indent=2), encoding="utf-8")
+                log.info("Failed webhook persisted", file=str(fp))
+            except Exception:
+                log.exception("Failed to persist failed webhook for later retry")
 
     return web.Response(status=200)
 
@@ -55,8 +81,6 @@ async def sync_web_user_handler(request: web.Request):
         
     from bot.models.user import User, UserRole, Student
     from sqlalchemy import select
-    import random
-    
     async with async_session_factory() as session:
         # Check if user already exists
         stmt = select(User).where(User.email == data.get("email"))
@@ -67,13 +91,8 @@ async def sync_web_user_handler(request: web.Request):
             user = (await session.execute(stmt)).scalar_one_or_none()
             
         if not user:
-            # Generate a negative telegram ID using user's web ID (guaranteed unique)
-            dummy_telegram_id = -abs(int(data.get("id", 0)))
-            if dummy_telegram_id >= 0:
-                dummy_telegram_id = -random.randint(10000000, 99999999)
-                
             user = User(
-                telegram_id=dummy_telegram_id,
+                telegram_id=None,
                 full_name=data.get("name"),
                 phone=data.get("phone"),
                 email=data.get("email"),
@@ -83,8 +102,12 @@ async def sync_web_user_handler(request: web.Request):
             await session.flush()
             
             if user.role == UserRole.STUDENT:
-                # Add to Student table
-                code = f"STU{random.randint(100000, 999999)}"
+                import random
+                while True:
+                    code = f"STU{random.randint(100000, 999999)}"
+                    existing = await session.execute(select(Student).where(Student.student_code == code))
+                    if not existing.scalar_one_or_none():
+                        break
                 student = Student(user_id=user.id, student_code=code, is_active=True)
                 session.add(student)
                 

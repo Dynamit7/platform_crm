@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from bot.models.education import Attendance
+from bot.config import config
 from typing import Dict
 
 class AttendanceService:
@@ -8,21 +9,29 @@ class AttendanceService:
         self.session = session
 
     async def mark_attendance(self, lesson_id: int, student_id: int, status: str = "present", notes: str = None):
-        """
-        Безопасная отметка посещаемости.
-        Использует 'upsert' логику: если запись уже есть, она обновляется.
-        """
-        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-        
-        stmt = sqlite_insert(Attendance).values(
-            lesson_id=lesson_id,
-            student_id=student_id,
-            status=status,
-            notes=notes
-        ).on_conflict_do_update(
-            index_elements=['lesson_id', 'student_id'],
-            set_=dict(status=status, notes=notes)
-        )
+        """Upsert logic — works with both SQLite and PostgreSQL."""
+        if "sqlite" in config.DATABASE_URL:
+            from sqlalchemy.dialects.sqlite import insert as upsert
+            stmt = upsert(Attendance).values(
+                lesson_id=lesson_id,
+                student_id=student_id,
+                status=status,
+                notes=notes
+            ).on_conflict_do_update(
+                index_elements=['lesson_id', 'student_id'],
+                set_=dict(status=status, notes=notes)
+            )
+        else:
+            from sqlalchemy.dialects.postgresql import insert as upsert
+            stmt = upsert(Attendance).values(
+                lesson_id=lesson_id,
+                student_id=student_id,
+                status=status,
+                notes=notes
+            ).on_conflict_do_update(
+                constraint='uq_attendance_lesson_student',
+                set_=dict(status=status, notes=notes)
+            )
         
         await self.session.execute(stmt)
         await self.session.commit()

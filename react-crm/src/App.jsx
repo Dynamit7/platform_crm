@@ -7,6 +7,8 @@ import Layout from './components/Layout/Layout';
 import ProtectedRoute from './components/Guards/ProtectedRoute';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+import TelegramLogin from './pages/TelegramLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
 import StudentDashboard from './pages/student/StudentDashboard';
@@ -48,6 +50,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/auth/tg" element={<TelegramLogin />} />
       <Route path="/register" element={<RegisterPage />} />
 
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>

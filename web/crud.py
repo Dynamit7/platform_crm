@@ -1,24 +1,113 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 import models, schemas
 from auth import get_password_hash, verify_password
 import os
 import requests
+import logging
+
+log = logging.getLogger("web.crud")
 
 BOT_SYNC_URL = os.getenv("BOT_SYNC_URL", "http://127.0.0.1:8080/api/web/sync-user")
 
-def send_telegram_notification(telegram_id: int, message: str):
+def send_telegram_notification(telegram_id: int, message: str, reply_markup: dict | None = None):
+    """Прямой sendMessage в Telegram Bot API.
+    reply_markup — опциональный JSON (inline_keyboard / reply_keyboard) — передаётся как есть.
+    """
     bot_token = os.getenv("BOT_TOKEN")
     if not bot_token or not telegram_id:
         return False
     try:
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        resp = requests.post(url, json={"chat_id": telegram_id, "text": message, "parse_mode": "Markdown"}, timeout=5)
+        payload = {"chat_id": telegram_id, "text": message, "parse_mode": "Markdown"}
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
+        resp = requests.post(url, json=payload, timeout=5)
         return resp.status_code == 200
     except Exception as e:
-        print(f"Telegram notification error: {e}")
+        log.warning("Telegram notification error: %s", e)
         return False
+
+
+def _make_web_login_link(user_id: int, role: str) -> str | None:
+    """(Оставлено для совместимости — больше не используется.)"""
+    return None
+
+
+def _ensure_login_credentials(db: Session, user) -> tuple[str, str | None]:
+    """Гарантирует что у юзера есть валидный email и password_hash.
+    Если чего-то нет — генерит, хэширует, коммитит.
+
+    Возвращает (email, plaintext_password).
+    plaintext_password = None, если пароль уже был установлен (мы его не знаем).
+    """
+    import secrets as _secrets
+    import string as _string
+    from auth import get_password_hash as _hash
+
+    plaintext_password = None
+    changed = False
+
+    # email
+    if not user.email or "@bot.local" in (user.email or "") or "@edusmart.local" in (user.email or ""):
+        # генерим читаемый email
+        candidate = None
+        for _ in range(20):
+            name_seed = "".join(c for c in (user.name or "").lower() if c.isalnum())[:6] or "student"
+            suffix = _secrets.token_hex(3)
+            candidate = f"{name_seed}_{suffix}@til.user"
+            if not db.query(models.User).filter(models.User.email == candidate).first():
+                break
+        if candidate:
+            user.email = candidate
+            changed = True
+
+    # password
+    if not user.password_hash:
+        alphabet = _string.ascii_letters + _string.digits
+        plaintext_password = "".join(_secrets.choice(alphabet) for _ in range(10))
+        user.password_hash = _hash(plaintext_password)
+        changed = True
+
+    if changed:
+        db.commit()
+
+    return user.email, plaintext_password
+
+
+def _is_telegram_safe_url(url: str | None) -> bool:
+    """Telegram отклоняет http://localhost / 127.0.0.1 / .local в inline-кнопках.
+    Только публичные HTTP(S) URL пропускаются."""
+    if not url:
+        return False
+    low = url.lower()
+    for bad in ("localhost", "127.0.0.1", "0.0.0.0", "://192.168.", "://10.", ".local/"):
+        if bad in low:
+            return False
+    return low.startswith("https://") or low.startswith("http://")
+
+
+def _student_cabinet_keyboard(extra_url: str | None = None) -> dict:
+    """Дублирует разметку из bot/keyboards/student/__init__.py.
+    Держим тут отдельно, чтобы web не зависел от bot-пакета (web и bot
+    запускаются как разные процессы)."""
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "📚 Мои курсы", "callback_data": "student:courses"},
+                {"text": "🗓 Расписание", "callback_data": "student:schedule"},
+            ],
+            [
+                {"text": "📝 Домашние задания", "callback_data": "student:homework"},
+                {"text": "📂 Материалы", "callback_data": "student:materials"},
+            ],
+            [
+                {"text": "💰 Мои оплаты", "callback_data": "student:payments"},
+                {"text": "👤 Мой профиль", "callback_data": "student:profile"},
+            ],
+        ] + ([[{"text": "🌐 Открыть веб-кабинет", "url": extra_url}]] if _is_telegram_safe_url(extra_url) else [])
+    }
 
 
 # ─────────────────────────────────────
@@ -55,7 +144,7 @@ def create_user(db: Session, user: schemas.UserRegister):
             timeout=3
         )
     except Exception as e:
-        print(f"Failed to sync user to bot: {e}")
+        log.warning("Failed to sync user to bot: %s", e)
         
     return db_user
 
@@ -96,7 +185,12 @@ def create_user_by_admin(db: Session, user_data: schemas.UserCreate):
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    
+
+    if db_user.role in ("student",) and not db.query(models.Student).filter(models.Student.user_id == db_user.id).first():
+        import random
+        code = f"STU{random.randint(100000, 999999)}"
+        db.add(models.Student(user_id=db_user.id, student_code=code, is_active=True))
+
     # Sync to bot
     try:
         requests.post(
@@ -111,7 +205,7 @@ def create_user_by_admin(db: Session, user_data: schemas.UserCreate):
             timeout=3
         )
     except Exception as e:
-        print(f"Failed to sync user to bot: {e}")
+        log.warning("Failed to sync user to bot: %s", e)
 
     return db_user
 
@@ -148,7 +242,7 @@ def update_user(db: Session, user_id: int, update: schemas.UserUpdate):
             timeout=3
         )
     except Exception as e:
-        print(f"Failed to sync user update to bot: {e}")
+        log.warning("Failed to sync user update to bot: %s", e)
 
     return user
 
@@ -185,25 +279,41 @@ def get_user_minimal(db: Session, user_id: int):
 
 def get_users_summary(db: Session, skip: int = 0, limit: int = 500):
     users = db.query(models.User).offset(skip).limit(limit).all()
+    user_ids = [u.id for u in users]
+    
+    latest_payments = db.query(
+        models.Payment.student_id,
+        models.Payment.status,
+        models.Payment.created_at
+    ).filter(
+        models.Payment.student_id.in_(user_ids)
+    ).order_by(models.Payment.created_at.desc()).all()
+    latest_by_user = {}
+    for sid, status, _ in latest_payments:
+        if sid not in latest_by_user:
+            latest_by_user[sid] = status
+    
+    enrollments = db.query(models.Enrollment).filter(
+        models.Enrollment.student_id.in_(user_ids)
+    ).all()
+    enr_by_user = {}
+    for e in enrollments:
+        enr_by_user.setdefault(e.student_id, []).append(e)
+    
+    group_ids = list({e.group_id for e in enrollments if e.group_id})
+    course_ids = list({e.course_id for e in enrollments if e.course_id})
+    groups = {g.id: g.name for g in db.query(models.Group).filter(models.Group.id.in_(group_ids)).all()}
+    courses = {c.id: c.title for c in db.query(models.Course).filter(models.Course.id.in_(course_ids)).all()}
+    
     results = []
     for u in users:
-        # Get latest payment
-        latest_payment = db.query(models.Payment).filter(
-            models.Payment.student_id == u.id
-        ).order_by(models.Payment.created_at.desc()).first()
-        
-        # Get groups/courses
-        enrollments = db.query(models.Enrollment).filter(
-            models.Enrollment.student_id == u.id
-        ).all()
+        user_enrs = enr_by_user.get(u.id, [])
         group_names = []
-        for e in enrollments:
-            if e.group_id:
-                group = db.query(models.Group).filter(models.Group.id == e.group_id).first()
-                if group: group_names.append(group.name)
-            else:
-                course = db.query(models.Course).filter(models.Course.id == e.course_id).first()
-                if course: group_names.append(course.title)
+        for e in user_enrs:
+            if e.group_id and e.group_id in groups:
+                group_names.append(groups[e.group_id])
+            elif e.course_id in courses:
+                group_names.append(courses[e.course_id])
         
         results.append({
             "id": u.id,
@@ -214,10 +324,42 @@ def get_users_summary(db: Session, skip: int = 0, limit: int = 500):
             "is_active": u.is_active,
             "registration_source": u.registration_source,
             "created_at": u.created_at,
-            "latest_payment_status": latest_payment.status if latest_payment else "none",
+            "latest_payment_status": latest_by_user.get(u.id, "none"),
             "groups": group_names
         })
     return results
+
+def get_student_progress(db: Session, student_id: int):
+    user = get_user(db, student_id)
+    if not user:
+        return None
+    enrollments = db.query(models.Enrollment).filter(
+        models.Enrollment.student_id == student_id
+    ).all()
+    progress_data = []
+    for e in enrollments:
+        group = db.query(models.Group).filter(models.Group.id == e.group_id).first()
+        course = db.query(models.Course).filter(models.Course.id == e.course_id).first()
+        lessons_total = db.query(func.count(models.Lesson.id)).filter(
+            models.Lesson.group_id == e.group_id
+        ).scalar()
+        lessons_attended = db.query(func.count(models.LessonAttendance.id)).filter(
+            models.LessonAttendance.student_id == student_id,
+            models.LessonAttendance.lesson_id.in_(
+                db.query(models.Lesson.id).filter(models.Lesson.group_id == e.group_id)
+            )
+        ).scalar()
+        progress_data.append({
+            "course_id": e.course_id,
+            "course_title": course.title if course else "",
+            "group_id": e.group_id,
+            "group_name": group.name if group else "",
+            "progress": e.progress or 0,
+            "xp": e.xp or 0,
+            "lessons_total": lessons_total,
+            "lessons_attended": lessons_attended,
+        })
+    return {"user_id": student_id, "progress": progress_data}
 
 def get_student_detail(db: Session, student_id: int):
     user = get_user(db, student_id)
@@ -281,6 +423,33 @@ def create_teacher(db: Session, teacher: schemas.TeacherCreate):
     db.refresh(db_teacher)
     return db_teacher
 
+def update_teacher(db: Session, teacher_id: int, data: schemas.TeacherUpdate):
+    db_teacher = db.query(models.Teacher).filter(models.Teacher.id == teacher_id).first()
+    if not db_teacher:
+        return None
+    update_data = data.model_dump(exclude_unset=True)
+    user_fields = {"name", "email", "phone"}
+    user_updates = {k: v for k, v in update_data.items() if k in user_fields}
+    if user_updates:
+        user = db.query(models.User).filter(models.User.id == db_teacher.user_id).first()
+        if user:
+            for k, v in user_updates.items():
+                setattr(user, k, v)
+    for key, val in update_data.items():
+        if key not in user_fields:
+            setattr(db_teacher, key, val)
+    db.commit()
+    db.refresh(db_teacher)
+    return db_teacher
+
+def delete_teacher(db: Session, teacher_id: int):
+    db_teacher = db.query(models.Teacher).filter(models.Teacher.id == teacher_id).first()
+    if not db_teacher:
+        return False
+    db.delete(db_teacher)
+    db.commit()
+    return True
+
 def create_admin_teacher(db: Session, data: schemas.AdminTeacherCreate):
     """Create a User with role='teacher' and a linked Teacher record."""
     user = models.User(
@@ -320,7 +489,7 @@ def create_admin_teacher(db: Session, data: schemas.AdminTeacherCreate):
             timeout=3,
         )
     except Exception as e:
-        print(f"Failed to sync teacher to bot: {e}")
+        log.warning("Failed to sync teacher to bot: %s", e)
 
     return user
 
@@ -373,11 +542,18 @@ def create_lesson(db: Session, lesson: schemas.LessonCreate):
                 if not lesson.description and template.objectives:
                     lesson.description = template.objectives
 
-    db_lesson = models.Lesson(**lesson.model_dump())
+    data = lesson.model_dump()
+    # В БД lesson_date и lesson_time помечены NOT NULL — выводим их из scheduled_at,
+    # если фронт не передал их явно.
+    if not data.get("lesson_date") and data.get("scheduled_at"):
+        data["lesson_date"] = data["scheduled_at"].date()
+    if not data.get("lesson_time") and data.get("scheduled_at"):
+        data["lesson_time"] = data["scheduled_at"].strftime("%H:%M")
+    db_lesson = models.Lesson(**data)
     db.add(db_lesson)
     db.commit()
     db.refresh(db_lesson)
-    
+
     # Notify students
     enrollments = db.query(models.Enrollment).filter(models.Enrollment.group_id == db_lesson.group_id).all()
     for e in enrollments:
@@ -385,26 +561,103 @@ def create_lesson(db: Session, lesson: schemas.LessonCreate):
         if student and student.telegram_id:
             msg = f"📅 *Новое занятие!*\n\nТема: {db_lesson.topic}\nДата: {db_lesson.scheduled_at.strftime('%d.%m.%Y %H:%M')}\n\nПожалуйста, не опаздывайте!"
             send_telegram_notification(student.telegram_id, msg)
-            
+
     return db_lesson
 
+def update_lesson(db: Session, lesson_id: int, data: schemas.LessonUpdate):
+    db_lesson = db.query(models.Lesson).filter(models.Lesson.id == lesson_id).first()
+    if not db_lesson:
+        return None
+    changes = data.model_dump(exclude_unset=True)
+    schedule_touched = any(k in changes for k in ("scheduled_at", "lesson_date", "lesson_time", "topic", "zoom_link"))
+    for key, val in changes.items():
+        setattr(db_lesson, key, val)
+    db.commit()
+    db.refresh(db_lesson)
+
+    # Push студентам этой группы о смене расписания
+    if schedule_touched:
+        enrollments = db.query(models.Enrollment).filter(
+            models.Enrollment.group_id == db_lesson.group_id
+        ).all()
+        when = db_lesson.scheduled_at.strftime("%d.%m.%Y %H:%M") if db_lesson.scheduled_at else "—"
+        msg = (
+            f"📅 *Расписание обновлено*\n\n"
+            f"Тема: {db_lesson.topic or 'Занятие'}\n"
+            f"Когда: {when}"
+        )
+        for e in enrollments:
+            stu = get_user(db, e.student_id)
+            if stu and stu.telegram_id:
+                send_telegram_notification(stu.telegram_id, msg)
+    return db_lesson
+
+def delete_lesson(db: Session, lesson_id: int):
+    db_lesson = db.query(models.Lesson).filter(models.Lesson.id == lesson_id).first()
+    if not db_lesson:
+        return False
+    # Уведомить студентов до удаления
+    enrollments = db.query(models.Enrollment).filter(
+        models.Enrollment.group_id == db_lesson.group_id
+    ).all()
+    when = db_lesson.scheduled_at.strftime("%d.%m.%Y %H:%M") if db_lesson.scheduled_at else "—"
+    msg = f"❌ *Занятие отменено*\n\nТема: {db_lesson.topic or 'Занятие'}\nБыло: {when}"
+    student_tg_ids = []
+    for e in enrollments:
+        stu = get_user(db, e.student_id)
+        if stu and stu.telegram_id:
+            student_tg_ids.append(stu.telegram_id)
+    db.delete(db_lesson)
+    db.commit()
+    for tg_id in student_tg_ids:
+        send_telegram_notification(tg_id, msg)
+    return True
 
 # ─────────────────────────────────────
 # Enrollments
 # ─────────────────────────────────────
 def enroll_student(db: Session, student_id: int, course_id: int, group_id: int = None):
+    # student_id is User.id (Enrollment.student_id FK → users.id)
+    group = None
+    if group_id:
+        group = db.query(models.Group).filter(models.Group.id == group_id).first()
+        if group and (group.max_students or 0) > 0 and (group.current_students or 0) >= group.max_students:
+            return None
+        # Если курс не совпадает с курсом группы — выравниваем по группе,
+        # чтобы данные в Enrollment были консистентны с student_groups.
+        if group and group.course_id and group.course_id != course_id:
+            course_id = group.course_id
+
     existing = db.query(models.Enrollment).filter(
         models.Enrollment.student_id == student_id,
         models.Enrollment.course_id == course_id
     ).first()
+
     if existing:
-        return existing
-    enrollment = models.Enrollment(
-        student_id=student_id,
-        course_id=course_id,
-        group_id=group_id
-    )
-    db.add(enrollment)
+        # Обновляем group_id у существующей записи, если админ указал группу.
+        if group_id and existing.group_id != group_id:
+            existing.group_id = group_id
+        enrollment = existing
+    else:
+        enrollment = models.Enrollment(
+            student_id=student_id,
+            course_id=course_id,
+            group_id=group_id
+        )
+        db.add(enrollment)
+
+    # Sync StudentGroup for bot
+    if group_id and group:
+        student_model = db.query(models.Student).filter(models.Student.user_id == student_id).first()
+        if student_model:
+            existing_sg = db.query(models.StudentGroup).filter(
+                models.StudentGroup.student_id == student_model.id,
+                models.StudentGroup.group_id == group_id
+            ).first()
+            if not existing_sg:
+                db.add(models.StudentGroup(student_id=student_model.id, group_id=group_id, status="active"))
+                group.current_students = (group.current_students or 0) + 1
+
     db.commit()
     db.refresh(enrollment)
     
@@ -413,7 +666,6 @@ def enroll_student(db: Session, student_id: int, course_id: int, group_id: int =
     if student and student.telegram_id:
         group_name = "новый курс"
         if group_id:
-            group = db.query(models.Group).filter(models.Group.id == group_id).first()
             if group:
                 group_name = group.name
         else:
@@ -421,8 +673,35 @@ def enroll_student(db: Session, student_id: int, course_id: int, group_id: int =
             if course:
                 group_name = course.title
                 
-        msg = f"🎉 *Поздравляем!*\n\nВы успешно зачислены в группу/на курс: *{group_name}*.\nРасписание и детали уже доступны в вашем кабинете!"
-        send_telegram_notification(student.telegram_id, msg)
+        email, plaintext_pwd = _ensure_login_credentials(db, student)
+        web_base = os.getenv("WEB_BASE_URL", "http://localhost:8000").rstrip("/")
+        login_url = f"{web_base}/login"
+
+        lines = [
+            "🎉 *Поздравляем!*",
+            "",
+            f"Вы успешно зачислены в группу/на курс: *{group_name}*.",
+        ]
+        if plaintext_pwd:
+            safe_email = (email or "").replace("_", r"\_")
+            lines += [
+                "",
+                "🔑 *Данные для входа в веб-кабинет:*",
+                f"🌐 {login_url}",
+                f"📧 Email: `{safe_email}`",
+                f"🔒 Пароль: `{plaintext_pwd}`",
+                "",
+                "_Эти данные можно изменить в разделе «Профиль» после входа._",
+            ]
+        else:
+            lines += ["", f"🌐 Вход: {login_url}"]
+        msg = "\n".join(lines)
+
+        send_telegram_notification(
+            student.telegram_id,
+            msg,
+            reply_markup=_student_cabinet_keyboard(),
+        )
         
     return enrollment
 
@@ -435,6 +714,22 @@ def create_homework(db: Session, hw: schemas.HomeworkCreate):
     db.add(db_hw)
     db.commit()
     db.refresh(db_hw)
+
+    # Push студентам группы или курса
+    target_user_ids: set[int] = set()
+    if db_hw.group_id:
+        for e in db.query(models.Enrollment).filter(models.Enrollment.group_id == db_hw.group_id).all():
+            target_user_ids.add(e.student_id)
+    elif db_hw.course_id:
+        for e in db.query(models.Enrollment).filter(models.Enrollment.course_id == db_hw.course_id).all():
+            target_user_ids.add(e.student_id)
+
+    due = db_hw.due_date.strftime("%d.%m.%Y %H:%M") if db_hw.due_date else "—"
+    msg = f"📝 *Новое домашнее задание*\n\n*{db_hw.title}*\n\nСрок сдачи: {due}\n\nОткройте раздел «Домашние задания» в боте."
+    for uid in target_user_ids:
+        stu = get_user(db, uid)
+        if stu and stu.telegram_id:
+            send_telegram_notification(stu.telegram_id, msg)
     return db_hw
 
 def get_homeworks_by_course(db: Session, course_id: int):
@@ -469,6 +764,15 @@ def grade_homework(db: Session, grade: schemas.HomeworkGrade):
         submission.graded_at = datetime.utcnow()
         db.commit()
         db.refresh(submission)
+
+        # Push студенту о проверке ДЗ
+        stu = get_user(db, submission.student_id)
+        hw = db.query(models.Homework).filter(models.Homework.id == submission.homework_id).first()
+        if stu and stu.telegram_id:
+            hw_title = hw.title if hw else "Домашнее задание"
+            fb_line = f"\n💬 Комментарий: {grade.feedback}" if grade.feedback else ""
+            msg = f"✅ *ДЗ проверено*\n\n*{hw_title}*\n\nОценка: *{grade.grade}*{fb_line}"
+            send_telegram_notification(stu.telegram_id, msg)
     return submission
 
 def get_pending_submissions(db: Session):
@@ -497,7 +801,9 @@ def get_pending_submissions(db: Session):
 # Payments
 # ─────────────────────────────────────
 def create_payment(db: Session, payment: schemas.PaymentCreate):
-    db_payment = models.Payment(**payment.model_dump())
+    data = payment.model_dump()
+    data.setdefault("user_id", data.get("student_id"))
+    db_payment = models.Payment(**data)
     db.add(db_payment)
     db.commit()
     db.refresh(db_payment)
@@ -507,7 +813,7 @@ def get_payments(db: Session, skip: int = 0, limit: int = 200):
     return db.query(models.Payment).order_by(models.Payment.created_at.desc()).offset(skip).limit(limit).all()
 
 def get_student_payments(db: Session, student_id: int):
-    return db.query(models.Payment).filter(models.Payment.student_id == student_id).all()
+    return db.query(models.Payment).filter(models.Payment.user_id == student_id).all()
 
 def get_monthly_revenue(db: Session):
     """Returns list of {month, year, total} for the last 6 months."""
@@ -536,12 +842,81 @@ def get_leads(db: Session, skip: int = 0, limit: int = 200):
 
 def update_lead_status(db: Session, lead_id: int, update: schemas.LeadStatusUpdate):
     lead = db.query(models.Lead).filter(models.Lead.id == lead_id).first()
-    if lead:
-        lead.status = update.status
-        if update.notes:
-            lead.notes = update.notes
-        db.commit()
-        db.refresh(lead)
+    if not lead:
+        return lead
+
+    old_status = lead.status
+    lead.status = update.status
+    if update.notes:
+        lead.notes = update.notes
+    db.commit()
+    db.refresh(lead)
+
+    # Если перевели в "Зачислен" — промоутим связанного юзера и пушим в TG
+    if update.status == "enrolled" and old_status != "enrolled":
+        user = None
+        if lead.phone:
+            user = db.query(models.User).filter(models.User.phone == lead.phone).first()
+        if not user and lead.email:
+            user = db.query(models.User).filter(models.User.email == lead.email).first()
+        if user:
+            if user.role in (None, "pending", ""):
+                user.role = "student"
+            user.is_active = True
+            # student profile
+            stu = db.query(models.Student).filter(models.Student.user_id == user.id).first()
+            if not stu:
+                import random
+                code = f"STU{random.randint(100000, 999999)}"
+                stu = models.Student(user_id=user.id, student_code=code, is_active=True)
+                db.add(stu)
+            # закрываем pending-заявки
+            for reg in db.query(models.Registration).filter(
+                models.Registration.user_id == user.id,
+                models.Registration.status_code == "pending",
+            ).all():
+                reg.status_code = "approved"
+                if lead.course_id and not reg.course_id:
+                    reg.course_id = lead.course_id
+            db.commit()
+            # push в Telegram + креды для веб-кабинета
+            if user.telegram_id:
+                course_name = ""
+                if lead.course_id:
+                    course = db.query(models.Course).filter(models.Course.id == lead.course_id).first()
+                    if course:
+                        course_name = course.title or course.name or ""
+
+                email, plaintext_pwd = _ensure_login_credentials(db, user)
+                web_base = os.getenv("WEB_BASE_URL", "http://localhost:8000").rstrip("/")
+                login_url = f"{web_base}/login"
+
+                msg_lines = [
+                    "🎉 *Поздравляем!*",
+                    "",
+                    f"Вы успешно зачислены{' на курс *' + course_name + '*' if course_name else ''}.",
+                ]
+                if plaintext_pwd:
+                    safe_email = (email or "").replace("_", r"\_")
+                    msg_lines += [
+                        "",
+                        "🔑 *Данные для входа в веб-кабинет:*",
+                        f"🌐 {login_url}",
+                        f"📧 Email: `{safe_email}`",
+                        f"🔒 Пароль: `{plaintext_pwd}`",
+                        "",
+                        "_Эти данные можно изменить в разделе «Профиль» после входа._",
+                    ]
+                else:
+                    msg_lines += ["", f"🌐 Вход: {login_url}"]
+                msg = "\n".join(msg_lines)
+
+                send_telegram_notification(
+                    user.telegram_id,
+                    msg,
+                    reply_markup=_student_cabinet_keyboard(),
+                )
+
     return lead
 
 
@@ -635,14 +1010,24 @@ def get_messages(db: Session, user_a: int, user_b: int, limit: int = 100):
         ((models.Message.sender_id == user_b) & (models.Message.receiver_id == user_a))
     ).order_by(models.Message.created_at.asc()).limit(limit).all()
 
-def mark_messages_read(db: Session, reader_id: int, sender_id: int):
-    """Mark all messages from sender_id to reader_id as read."""
-    db.query(models.Message).filter(
+def mark_messages_read(db: Session, reader_id: int, sender_id: int) -> list[int]:
+    """Mark all messages from sender_id to reader_id as read.
+
+    Returns ids of messages that were actually flipped from unread to read,
+    so callers can push a WS notification to the original sender.
+    """
+    unread = db.query(models.Message).filter(
         models.Message.receiver_id == reader_id,
         models.Message.sender_id == sender_id,
-        models.Message.is_read == False
-    ).update({"is_read": True})
+        models.Message.is_read == False,
+    ).all()
+    if not unread:
+        return []
+    ids = [m.id for m in unread]
+    for m in unread:
+        m.is_read = True
     db.commit()
+    return ids
 
 def get_unread_count(db: Session, user_id: int) -> int:
     return db.query(models.Message).filter(
@@ -677,7 +1062,10 @@ def get_group_gradebook(db: Session, group_id: int):
     ).order_by(models.Homework.due_date.asc()).all()
 
     # Attendance
-    attendance = db.query(models.LessonAttendance).all()
+    lesson_ids = [l.id for l in lessons]
+    attendance = db.query(models.LessonAttendance).filter(
+        models.LessonAttendance.lesson_id.in_(lesson_ids)
+    ).all() if lesson_ids else []
     att_map = {}
     for a in attendance:
         att_map.setdefault(a.lesson_id, {})[a.student_id] = a.attended
@@ -736,7 +1124,7 @@ def get_chat_contacts(db: Session, user_id: int):
                 "name": other.name if other else f"User #{other_id}",
                 "role": other.role if other else "student",
                 "last_message": last_msg[:60],
-                "last_time": str(m.created_at)[:16],
+                "last_time": m.created_at.isoformat()[:16] if m.created_at else "",
                 "unread": unread,
             }
 
@@ -1285,11 +1673,13 @@ def get_teacher_groups_by_user(db: Session, user_id: int):
     if teacher:
         groups = db.query(models.Group).filter(models.Group.teacher_id == teacher.id).all()
     else:
-        groups = db.query(models.Group).all()
+        groups = []
     for g in groups:
-        g.current_students = db.query(models.Enrollment).filter(
-            models.Enrollment.group_id == g.id
-        ).distinct(models.Enrollment.student_id).count()
+        # student_groups — источник истины (с ним сверяется бот)
+        g.current_students = db.query(models.StudentGroup).filter(
+            models.StudentGroup.group_id == g.id,
+            models.StudentGroup.status == "active",
+        ).count()
     return groups
 
 
@@ -1473,10 +1863,13 @@ def get_student_homeworks(db: Session, student_id: int):
         submissions = {s.homework_id: s for s in subs}
 
     result = []
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     for hw in homeworks:
         sub = submissions.get(hw.id)
-        is_overdue = hw.due_date and hw.due_date < now
+        hw_due = hw.due_date
+        if hw_due is not None and hw_due.tzinfo is None:
+            hw_due = hw_due.replace(tzinfo=timezone.utc)
+        is_overdue = hw_due is not None and hw_due < now
         result.append({
             "id": hw.id,
             "title": hw.title,
@@ -1488,6 +1881,7 @@ def get_student_homeworks(db: Session, student_id: int):
             "grade": sub.grade if sub else None,
             "feedback": sub.feedback if sub else None,
             "submission_id": sub.id if sub else None,
+            "submission": sub.content.split('\n')[0] if sub and sub.content else None,
         })
     return result
 

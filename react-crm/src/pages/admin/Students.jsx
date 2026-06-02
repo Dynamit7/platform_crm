@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
+import Modal from '../../components/Modal';
 
 /* ── SVG Icons ── */
 const SSearch = () => (
@@ -188,10 +189,12 @@ const st = {
     background: 'var(--glass-bg)', backdropFilter: 'var(--backdrop-blur)', color: 'var(--text)',
     whiteSpace: 'nowrap', transition: 'all 0.2s ease',
   },
-  rowActions: { display: 'flex', gap: 2, opacity: 0, transition: 'opacity 0.15s' },
+  rowActions: { display: 'flex', gap: 4, alignItems: 'center' },
   rowBtn: {
-    width: 30, height: 30, border: 'none', background: 'none', borderRadius: 6, cursor: 'pointer',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', transition: 'all 0.15s',
+    width: 34, height: 34, border: 'none', borderRadius: 8, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: 'transparent', color: 'var(--text-secondary)',
+    transition: 'all 0.15s',
   },
   badge: (color, bg) => ({
     display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 12px', borderRadius: 20,
@@ -248,12 +251,18 @@ function AdminStudentsInner() {
   const [detail, setDetail] = useState(null);
   const [detailTab, setDetailTab] = useState('profile');
 
+  /* ─── Enrollment ─── */
+  const [enrollModal, setEnrollModal] = useState(null);
+  const [enrollGroupId, setEnrollGroupId] = useState('');
+  const [enrollCourseId, setEnrollCourseId] = useState('');
+  const [enrollBusy, setEnrollBusy] = useState(false);
+
   /* ─── Modal ─── */
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', level: '', group_ids: [] });
 
   /* ─── Load ─── */
-  useEffect(() => {
+  const loadStudents = () => {
     setLoading(true);
     Promise.all([
       api.get('/api/admin/students').then(({ data }) => data),
@@ -278,7 +287,8 @@ function AdminStudentsInner() {
       setCourses(coursesData);
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, []);
+  };
+  useEffect(() => { loadStudents(); }, []);
 
   /* ─── Stats ─── */
   const stats = useMemo(() => {
@@ -353,6 +363,37 @@ function AdminStudentsInner() {
     } finally { setSaving(false); }
   };
 
+  const handleEnroll = async () => {
+    setEnrollBusy(true);
+    try {
+      await api.post('/api/students/enroll', { student_id: enrollModal.id, course_id: parseInt(enrollCourseId), group_id: enrollGroupId ? parseInt(enrollGroupId) : null });
+      if (add) add('Студент зачислен', 'success');
+      setEnrollModal(null);
+      setEnrollGroupId('');
+      setEnrollCourseId('');
+      loadStudents();
+    } catch (err) { if (add) add(err?.response?.data?.detail || 'Ошибка', 'error'); }
+    setEnrollBusy(false);
+  };
+
+  const handleRemoveFromGroup = async (studentId, groupId, groupName) => {
+    if (!window.confirm(`Удалить студента из группы "${groupName}"?`)) return;
+    try {
+      await api.delete(`/api/students/${studentId}/groups/${groupId}`);
+      if (add) add('Студент удалён из группы', 'success');
+      // Локально обновляем detail и список
+      setDetail(prev => prev ? {
+        ...prev,
+        groups_list: (prev.groups_list || []).filter((_, idx) => prev.group_ids?.[idx] !== groupId),
+        group_ids: (prev.group_ids || []).filter(id => id !== groupId),
+        groups_count: Math.max(0, (prev.groups_count || 1) - 1),
+      } : prev);
+      loadStudents();
+    } catch (err) {
+      if (add) add(err?.response?.data?.detail || 'Не удалось удалить', 'error');
+    }
+  };
+
   const exportCSV = () => {
     const headers = ['Имя','Email','Телефон','Статус','Уровень','Курс','Групп','Посещаемость','Оплачено','Регистрация','Активность'];
     const rows = filteredStudents.map(s => [
@@ -390,7 +431,7 @@ function AdminStudentsInner() {
 
   /* ───────────── RENDER ───────────── */
   return (
-    <div className="page-content" style={{ padding: '24px 28px' }}>
+    <div className="page-content ed-page ed-admin">
 
       {/* ═══════ STATS BAR ═══════ */}
       <div style={st.statsGrid}>
@@ -410,12 +451,6 @@ function AdminStudentsInner() {
         </div>
         <div style={st.headerActions}>
           <button style={st.btnOutline} onClick={exportCSV}><SExport /> Экспорт</button>
-          <button style={st.btnPrimary}
-            onMouseEnter={e => { e.target.style.boxShadow = 'var(--shadow-glow)'; e.target.style.transform = 'translateY(-1px)'; }}
-            onMouseLeave={e => { e.target.style.boxShadow = 'none'; e.target.style.transform = 'none'; }}
-            onClick={() => setShowModal(true)}>
-            <SPlus /> Добавить студента
-          </button>
         </div>
       </div>
 
@@ -456,6 +491,13 @@ function AdminStudentsInner() {
           </select>
           <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', pointerEvents: 'none' }}><SChevronDown /></span>
         </div>
+
+        <button style={st.btnPrimary}
+          onMouseEnter={e => { e.target.style.boxShadow = 'var(--shadow-glow)'; e.target.style.transform = 'translateY(-1px)'; }}
+          onMouseLeave={e => { e.target.style.boxShadow = 'none'; e.target.style.transform = 'none'; }}
+          onClick={() => setShowModal(true)}>
+          <SPlus /> Добавить студента
+        </button>
       </div>
 
       {/* ════════════ TABLE ════════════ */}
@@ -476,7 +518,7 @@ function AdminStudentsInner() {
               <SortBtn col="attendance_rate">Посещ-ть</SortBtn>
               <SortBtn col="status">Статус</SortBtn>
               <SortBtn col="last_active">Активность</SortBtn>
-              <th style={{ width: 90, padding: '14px 18px 14px 14px', borderBottom: '1px solid var(--border)' }}></th>
+              <th style={{ width: 1, padding: '14px 14px', borderBottom: '1px solid var(--border)' }}></th>
             </tr>
           </thead>
           <tbody>
@@ -557,14 +599,12 @@ function AdminStudentsInner() {
                       <SClock /> {timeAgo(s.last_active)}
                     </div>
                   </td>
-                  <td style={{ padding: '12px 18px 12px 14px', borderBottom: '1px solid var(--border)' }}
+                  <td style={{ padding: '12px 14px 12px 14px', borderBottom: '1px solid var(--border)', width: 1 }}
                     onClick={e => e.stopPropagation()}>
-                    <div style={st.rowActions}
-                      onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                      onMouseLeave={e => e.currentTarget.style.opacity = '0'}>
+                    <div style={st.rowActions}>
                       <button style={st.rowBtn} title={s.status === 'active' ? 'Заморозить' : 'Активировать'} onClick={() => toggleActive(s.id)}
                         onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg)'; e.currentTarget.style.color = s.status === 'active' ? '#f59e0b' : '#10b981'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--muted)'; }}>
+                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
                         {s.status === 'active' ? <SUserX /> : <SUserCheck />}
                       </button>
                     </div>
@@ -576,15 +616,15 @@ function AdminStudentsInner() {
         </table>
       </div>
 
-      {/* ════════════ SIDE PANEL ════════════ */}
-      {detail && (
-        <div className="ld-overlay" onClick={() => setDetail(null)}>
-          <div className="ld-panel" style={{ width: 500 }} onClick={e => e.stopPropagation()}>
-            <div className="ld-panel-header">
-              <h3>Карточка студента</h3>
-              <button className="ld-panel-close" onClick={() => setDetail(null)}><SClose /></button>
-            </div>
-
+      {/* ════════════ STUDENT DETAIL — portal-based centered modal ════════════ */}
+      <Modal
+        open={!!detail}
+        onClose={() => setDetail(null)}
+        title="Карточка студента"
+        width={520}
+      >
+        {detail && (
+          <div style={{ margin: '-20px -22px' }}>
             {/* Tabs */}
             <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0, padding: '0 16px', gap: 0 }}>
               {[
@@ -603,7 +643,7 @@ function AdminStudentsInner() {
               ))}
             </div>
 
-            <div className="ld-panel-body" style={{ padding: 0 }}>
+            <div style={{ padding: 0 }}>
 
               {/* ══ PROFILE TAB ══ */}
               {detailTab === 'profile' && (
@@ -681,27 +721,62 @@ function AdminStudentsInner() {
               {/* ══ GROUPS TAB ══ */}
               {detailTab === 'groups' && (
                 <div style={{ padding: 24 }}>
-                  <h4 style={{ fontSize: 14, fontWeight: 600, margin: '0 0 14px', color: 'var(--text)' }}>
-                    Группы ({detail.groups_count})
-                  </h4>
-                  {detail.groups_list?.length > 0 ? detail.groups_list.map((g, i) => (
-                    <div key={i} style={{
-                      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
-                      background: 'var(--bg)', borderRadius: 'var(--radius-sm)', marginBottom: 8,
-                    }}>
-                      <div style={{
-                        width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center',
-                        justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14,
-                        background: GROUP_COLORS[i % GROUP_COLORS.length],
-                      }}>{(typeof g === 'string' ? g : g.name || g).charAt(0)}</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{typeof g === 'string' ? g : g.name || g}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                          {detail.course_name || 'Основной курс'}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                    <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+                      Группы ({detail.groups_count})
+                    </h4>
+                    <button className="ld-btn ld-btn--primary" style={{ padding: '6px 14px', fontSize: 12 }} onClick={() => setEnrollModal(detail)}>
+                      <SPlus /> Добавить
+                    </button>
+                  </div>
+                  {detail.groups_list?.length > 0 ? detail.groups_list.map((g, i) => {
+                    const groupName = typeof g === 'string' ? g : (g.name || g);
+                    const groupId = detail.group_ids?.[i];
+                    return (
+                      <div key={i} style={{
+                        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
+                        background: 'var(--bg)', borderRadius: 'var(--radius-sm)', marginBottom: 8,
+                      }}>
+                        <div style={{
+                          width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center',
+                          justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14,
+                          background: GROUP_COLORS[i % GROUP_COLORS.length],
+                        }}>{groupName.charAt(0)}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{groupName}</div>
+                          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                            {detail.course_name || 'Основной курс'}
+                          </div>
                         </div>
+                        {groupId != null && (
+                          <button
+                            type="button"
+                            title="Удалить из группы"
+                            onClick={() => handleRemoveFromGroup(detail.id, groupId, groupName)}
+                            style={{
+                              width: 30, height: 30, borderRadius: 8, border: 'none',
+                              background: 'transparent', color: 'var(--muted)', cursor: 'pointer',
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.background = 'rgba(239,68,68,0.12)';
+                              e.currentTarget.style.color = '#ef4444';
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.background = 'transparent';
+                              e.currentTarget.style.color = 'var(--muted)';
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="18" y1="6" x2="6" y2="18" />
+                              <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
-                    </div>
-                  )) : (
+                    );
+                  }) : (
                     <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--muted)', fontSize: 13 }}>
                       Нет групп
                     </div>
@@ -779,53 +854,84 @@ function AdminStudentsInner() {
 
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* ════════════ ADD MODAL ════════════ */}
-      {showModal && (
-        <div className="ld-overlay" style={{ justifyContent: 'center' }} onClick={() => setShowModal(false)}>
-          <div className="ld-modal" style={{ width: 480 }} onClick={e => e.stopPropagation()}>
-            <div className="ld-modal-header">
-              <h3>Новый студент</h3>
-              <button className="ld-panel-close" onClick={() => setShowModal(false)}><SClose /></button>
-            </div>
-            <form onSubmit={handleCreate} className="ld-modal-body">
-              <label className="ld-field">
-                <span>Имя и фамилия</span>
-                <input className="ld-input" name="name" value={form.name} onChange={handleChange} placeholder="Иван Петров" required />
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <label className="ld-field">
-                  <span>Email</span>
-                  <input className="ld-input" name="email" type="email" value={form.email} onChange={handleChange} placeholder="ivan@example.com" required />
-                </label>
-                <label className="ld-field">
-                  <span>Телефон</span>
-                  <input className="ld-input" name="phone" value={form.phone} onChange={handleChange} placeholder="+998901234567" />
-                </label>
-              </div>
-              <label className="ld-field">
-                <span>Пароль</span>
-                <input className="ld-input" name="password" type="password" value={form.password} onChange={handleChange} placeholder="Минимум 6 символов" required />
-              </label>
-              <label className="ld-field">
-                <span>Уровень</span>
-                <select className="ld-input" name="level" value={form.level} onChange={handleChange}>
-                  <option value="">— Не выбран —</option>
-                  {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-                </select>
-              </label>
-              <div className="ld-modal-actions">
-                <button type="button" className="ld-btn ld-btn--outline" onClick={() => setShowModal(false)}>Отмена</button>
-                <button type="submit" className="ld-btn ld-btn--primary" disabled={saving}>
-                  {saving ? 'Сохранение...' : 'Создать студента'}
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title="Новый студент"
+        width={480}
+        footer={
+          <>
+            <button type="button" className="ld-btn ld-btn--outline" onClick={() => setShowModal(false)}>Отмена</button>
+            <button type="submit" form="student-create-form" className="ld-btn ld-btn--primary" disabled={saving}>
+              {saving ? 'Сохранение...' : 'Создать студента'}
+            </button>
+          </>
+        }
+      >
+        <form id="student-create-form" onSubmit={handleCreate}>
+          <label className="ld-field">
+            <span>Имя и фамилия</span>
+            <input className="ld-input" name="name" value={form.name} onChange={handleChange} placeholder="Иван Петров" required />
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <label className="ld-field">
+              <span>Email</span>
+              <input className="ld-input" name="email" type="email" value={form.email} onChange={handleChange} placeholder="ivan@example.com" required />
+            </label>
+            <label className="ld-field">
+              <span>Телефон</span>
+              <input className="ld-input" name="phone" value={form.phone} onChange={handleChange} placeholder="+998901234567" />
+            </label>
           </div>
-        </div>
-      )}
+          <label className="ld-field">
+            <span>Пароль</span>
+            <input className="ld-input" name="password" type="password" value={form.password} onChange={handleChange} placeholder="Минимум 6 символов" required />
+          </label>
+          <label className="ld-field">
+            <span>Уровень</span>
+            <select className="ld-input" name="level" value={form.level} onChange={handleChange}>
+              <option value="">— Не выбран —</option>
+              {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </label>
+        </form>
+      </Modal>
+
+      <Modal
+        open={!!enrollModal}
+        onClose={() => setEnrollModal(null)}
+        title={enrollModal ? `Зачислить ${enrollModal.name}` : ''}
+        width={420}
+        footer={
+          <>
+            <button type="button" className="ld-btn ld-btn--outline" onClick={() => setEnrollModal(null)}>Отмена</button>
+            <button type="button" className="ld-btn ld-btn--primary" onClick={handleEnroll} disabled={enrollBusy || !enrollCourseId}>
+              {enrollBusy ? 'Зачисление...' : 'Зачислить'}
+            </button>
+          </>
+        }
+      >
+        <label className="ld-field">
+          <span>Курс</span>
+          <select className="ld-input" value={enrollCourseId} onChange={e => setEnrollCourseId(e.target.value)} required>
+            <option value="">Выберите курс</option>
+            {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+          </select>
+        </label>
+        <label className="ld-field">
+          <span>Группа (необязательно)</span>
+          <select className="ld-input" value={enrollGroupId} onChange={e => setEnrollGroupId(e.target.value)}>
+            <option value="">Без группы</option>
+            {groups.filter(g => g.is_active !== false).map(g => (
+              <option key={g.id} value={g.id}>{g.name} ({g.current_students || 0}/{g.max_students || 15})</option>
+            ))}
+          </select>
+        </label>
+      </Modal>
 
     </div>
   );

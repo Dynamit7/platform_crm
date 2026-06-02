@@ -1,4 +1,5 @@
 import random
+import html
 import logging
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
@@ -18,24 +19,31 @@ async def view_profile(callback: types.CallbackQuery, db_user: User):
     role_str = "Преподаватель" if db_user.role == UserRole.TEACHER else "Ученик"
     if db_user.role == UserRole.ADMIN: role_str = "Администратор"
     
+    # HTML escape, чтобы любые символы в имени/username (например '_' в
+     # @maestr0_0X) не ломали парсер entities.
+    safe_name = html.escape(db_user.full_name or "")
+    safe_phone = html.escape(db_user.phone or "не указан")
+    safe_username = html.escape(db_user.username or "отсутствует")
+    safe_role = html.escape(role_str)
+
     text = (
-        f"👤 *Мой профиль*\n\n"
-        f"📍 *Имя:* {db_user.full_name}\n"
-        f"📱 *Телефон:* `{db_user.phone or 'не указан'}`\n"
-        f"🔗 *Username:* @{db_user.username or 'отсутствует'}\n"
-        f"🎓 *Роль:* {role_str}\n\n"
+        f"👤 <b>Мой профиль</b>\n\n"
+        f"📍 <b>Имя:</b> {safe_name}\n"
+        f"📱 <b>Телефон:</b> <code>{safe_phone}</code>\n"
+        f"🔗 <b>Username:</b> @{safe_username}\n"
+        f"🎓 <b>Роль:</b> {safe_role}\n\n"
         f"Для защиты данных изменение ФИО или телефона требует подтверждения кодом."
     )
-    
+
     back_cb = "teacher:main" if db_user.role in [UserRole.TEACHER, UserRole.ADMIN] else "student:main"
-    
+
     kb = types.InlineKeyboardMarkup(inline_keyboard=[
         [types.InlineKeyboardButton(text="✏️ Изменить Имя", callback_data="p_edit:name")],
         [types.InlineKeyboardButton(text="📱 Изменить Телефон", callback_data="p_edit:phone")],
         [types.InlineKeyboardButton(text="⬅️ Меню", callback_data=back_cb)]
     ])
-    
-    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=kb)
+
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
 
 @router.callback_query(F.data.startswith("p_edit:"))
 async def start_profile_edit(callback: types.CallbackQuery, state: FSMContext, db_user: User):
@@ -62,12 +70,13 @@ async def request_verification(message: types.Message, state: FSMContext):
     code = str(random.randint(1000, 9999))
     await state.update_data(pending_value=new_value, verify_code=code)
     
+    safe_val = html.escape(new_value or "")
     await message.answer(
-        f"🔐 *Подтверждение изменения*\n\n"
-        f"Новое значение: `{new_value}`\n\n"
-        f"Ваш код подтверждения: *{code}*\n"
+        f"🔐 <b>Подтверждение изменения</b>\n\n"
+        f"Новое значение: <code>{safe_val}</code>\n\n"
+        f"Ваш код подтверждения: <b>{code}</b>\n"
         f"Введите этот код в чат, чтобы применить изменения:",
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
     await state.set_state(ProfileEditStates.waiting_for_verification_code)
 

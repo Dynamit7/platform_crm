@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
+import Modal from '../../components/Modal';
 
 /* ── SVG Icons ── */
 const SSearch = () => (
@@ -164,10 +165,12 @@ const s = {
     background: 'var(--glass-bg)', backdropFilter: 'var(--backdrop-blur)', color: 'var(--text)',
     whiteSpace: 'nowrap', transition: 'all 0.2s ease',
   },
-  rowActions: { display: 'flex', gap: 2, opacity: 0, transition: 'opacity 0.15s' },
+  rowActions: { display: 'flex', gap: 4, alignItems: 'center' },
   rowBtn: {
-    width: 30, height: 30, border: 'none', background: 'none', borderRadius: 6, cursor: 'pointer',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', transition: 'all 0.15s',
+    width: 34, height: 34, border: 'none', borderRadius: 8, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: 'transparent', color: 'var(--text-secondary)',
+    transition: 'all 0.15s',
   },
   badge: (color, bg) => ({
     display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 12px', borderRadius: 20,
@@ -221,7 +224,11 @@ export default function AdminGroups() {
   /* ─── Form ─── */
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState(null);
-  const [form, setForm] = useState({ name: '', course_id: '', teacher_id: '', max_students: 20, schedule: '' });
+  const [form, setForm] = useState({ name: '', course_id: '', teacher_id: '', max_students: 20, schedule: '', days_bitmask: 0 });
+  const [enrollModal, setEnrollModal] = useState(false);
+  const [enrollSearch, setEnrollSearch] = useState('');
+  const [enrollResults, setEnrollResults] = useState([]);
+  const [enrollBusy, setEnrollBusy] = useState(false);
 
   /* ─── Load ─── */
   const load = () => {
@@ -231,21 +238,12 @@ export default function AdminGroups() {
       api.get('/api/courses').then(({ data }) => data),
       api.get('/api/teachers').then(({ data }) => data),
     ]).then(([groupsData, coursesData, teachersData]) => {
-      const enriched = groupsData.map((g, i) => ({
+      const enriched = groupsData.map((g) => ({
         ...g,
-        status: g.status || (g.is_active ? 'active' : 'inactive'),
-        current_students: g.current_students ?? g.students_count ?? Math.floor(Math.random() * (g.max_students || 15) + 2),
+        status: g.is_active ? 'active' : 'inactive',
+        current_students: g.current_students ?? 0,
         max_students: g.max_students || 15,
-        schedule: g.schedule || `${['Пн/Ср/Пт', 'Вт/Чт', 'Пн/Ср', 'Вт/Чт/Сб', 'Сб/Вс'][i % 5]} ${['10:00-11:30', '14:00-15:30', '16:00-17:30', '18:00-19:30', '09:00-10:30'][i % 5]}`,
-        next_lesson: g.next_lesson || new Date(Date.now() + (i + 1) * 86400000).toISOString(),
-        next_lesson_topic: g.next_lesson_topic || ['Unit 5: Present Perfect', 'Reading comprehension', 'Grammar: Conditionals', 'Vocabulary: Business', 'Speaking practice'][i % 5],
-        students_list: g.students_list || Array.from({ length: g.current_students ?? 7 }, (_, j) => ({
-          id: j + 1, name: ['Анна К.','Марк Л.','Елена С.','Дмитрий В.','Ольга П.','Иван Р.','София М.','Алексей Н.','Карина Т.','Рустам А.'][j % 10],
-          attendance_rate: Math.floor(Math.random() * 30 + 70),
-        })),
-        avg_attendance: g.avg_attendance ?? Math.floor(Math.random() * 20 + 80),
-        lessons_count: g.lessons_count ?? Math.floor(Math.random() * 30 + 5),
-        room: g.room || `${Math.floor(Math.random() * 5 + 1)}${['A','B','C'][Math.floor(Math.random() * 3)]}`,
+        schedule: g.schedule_json || '',
       }));
       setGroups(enriched);
       setCourses(coursesData);
@@ -302,7 +300,8 @@ export default function AdminGroups() {
     e.preventDefault();
     setSaving(true);
     try {
-      const payload = { ...form, course_id: parseInt(form.course_id), teacher_id: form.teacher_id ? parseInt(form.teacher_id) : null, max_students: parseInt(form.max_students) };
+      const payload = { ...form, schedule_json: form.schedule, days_bitmask: form.days_bitmask || 0, course_id: parseInt(form.course_id), teacher_id: form.teacher_id ? parseInt(form.teacher_id) : null, max_students: parseInt(form.max_students) };
+      delete payload.schedule;
       if (editId) {
         await api.put(`/api/groups/${editId}`, payload);
         if (add) add('Группа обновлена', 'success');
@@ -314,6 +313,28 @@ export default function AdminGroups() {
       setEditId(null);
       load();
     } catch { if (add) add('Ошибка', 'error'); } finally { setSaving(false); }
+  };
+
+  const enrollStudent = async (userId) => {
+    setEnrollBusy(true);
+    try {
+      await api.post('/api/students/enroll', { student_id: userId, course_id: selectedGroup.course_id, group_id: selectedGroup.id });
+      if (add) add('Студент добавлен', 'success');
+      setEnrollModal(false);
+      setEnrollSearch('');
+      setEnrollResults([]);
+      load();
+    } catch (err) { if (add) add(err?.response?.data?.detail || 'Ошибка', 'error'); }
+    setEnrollBusy(false);
+  };
+
+  const searchStudents = async (q) => {
+    setEnrollSearch(q);
+    if (q.trim().length < 2) { setEnrollResults([]); return; }
+    try {
+      const { data } = await api.get(`/api/students?search=${encodeURIComponent(q)}`);
+      setEnrollResults(data.filter(s => s.is_active));
+    } catch { setEnrollResults([]); }
   };
 
   const toggleActive = async (id) => {
@@ -351,7 +372,7 @@ export default function AdminGroups() {
 
   /* ───────────── RENDER ───────────── */
   return (
-    <div className="page-content" style={{ padding: '24px 28px' }}>
+    <div className="page-content ed-page ed-admin">
 
       {/* ═══════ STATS BAR ═══════ */}
       <div style={s.statsGrid}>
@@ -524,19 +545,17 @@ export default function AdminGroups() {
                         {cfg.label}
                       </span>
                     </td>
-                    <td style={{ padding: '12px 18px 12px 14px', borderBottom: '1px solid var(--border)' }}
+                    <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', width: 1 }}
                       onClick={e => e.stopPropagation()}>
-                      <div style={s.rowActions}
-                        onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                        onMouseLeave={e => e.currentTarget.style.opacity = '0'}>
+                      <div style={s.rowActions}>
                         <button style={s.rowBtn} title="Редактировать" onClick={() => openEdit(g)}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg)'; e.currentTarget.style.color = 'var(--text)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--muted)'; }}>
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.12)'; e.currentTarget.style.color = '#f59e0b'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
                           <SEdit />
                         </button>
                         <button style={s.rowBtn} title={g.status === 'active' ? 'Деактивировать' : 'Активировать'} onClick={() => toggleActive(g.id)}
                           onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg)'; e.currentTarget.style.color = g.status === 'active' ? '#6b7280' : '#10b981'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--muted)'; }}>
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
                           {g.status === 'active' ? <SX /> : <SCheck />}
                         </button>
                       </div>
@@ -631,15 +650,15 @@ export default function AdminGroups() {
         </div>
       )}
 
-      {/* ════════════ SIDE PANEL ════════════ */}
-      {selectedGroup && (
-        <div className="ld-overlay" onClick={() => setSelectedGroup(null)}>
-          <div className="ld-panel" style={{ width: 520 }} onClick={e => e.stopPropagation()}>
-            <div className="ld-panel-header">
-              <h3>{selectedGroup.name}</h3>
-              <button className="ld-panel-close" onClick={() => setSelectedGroup(null)}><SClose /></button>
-            </div>
-
+      {/* ════════════ GROUP DETAIL — portal-based centered modal ════════════ */}
+      <Modal
+        open={!!selectedGroup && !enrollModal}
+        onClose={() => setSelectedGroup(null)}
+        title={selectedGroup ? selectedGroup.name : 'Карточка группы'}
+        width={520}
+      >
+        {selectedGroup && (
+          <div style={{ margin: '-20px -22px' }}>
             {/* Tabs */}
             <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0, padding: '0 16px', gap: 0 }}>
               {[
@@ -658,7 +677,7 @@ export default function AdminGroups() {
               ))}
             </div>
 
-            <div className="ld-panel-body" style={{ padding: 0 }}>
+            <div style={{ padding: 0 }}>
 
               {/* ══ STUDENTS TAB ══ */}
               {detailTab === 'students' && (
@@ -667,7 +686,7 @@ export default function AdminGroups() {
                     <h4 style={{ fontSize: 14, fontWeight: 600, margin: 0, color: 'var(--text)' }}>
                       Студенты ({selectedGroup.current_students}/{selectedGroup.max_students})
                     </h4>
-                    <button style={{ ...s.btnOutline, padding: '6px 14px', fontSize: 12 }}><SPlus /> Добавить</button>
+                    <button style={{ ...s.btnOutline, padding: '6px 14px', fontSize: 12 }} onClick={() => setEnrollModal(true)}><SPlus /> Добавить</button>
                   </div>
                   {(selectedGroup.students_list || []).map((student, i) => (
                     <div key={student.id || i} style={{
@@ -830,56 +849,90 @@ export default function AdminGroups() {
 
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
-      {/* ════════════ ADD / EDIT MODAL (inline form in panel) ════════════ */}
-      {showForm && (
-        <div className="ld-overlay" style={{ justifyContent: 'center' }} onClick={() => setShowForm(false)}>
-          <div className="ld-modal" style={{ width: 520 }} onClick={e => e.stopPropagation()}>
-            <div className="ld-modal-header">
-              <h3>{editId ? 'Редактировать группу' : 'Новая группа'}</h3>
-              <button className="ld-panel-close" onClick={() => setShowForm(false)}><SClose /></button>
-            </div>
-            <form onSubmit={handleSubmit} className="ld-modal-body">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <label className="ld-field" style={{ gridColumn: '1 / -1' }}>
-                  <span>Название группы</span>
-                  <input className="ld-input" name="name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="IELTS Advanced A" required />
-                </label>
-                <label className="ld-field">
-                  <span>Курс</span>
-                  <select className="ld-input" value={form.course_id} onChange={e => setForm({ ...form, course_id: e.target.value })} required>
-                    <option value="">Выберите курс</option>
-                    {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
-                  </select>
-                </label>
-                <label className="ld-field">
-                  <span>Преподаватель</span>
-                  <select className="ld-input" value={form.teacher_id} onChange={e => setForm({ ...form, teacher_id: e.target.value })}>
-                    <option value="">Не назначен</option>
-                    {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
-                </label>
-                <label className="ld-field">
-                  <span>Макс. студентов</span>
-                  <input className="ld-input" type="number" value={form.max_students} onChange={e => setForm({ ...form, max_students: e.target.value })} />
-                </label>
-                <label className="ld-field">
-                  <span>Расписание</span>
-                  <input className="ld-input" value={form.schedule} onChange={e => setForm({ ...form, schedule: e.target.value })} placeholder="Пн/Ср/Пт 10:00-11:30" />
-                </label>
+      {/* ════════════ ADD / EDIT MODAL — portal-based, escapes any container ════════════ */}
+      <Modal
+        open={showForm}
+        onClose={() => setShowForm(false)}
+        title={editId ? 'Редактировать группу' : 'Новая группа'}
+        width={520}
+        footer={
+          <>
+            <button type="button" className="ld-btn ld-btn--outline" onClick={() => setShowForm(false)}>Отмена</button>
+            <button type="submit" form="group-form" className="ld-btn ld-btn--primary" disabled={saving}>
+              {saving ? 'Сохранение...' : editId ? 'Обновить' : 'Создать группу'}
+            </button>
+          </>
+        }
+      >
+        <form id="group-form" onSubmit={handleSubmit}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <label className="ld-field" style={{ gridColumn: '1 / -1' }}>
+              <span>Название группы</span>
+              <input className="ld-input" name="name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="IELTS Advanced A" required />
+            </label>
+            <label className="ld-field">
+              <span>Курс</span>
+              <select className="ld-input" value={form.course_id} onChange={e => setForm({ ...form, course_id: e.target.value })} required>
+                <option value="">Выберите курс</option>
+                {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+              </select>
+            </label>
+            <label className="ld-field">
+              <span>Преподаватель</span>
+              <select className="ld-input" value={form.teacher_id} onChange={e => setForm({ ...form, teacher_id: e.target.value })}>
+                <option value="">Не назначен</option>
+                {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </label>
+            <label className="ld-field">
+              <span>Макс. студентов</span>
+              <input className="ld-input" type="number" value={form.max_students} onChange={e => setForm({ ...form, max_students: e.target.value })} />
+            </label>
+            <label className="ld-field" style={{ gridColumn: '1 / -1' }}>
+              <span>Дни занятий</span>
+              <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                {DAYS_SHORT.map((d, i) => (
+                  <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 13 }}>
+                    <input type="checkbox" checked={(form.days_bitmask || 0) & (1 << i)} onChange={e => {
+                      const bit = 1 << i;
+                      setForm({ ...form, days_bitmask: e.target.checked ? (form.days_bitmask || 0) | bit : (form.days_bitmask || 0) & ~bit });
+                    }} />
+                    {d}
+                  </label>
+                ))}
               </div>
-              <div className="ld-modal-actions">
-                <button type="button" className="ld-btn ld-btn--outline" onClick={() => setShowForm(false)}>Отмена</button>
-                <button type="submit" className="ld-btn ld-btn--primary" disabled={saving}>
-                  {saving ? 'Сохранение...' : editId ? 'Обновить' : 'Создать группу'}
-                </button>
-              </div>
-            </form>
+            </label>
+            <label className="ld-field">
+              <span>Расписание</span>
+              <input className="ld-input" value={form.schedule} onChange={e => setForm({ ...form, schedule: e.target.value })} placeholder="Пн/Ср/Пт 10:00-11:30" />
+            </label>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
+
+      <Modal
+        open={enrollModal && !!selectedGroup}
+        onClose={() => { setEnrollModal(false); setEnrollResults([]); }}
+        title={selectedGroup ? `Добавить студента в ${selectedGroup.name}` : ''}
+        width={420}
+      >
+        <input className="ld-input" placeholder="Поиск студента (мин 2 символа)..." value={enrollSearch} onChange={e => searchStudents(e.target.value)} style={{ marginBottom: 12 }} />
+        {enrollResults.length === 0 && enrollSearch.length >= 2 && <p style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>Ничего не найдено</p>}
+        {enrollResults.map(s => (
+          <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>{s.email} · {s.phone || '—'}</div>
+            </div>
+            <button className="ld-btn ld-btn--primary" style={{ padding: '6px 14px', fontSize: 12 }} onClick={() => enrollStudent(s.id)} disabled={enrollBusy}>
+              {enrollBusy ? '...' : 'Добавить'}
+            </button>
+          </div>
+        ))}
+      </Modal>
 
     </div>
   );

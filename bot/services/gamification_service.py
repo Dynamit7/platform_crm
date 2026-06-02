@@ -2,18 +2,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from bot.models.features import Achievement, StudentAchievement
 from bot.models.education import HomeworkSubmission, Attendance
+from bot.models.user import Student
+import logging
+
+log = logging.getLogger(__name__)
 
 class GamificationService:
     def __init__(self, session: AsyncSession, bot=None):
         self.session = session
         self.bot = bot
 
-    async def _grant_achievement(self, student_id: int, achievement_id: int, telegram_id: int = None):
-        stmt = select(StudentAchievement).where(StudentAchievement.student_id == student_id, StudentAchievement.achievement_id == achievement_id)
+    async def _get_student_record_id(self, user_id: int) -> int:
+        stmt = select(Student.id).where(Student.user_id == user_id)
+        result = await self.session.execute(stmt)
+        row = result.scalar_one_or_none()
+        return row
+
+    async def _grant_achievement(self, user_id: int, achievement_id: int, telegram_id: int = None):
+        student_record_id = await self._get_student_record_id(user_id)
+        if not student_record_id:
+            return
+        stmt = select(StudentAchievement).where(StudentAchievement.student_id == student_record_id, StudentAchievement.achievement_id == achievement_id)
         exists = (await self.session.execute(stmt)).scalar_one_or_none()
         
         if not exists:
-            new_sa = StudentAchievement(student_id=student_id, achievement_id=achievement_id)
+            new_sa = StudentAchievement(student_id=student_record_id, achievement_id=achievement_id)
             self.session.add(new_sa)
             await self.session.commit()
             
@@ -27,11 +40,11 @@ class GamificationService:
                         f"🎉 *НОВОЕ ДОСТИЖЕНИЕ!*\n\n{ach.icon} *{ach.name}*\n_{ach.description}_\n\nВы получили +{ach.xp_reward} XP!",
                         parse_mode="Markdown"
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.warning("Achievement notification failed for student %s: %s", user_id, e)
 
-    async def check_homework_achievements(self, student_id: int, telegram_id: int = None):
-        stmt = select(func.count(HomeworkSubmission.id)).where(HomeworkSubmission.student_id == student_id, HomeworkSubmission.status == "accepted")
+    async def check_homework_achievements(self, user_id: int, telegram_id: int = None):
+        stmt = select(func.count(HomeworkSubmission.id)).where(HomeworkSubmission.student_id == user_id, HomeworkSubmission.status == "accepted")
         hw_count = await self.session.scalar(stmt) or 0
         
         achievements_to_grant = []
@@ -46,4 +59,4 @@ class GamificationService:
             stmt_ach = select(Achievement).where(Achievement.name == name)
             ach = (await self.session.execute(stmt_ach)).scalar_one_or_none()
             if ach:
-                await self._grant_achievement(student_id, ach.id, telegram_id)
+                await self._grant_achievement(user_id, ach.id, telegram_id)

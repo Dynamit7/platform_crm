@@ -89,6 +89,7 @@ class PaymentService:
                 
             # Sync with CRM
             try:
+                headers = {"X-Bot-Secret": config.BOT_TOKEN.get_secret_value()}
                 async with aiohttp.ClientSession() as http_session:
                     payload = {
                         "telegram_id": payment_record.user.telegram_id,
@@ -98,7 +99,7 @@ class PaymentService:
                         "description": payment_record.description or "Автоматическая оплата ЮKassa",
                         "course_id": None  # Not available in webhook context
                     }
-                    await http_session.post(f"{config.API_URL}/sync-payment", json=payload, timeout=3)
+                    await http_session.post(f"{config.API_URL}/sync-payment", json=payload, headers=headers, timeout=3)
             except Exception as e:
                 log.error("Failed to sync webhook payment to CRM", error=str(e))
         

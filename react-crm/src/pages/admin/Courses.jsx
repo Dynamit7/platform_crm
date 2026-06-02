@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
+import Modal from '../../components/Modal';
 
 /* ── SVG Icons ── */
 const SSearch = () => (
@@ -192,10 +193,12 @@ const s = {
     background: 'var(--glass-bg)', backdropFilter: 'var(--backdrop-blur)', color: 'var(--text)',
     whiteSpace: 'nowrap', transition: 'all 0.2s ease',
   },
-  rowActions: { display: 'flex', gap: 2, opacity: 0, transition: 'opacity 0.15s' },
+  rowActions: { display: 'flex', gap: 4, alignItems: 'center' },
   rowBtn: {
-    width: 30, height: 30, border: 'none', background: 'none', borderRadius: 6, cursor: 'pointer',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', transition: 'all 0.15s',
+    width: 34, height: 34, border: 'none', borderRadius: 8, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: 'transparent', color: 'var(--text-secondary)',
+    transition: 'all 0.15s',
   },
   badge: (color, bg) => ({
     display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 12px', borderRadius: 20,
@@ -485,7 +488,7 @@ export default function AdminCourses() {
 
   /* ───────────── RENDER ───────────── */
   return (
-    <div className="page-content" style={{ padding: '24px 28px' }}>
+    <div className="page-content ed-page ed-admin">
 
       {/* ═══════ STATS BAR ═══════ */}
       <div style={s.statsGrid}>
@@ -632,29 +635,27 @@ export default function AdminCourses() {
                         {cfg.label}
                       </span>
                     </td>
-                    <td style={{ padding: '13px 18px 13px 14px', borderBottom: '1px solid var(--border)' }}
+                    <td style={{ padding: '13px 14px', borderBottom: '1px solid var(--border)', width: 1 }}
                       onClick={e => e.stopPropagation()}>
-                      <div style={s.rowActions}
-                        onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                        onMouseLeave={e => e.currentTarget.style.opacity = '0'}>
+                      <div style={s.rowActions}>
                         <button style={s.rowBtn} title="Редактировать" onClick={() => openEdit(c)}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg)'; e.currentTarget.style.color = 'var(--text)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--muted)'; }}>
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.12)'; e.currentTarget.style.color = '#f59e0b'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
                           <SEdit />
                         </button>
                         <button style={s.rowBtn} title="Дублировать" onClick={() => duplicateCourse(c)}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg)'; e.currentTarget.style.color = '#8b5cf6'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--muted)'; }}>
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.12)'; e.currentTarget.style.color = '#8b5cf6'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
                           <SCopy />
                         </button>
                         <button style={s.rowBtn} title={c.status === 'archived' ? 'Восстановить' : 'Архивировать'} onClick={() => toggleArchive(c)}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg)'; e.currentTarget.style.color = '#f59e0b'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--muted)'; }}>
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.12)'; e.currentTarget.style.color = '#f59e0b'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
                           <SArchive />
                         </button>
                         <button style={s.rowBtn} title="Удалить" onClick={() => deleteCourse(c.id)}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg)'; e.currentTarget.style.color = '#ef4444'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--muted)'; }}>
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; e.currentTarget.style.color = '#ef4444'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
                           <STrash />
                         </button>
                       </div>
@@ -760,15 +761,15 @@ export default function AdminCourses() {
         </div>
       )}
 
-      {/* ════════════ SIDE PANEL ════════════ */}
-      {selectedCourse && (
-        <div className="ld-overlay" onClick={() => setSelectedCourse(null)}>
-          <div className="ld-panel" style={{ width: 540 }} onClick={e => e.stopPropagation()}>
-            <div className="ld-panel-header">
-              <h3>Карточка курса</h3>
-              <button className="ld-panel-close" onClick={() => setSelectedCourse(null)}><SClose /></button>
-            </div>
-
+      {/* ════════════ COURSE DETAIL — portal-based centered modal ════════════ */}
+      <Modal
+        open={!!selectedCourse}
+        onClose={() => setSelectedCourse(null)}
+        title="Карточка курса"
+        width={520}
+      >
+        {selectedCourse && (
+          <div style={{ margin: '-20px -22px' }}>
             {/* Tabs */}
             <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0, padding: '0 16px', gap: 0 }}>
               {[
@@ -788,7 +789,7 @@ export default function AdminCourses() {
               ))}
             </div>
 
-            <div className="ld-panel-body" style={{ padding: 0 }}>
+            <div style={{ padding: 0 }}>
 
               {/* ══ OVERVIEW TAB ══ */}
               {panelTab === 'overview' && (
@@ -1051,79 +1052,78 @@ export default function AdminCourses() {
 
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* ════════════ ADD / EDIT MODAL ════════════ */}
-      {showModal && (
-        <div className="ld-overlay" style={{ justifyContent: 'center' }} onClick={() => setShowModal(false)}>
-          <div className="ld-modal" style={{ width: 560 }} onClick={e => e.stopPropagation()}>
-            <div className="ld-modal-header">
-              <h3>{editingCourse ? 'Редактировать курс' : 'Новый курс'}</h3>
-              <button className="ld-panel-close" onClick={() => setShowModal(false)}><SClose /></button>
-            </div>
-            <form onSubmit={handleSave} className="ld-modal-body">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <label className="ld-field" style={{ gridColumn: '1 / -1' }}>
-                  <span>Название курса</span>
-                  <input className="ld-input" name="title" value={form.title} onChange={handleChange} placeholder="IELTS Advanced" required />
-                </label>
-                <label className="ld-field" style={{ gridColumn: '1 / -1' }}>
-                  <span>Краткое описание</span>
-                  <input className="ld-input" name="description" value={form.description} onChange={handleChange} placeholder="Подготовка к IELTS на 7+" />
-                </label>
-                <label className="ld-field" style={{ gridColumn: '1 / -1' }}>
-                  <span>Полное описание</span>
-                  <textarea className="ld-input" name="full_description" value={form.full_description} onChange={handleChange} rows={3} placeholder="Детальная программа курса..." />
-                </label>
-                <label className="ld-field">
-                  <span>Длительность</span>
-                  <input className="ld-input" name="duration" value={form.duration} onChange={handleChange} placeholder="3 месяца" />
-                </label>
-                <label className="ld-field">
-                  <span>Цена (сум)</span>
-                  <input className="ld-input" name="price" type="number" value={form.price} onChange={handleChange} placeholder="1500000" />
-                </label>
-                <label className="ld-field">
-                  <span>Язык</span>
-                  <select className="ld-input" name="language" value={form.language} onChange={handleChange}>
-                    {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                </label>
-                <label className="ld-field">
-                  <span>Уровень</span>
-                  <select className="ld-input" name="level" value={form.level} onChange={handleChange}>
-                    <option value="">— Не выбран —</option>
-                    {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                </label>
-                <label className="ld-field">
-                  <span>Статус</span>
-                  <select className="ld-input" name="status" value={form.status} onChange={handleChange}>
-                    <option value="draft">Черновик</option>
-                    <option value="active">Активен</option>
-                    <option value="archived">Архив</option>
-                  </select>
-                </label>
-                <label className="ld-field">
-                  <span>Макс. студентов</span>
-                  <input className="ld-input" name="max_students" type="number" value={form.max_students} onChange={handleChange} />
-                </label>
-                <label className="ld-field">
-                  <span>Кол-во уроков</span>
-                  <input className="ld-input" name="lessons_count" type="number" value={form.lessons_count} onChange={handleChange} />
-                </label>
-              </div>
-              <div className="ld-modal-actions">
-                <button type="button" className="ld-btn ld-btn--outline" onClick={() => setShowModal(false)}>Отмена</button>
-                <button type="submit" className="ld-btn ld-btn--primary" disabled={saving}>
-                  {saving ? 'Сохранение...' : editingCourse ? 'Сохранить' : 'Создать курс'}
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={editingCourse ? 'Редактировать курс' : 'Новый курс'}
+        width={560}
+        footer={
+          <>
+            <button type="button" className="ld-btn ld-btn--outline" onClick={() => setShowModal(false)}>Отмена</button>
+            <button type="submit" form="course-form" className="ld-btn ld-btn--primary" disabled={saving}>
+              {saving ? 'Сохранение...' : editingCourse ? 'Сохранить' : 'Создать курс'}
+            </button>
+          </>
+        }
+      >
+        <form id="course-form" onSubmit={handleSave}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <label className="ld-field" style={{ gridColumn: '1 / -1' }}>
+              <span>Название курса</span>
+              <input className="ld-input" name="title" value={form.title} onChange={handleChange} placeholder="IELTS Advanced" required />
+            </label>
+            <label className="ld-field" style={{ gridColumn: '1 / -1' }}>
+              <span>Краткое описание</span>
+              <input className="ld-input" name="description" value={form.description} onChange={handleChange} placeholder="Подготовка к IELTS на 7+" />
+            </label>
+            <label className="ld-field" style={{ gridColumn: '1 / -1' }}>
+              <span>Полное описание</span>
+              <textarea className="ld-input" name="full_description" value={form.full_description} onChange={handleChange} rows={3} placeholder="Детальная программа курса..." />
+            </label>
+            <label className="ld-field">
+              <span>Длительность</span>
+              <input className="ld-input" name="duration" value={form.duration} onChange={handleChange} placeholder="3 месяца" />
+            </label>
+            <label className="ld-field">
+              <span>Цена (сум)</span>
+              <input className="ld-input" name="price" type="number" value={form.price} onChange={handleChange} placeholder="1500000" />
+            </label>
+            <label className="ld-field">
+              <span>Язык</span>
+              <select className="ld-input" name="language" value={form.language} onChange={handleChange}>
+                {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </label>
+            <label className="ld-field">
+              <span>Уровень</span>
+              <select className="ld-input" name="level" value={form.level} onChange={handleChange}>
+                <option value="">— Не выбран —</option>
+                {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </label>
+            <label className="ld-field">
+              <span>Статус</span>
+              <select className="ld-input" name="status" value={form.status} onChange={handleChange}>
+                <option value="draft">Черновик</option>
+                <option value="active">Активен</option>
+                <option value="archived">Архив</option>
+              </select>
+            </label>
+            <label className="ld-field">
+              <span>Макс. студентов</span>
+              <input className="ld-input" name="max_students" type="number" value={form.max_students} onChange={handleChange} />
+            </label>
+            <label className="ld-field">
+              <span>Кол-во уроков</span>
+              <input className="ld-input" name="lessons_count" type="number" value={form.lessons_count} onChange={handleChange} />
+            </label>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
     </div>
   );

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
+import Modal from '../../components/Modal';
 
 /* ── SVG Icons ── */
 const SSearch = () => (
@@ -454,7 +455,7 @@ export default function AdminPayments() {
 
   /* ───────────── RENDER ───────────── */
   return (
-    <div className="page-content" style={{ padding: '24px 28px' }}>
+    <div className="page-content ed-page ed-admin">
 
       {/* ═══════ TWO-COLUMN TOP: Stats + Chart (super_admin only) ═══════ */}
       {isSuperAdmin && (
@@ -778,17 +779,17 @@ export default function AdminPayments() {
         </div>
       </div>
 
-      {/* ════════════ SIDE PANEL ════════════ */}
-      {selectedPayment && (
-        <div className="ld-overlay" onClick={() => setSelectedPayment(null)}>
-          <div className="ld-panel" style={{ width: 460 }} onClick={e => e.stopPropagation()}>
-            <div className="ld-panel-header">
-              <h3>Детали платежа</h3>
-              <button className="ld-panel-close" onClick={() => setSelectedPayment(null)}><SClose /></button>
-            </div>
-            <div className="ld-panel-body">
-              {/* Header */}
-              <div style={{ textAlign: 'center', marginBottom: 20 }}>
+      {/* ════════════ PAYMENT DETAIL — portal-based centered modal ════════════ */}
+      <Modal
+        open={!!selectedPayment}
+        onClose={() => setSelectedPayment(null)}
+        title="Карточка платежа"
+        width={480}
+      >
+        {selectedPayment && (
+          <div>
+            {/* Header */}
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
                 <div style={{
                   width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center',
                   justifyContent: 'center', margin: '0 auto 12px',
@@ -893,124 +894,121 @@ export default function AdminPayments() {
                   </button>
                 )}
               </div>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* ════════════ ADD MODAL ════════════ */}
-      {showModal && (
-        <div className="ld-overlay" style={{ justifyContent: 'center' }} onClick={() => setShowModal(false)}>
-          <div className="ld-modal" style={{ width: 500 }} onClick={e => e.stopPropagation()}>
-            <div className="ld-modal-header">
-              <h3>Новый платёж</h3>
-              <button className="ld-panel-close" onClick={() => setShowModal(false)}><SClose /></button>
-            </div>
-            <form onSubmit={handleCreate} className="ld-modal-body">
-              <label className="ld-field">
-                <span>Студент</span>
-                <select className="ld-input" name="student_id" value={form.student_id} onChange={handleChange} required>
-                  <option value="">Выберите студента</option>
-                  {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <label className="ld-field">
-                  <span>Сумма (сум)</span>
-                  <input className="ld-input" name="amount" type="number" value={form.amount} onChange={handleChange} placeholder="1000000" required />
-                </label>
-                <label className="ld-field">
-                  <span>Метод оплаты</span>
-                  <select className="ld-input" name="method" value={form.method} onChange={handleChange}>
-                    <option value="cash">💵 Наличные</option>
-                    <option value="card">💳 Карта</option>
-                    <option value="bank">🏦 Банк</option>
-                    <option value="click">🖱️ Click</option>
-                    <option value="payme">📱 Payme</option>
-                    <option value="transfer">💸 Перевод</option>
-                  </select>
-                </label>
-              </div>
-              <label className="ld-field">
-                <span>Тип платежа</span>
-                <select className="ld-input" name="type" value={form.type} onChange={handleChange}>
-                  {PAYMENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-              </label>
-              <label className="ld-field">
-                <span>Описание</span>
-                <input className="ld-input" name="description" value={form.description} onChange={handleChange} placeholder="Оплата за курс..." />
-              </label>
-              <div className="ld-modal-actions">
-                <button type="button" className="ld-btn ld-btn--outline" onClick={() => setShowModal(false)}>Отмена</button>
-                <button type="submit" className="ld-btn ld-btn--primary" disabled={saving}>
-                  {saving ? 'Сохранение...' : 'Создать платёж'}
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title="Новый платёж"
+        width={500}
+        footer={
+          <>
+            <button type="button" className="ld-btn ld-btn--outline" onClick={() => setShowModal(false)}>Отмена</button>
+            <button type="submit" form="payment-create-form" className="ld-btn ld-btn--primary" disabled={saving}>
+              {saving ? 'Сохранение...' : 'Создать платёж'}
+            </button>
+          </>
+        }
+      >
+        <form id="payment-create-form" onSubmit={handleCreate}>
+          <label className="ld-field">
+            <span>Студент</span>
+            <select className="ld-input" name="student_id" value={form.student_id} onChange={handleChange} required>
+              <option value="">Выберите студента</option>
+              {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <label className="ld-field">
+              <span>Сумма (сум)</span>
+              <input className="ld-input" name="amount" type="number" value={form.amount} onChange={handleChange} placeholder="1000000" required />
+            </label>
+            <label className="ld-field">
+              <span>Метод оплаты</span>
+              <select className="ld-input" name="method" value={form.method} onChange={handleChange}>
+                <option value="cash">💵 Наличные</option>
+                <option value="card">💳 Карта</option>
+                <option value="bank">🏦 Банк</option>
+                <option value="click">🖱️ Click</option>
+                <option value="payme">📱 Payme</option>
+                <option value="transfer">💸 Перевод</option>
+              </select>
+            </label>
           </div>
-        </div>
-      )}
+          <label className="ld-field">
+            <span>Тип платежа</span>
+            <select className="ld-input" name="type" value={form.type} onChange={handleChange}>
+              {PAYMENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </label>
+          <label className="ld-field">
+            <span>Описание</span>
+            <input className="ld-input" name="description" value={form.description} onChange={handleChange} placeholder="Оплата за курс..." />
+          </label>
+        </form>
+      </Modal>
 
       {/* ════════════ RECEIPT MODAL ════════════ */}
-      {receiptPayment && (
-        <div className="ld-overlay" style={{ justifyContent: 'center', zIndex: 1001 }} onClick={() => setReceiptPayment(null)}>
-          <div className="ld-modal" style={{ width: 420, maxWidth: 420 }} onClick={e => e.stopPropagation()}>
-            <div className="ld-modal-header">
-              <h3>Квитанция об оплате</h3>
-              <button className="ld-panel-close" onClick={() => setReceiptPayment(null)}><SClose /></button>
+      <Modal
+        open={!!receiptPayment}
+        onClose={() => setReceiptPayment(null)}
+        title="Квитанция об оплате"
+        width={420}
+      >
+        {receiptPayment && (
+          <div id="receipt-content" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)' }}>TIL USER</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>Языковая школа</div>
             </div>
-            <div className="ld-modal-body" id="receipt-content" style={{ fontFamily: 'Inter, sans-serif' }}>
-              <div style={{ textAlign: 'center', marginBottom: 20 }}>
-                <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)' }}>TIL USER</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)' }}>Языковая школа</div>
+            <div style={{ borderTop: '2px dashed var(--border)', borderBottom: '2px dashed var(--border)', padding: '16px 0', marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ color: 'var(--muted)', fontSize: 12 }}>№ платежа:</span>
+                <span style={{ fontWeight: 600, fontSize: 13 }}>#{receiptPayment.id}</span>
               </div>
-              <div style={{ borderTop: '2px dashed var(--border)', borderBottom: '2px dashed var(--border)', padding: '16px 0', marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ color: 'var(--muted)', fontSize: 12 }}>№ платежа:</span>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>#{receiptPayment.id}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ color: 'var(--muted)', fontSize: 12 }}>Студент:</span>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>{receiptPayment.student_name || '—'}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ color: 'var(--muted)', fontSize: 12 }}>Дата:</span>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>{formatDate(receiptPayment.created_at)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ color: 'var(--muted)', fontSize: 12 }}>Сумма:</span>
-                  <span style={{ fontWeight: 700, fontSize: 18, color: '#10b981' }}>{formatPrice(receiptPayment.amount)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ color: 'var(--muted)', fontSize: 12 }}>Метод:</span>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>
-                    {METHOD_CONFIG[receiptPayment.method]?.icon} {METHOD_CONFIG[receiptPayment.method]?.label || receiptPayment.method}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--muted)', fontSize: 12 }}>Статус:</span>
-                  <span style={{
-                    fontWeight: 600, fontSize: 13,
-                    color: STATUS_CONFIG[receiptPayment.status]?.color || 'var(--text)',
-                  }}>
-                    {STATUS_CONFIG[receiptPayment.status]?.label || receiptPayment.status}
-                  </span>
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ color: 'var(--muted)', fontSize: 12 }}>Студент:</span>
+                <span style={{ fontWeight: 600, fontSize: 13 }}>{receiptPayment.student_name || '—'}</span>
               </div>
-              {receiptPayment.description && (
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>
-                  {receiptPayment.description}
-                </div>
-              )}
-              <button className="ld-btn ld-btn--primary" style={{ width: '100%' }}
-                onClick={() => window.print()}>
-                🖨️ Распечатать
-              </button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ color: 'var(--muted)', fontSize: 12 }}>Дата:</span>
+                <span style={{ fontWeight: 600, fontSize: 13 }}>{formatDate(receiptPayment.created_at)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ color: 'var(--muted)', fontSize: 12 }}>Сумма:</span>
+                <span style={{ fontWeight: 700, fontSize: 18, color: '#10b981' }}>{formatPrice(receiptPayment.amount)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ color: 'var(--muted)', fontSize: 12 }}>Метод:</span>
+                <span style={{ fontWeight: 600, fontSize: 13 }}>
+                  {METHOD_CONFIG[receiptPayment.method]?.icon} {METHOD_CONFIG[receiptPayment.method]?.label || receiptPayment.method}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--muted)', fontSize: 12 }}>Статус:</span>
+                <span style={{
+                  fontWeight: 600, fontSize: 13,
+                  color: STATUS_CONFIG[receiptPayment.status]?.color || 'var(--text)',
+                }}>
+                  {STATUS_CONFIG[receiptPayment.status]?.label || receiptPayment.status}
+                </span>
+              </div>
             </div>
+            {receiptPayment.description && (
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>
+                {receiptPayment.description}
+              </div>
+            )}
+            <button className="ld-btn ld-btn--primary" style={{ width: '100%' }}
+              onClick={() => window.print()}>
+              🖨️ Распечатать
+            </button>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
     </div>
   );

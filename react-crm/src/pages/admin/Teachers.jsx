@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
+import Modal from '../../components/Modal';
 
 /* ── SVG Icons ── */
 const SSearch = () => (
@@ -234,10 +235,12 @@ const s = {
     display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 12px', borderRadius: 20,
     fontSize: 11, fontWeight: 600, color, background: bg, whiteSpace: 'nowrap',
   }),
-  rowActions: { display: 'flex', gap: 2, opacity: 0, transition: 'opacity 0.15s' },
+  rowActions: { display: 'flex', gap: 4, alignItems: 'center' },
   rowBtn: {
-    width: 30, height: 30, border: 'none', background: 'none', borderRadius: 6, cursor: 'pointer',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', transition: 'all 0.15s',
+    width: 34, height: 34, border: 'none', borderRadius: 8, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: 'transparent', color: 'var(--text-secondary)',
+    transition: 'all 0.15s',
   },
 };
 
@@ -318,16 +321,9 @@ export default function AdminTeachers() {
   const [editingTeacher, setEditingTeacher] = useState(null);
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', subjects: '', bio: '', status: 'active' });
 
-  /* ─── Mock extended data ─── */
-  const [mockExtended] = useState(() => {
-    const groups = ['IELTS Advanced', 'General English A2', 'Business English', 'Kids 7-9', 'Speaking Club'];
-    const reviews = [
-      { student: 'Анна К.', rating: 5, text: 'Отличный преподаватель!', date: '2026-04-15' },
-      { student: 'Марк Л.', rating: 4, text: 'Хорошо объясняет грамматику', date: '2026-04-10' },
-      { student: 'Елена С.', rating: 5, text: 'Занятия всегда интересные', date: '2026-03-28' },
-    ];
-    return { groups, reviews };
-  });
+  /* ─── Detail teacher real data (lazy-fetched) ─── */
+  const [teacherGroups, setTeacherGroups] = useState([]);
+  const [teacherLessons, setTeacherLessons] = useState([]);
 
   /* ─── Load Data ─── */
   const loadTeachers = () => {
@@ -337,20 +333,35 @@ export default function AdminTeachers() {
         ...t,
         status: t.status || (t.is_active ? 'active' : 'inactive'),
         subjects_list: t.subjects ? t.subjects.split(',').map(s => s.trim()).filter(Boolean) : [],
-        work_hours: t.work_hours || Math.floor(Math.random() * 20 + 10),
-        groups_count: t.groups_count || Math.floor(Math.random() * 5),
-        salary: t.salary || (Math.floor(Math.random() * 500 + 300)),
-        rating: t.rating || (3 + Math.random() * 2),
-        hire_date: t.hire_date || t.created_at,
-        last_active: t.last_active || new Date(Date.now() - Math.random() * 7 * 86400000).toISOString(),
-        lesson_count: t.lesson_count || Math.floor(Math.random() * 50 + 10),
-        student_count: t.student_count || Math.floor(Math.random() * 30 + 5),
-        attendance_rate: t.attendance_rate || Math.floor(Math.random() * 20 + 80),
+        groups_count: t.groups_count ?? 0,
+        lesson_count: t.lesson_count ?? 0,
+        student_count: t.student_count ?? 0,
+        // Эти данные пока не считаются — оставляем null для UI «—»
+        work_hours: t.work_hours ?? null,
+        salary: t.salary ?? null,
+        rating: t.rating ?? null,
+        attendance_rate: t.attendance_rate ?? null,
       }));
       setTeachers(enriched);
       setLoading(false);
     }).catch(() => { setLoading(false); });
   };
+
+  // При открытии карточки преподавателя — подтягиваем его реальные группы и уроки
+  useEffect(() => {
+    if (!selectedTeacher) {
+      setTeacherGroups([]);
+      setTeacherLessons([]);
+      return;
+    }
+    api.get(`/api/teacher/groups/${selectedTeacher.id}`).then(({ data }) => {
+      setTeacherGroups(data || []);
+      // Подтягиваем уроки по всем группам параллельно
+      Promise.all((data || []).map(g =>
+        api.get(`/api/groups/${g.id}/lessons`).then(r => r.data).catch(() => [])
+      )).then(arrs => setTeacherLessons(arrs.flat()));
+    }).catch(() => setTeacherGroups([]));
+  }, [selectedTeacher?.id]);
 
   useEffect(() => { loadTeachers(); }, [search]);
 
@@ -448,7 +459,7 @@ export default function AdminTeachers() {
     setSaving(true);
     try {
       if (editingTeacher) {
-        const { data } = await api.put(`/api/admin/teachers/${editingTeacher.id}`, form);
+        const { data } = await api.put(`/api/teachers/${editingTeacher.id}`, form);
         if (add) add('Преподаватель обновлён', 'success');
         setTeachers(prev => prev.map(t => t.id === editingTeacher.id ? { ...t, ...data, name: form.name, email: form.email, phone: form.phone, subjects: form.subjects, bio: form.bio, subjects_list: form.subjects.split(',').map(s => s.trim()).filter(Boolean) } : t));
         if (selectedTeacher?.id === editingTeacher.id) setSelectedTeacher(p => ({ ...p, ...data, name: form.name, email: form.email }));
@@ -466,7 +477,7 @@ export default function AdminTeachers() {
   const deleteTeacher = async (id) => {
     if (!confirm('Удалить преподавателя?')) return;
     try {
-      await api.delete(`/api/admin/teachers/${id}`);
+      await api.delete(`/api/teachers/${id}`);
       setTeachers(prev => prev.filter(t => t.id !== id));
       if (selectedTeacher?.id === id) setSelectedTeacher(null);
       if (add) add('Преподаватель удалён', 'success');
@@ -505,7 +516,7 @@ export default function AdminTeachers() {
 
   /* ───────────── RENDER ───────────── */
   return (
-    <div className="page-content" style={{ padding: '24px 28px' }}>
+    <div className="page-content ed-page ed-admin">
 
       {/* ═══════ STATS BAR ═══════ */}
       <div style={s.statsGrid}>
@@ -689,14 +700,14 @@ export default function AdminTeachers() {
                       <span style={{ fontWeight: 600, color: 'var(--text)' }}>{t.groups_count}</span>
                     </td>
                     <td style={{ padding: '13px 14px', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontWeight: 500 }}>{t.work_hours} ч</span>
-                        <div style={{
-                          width: 40, height: 4, borderRadius: 2, background: 'var(--border)', overflow: 'hidden',
-                        }}>
-                          <div style={{ width: `${Math.min(100, (t.work_hours / 30) * 100)}%`, height: '100%', borderRadius: 2, background: 'var(--accent-gradient)' }} />
+                      {t.work_hours != null ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontWeight: 500 }}>{t.work_hours} ч</span>
+                          <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
+                            <div style={{ width: `${Math.min(100, (t.work_hours / 30) * 100)}%`, height: '100%', borderRadius: 2, background: 'var(--accent-gradient)' }} />
+                          </div>
                         </div>
-                      </div>
+                      ) : <span style={{ color: 'var(--muted)' }}>—</span>}
                     </td>
                     <td style={{ padding: '13px 14px', borderBottom: '1px solid var(--border)' }}>
                       <span style={s.badge(cfg.color, cfg.bg)}>
@@ -716,24 +727,22 @@ export default function AdminTeachers() {
                         {timeAgo(t.last_active)}
                       </div>
                     </td>
-                    <td style={{ padding: '13px 18px 13px 14px', borderBottom: '1px solid var(--border)' }}
+                    <td style={{ padding: '13px 14px 13px 14px', borderBottom: '1px solid var(--border)', width: 1 }}
                       onClick={e => e.stopPropagation()}>
-                      <div style={s.rowActions}
-                        onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                        onMouseLeave={e => e.currentTarget.style.opacity = '0'}>
+                      <div style={s.rowActions}>
                         <button style={s.rowBtn} title="Редактировать" onClick={() => openEdit(t)}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg)'; e.currentTarget.style.color = 'var(--text)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--muted)'; }}>
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.12)'; e.currentTarget.style.color = '#f59e0b'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
                           <SEdit />
                         </button>
                         <button style={s.rowBtn} title={t.status === 'active' ? 'Деактивировать' : 'Активировать'} onClick={() => toggleActive(t.id)}
                           onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg)'; e.currentTarget.style.color = t.status === 'active' ? '#ef4444' : '#10b981'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--muted)'; }}>
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
                           {t.status === 'active' ? <SUserX /> : <SUserCheck />}
                         </button>
                         <button style={s.rowBtn} title="Удалить" onClick={() => deleteTeacher(t.id)}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg)'; e.currentTarget.style.color = '#ef4444'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--muted)'; }}>
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; e.currentTarget.style.color = '#ef4444'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
                           <STrash />
                         </button>
                       </div>
@@ -877,8 +886,9 @@ export default function AdminTeachers() {
                 </thead>
                 <tbody>
                   {filteredTeachers.slice(0, 15).map(t => {
-                    const hours = Array.from({ length: 7 }, () => Math.floor(Math.random() * 4));
-                    const total = hours.reduce((s, h) => s + h, 0);
+                    // График пока заглушен нулями — нужна аналитика по урокам в БД
+                    const hours = [0, 0, 0, 0, 0, 0, 0];
+                    const total = 0;
                     return (
                       <tr key={t.id}
                         onMouseEnter={e => e.currentTarget.style.background = 'rgba(37,99,235,0.02)'}
@@ -916,15 +926,15 @@ export default function AdminTeachers() {
         </div>
       )}
 
-      {/* ════════════ SIDE PANEL ════════════ */}
-      {selectedTeacher && (
-        <div className="ld-overlay" onClick={() => setSelectedTeacher(null)}>
-          <div className="ld-panel" style={{ width: 520 }} onClick={e => e.stopPropagation()}>
-            <div className="ld-panel-header">
-              <h3>Карточка преподавателя</h3>
-              <button className="ld-panel-close" onClick={() => setSelectedTeacher(null)}><SClose /></button>
-            </div>
-
+      {/* ════════════ TEACHER DETAIL — portal-based centered modal ════════════ */}
+      <Modal
+        open={!!selectedTeacher}
+        onClose={() => setSelectedTeacher(null)}
+        title="Карточка преподавателя"
+        width={500}
+      >
+        {selectedTeacher && (
+          <div style={{ margin: '-20px -22px' }}>
             {/* Panel tabs */}
             <div style={{
               display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0, padding: '0 16px', gap: 0,
@@ -949,7 +959,7 @@ export default function AdminTeachers() {
               ))}
             </div>
 
-            <div className="ld-panel-body" style={{ padding: 0 }}>
+            <div style={{ padding: 0 }}>
               {/* ══ PROFILE TAB ══ */}
               {panelTab === 'profile' && (
                 <div style={{ padding: 24 }}>
@@ -1034,7 +1044,7 @@ export default function AdminTeachers() {
                   </div>
                   <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', height: 60, marginBottom: 12 }}>
                     {Array.from({ length: 7 }, (_, i) => {
-                      const h = Math.floor(Math.random() * 4 + 1);
+                      const h = 0; // график пока не считается — будет когда подключим аналитику уроков
                       return (
                         <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                           <div style={{
@@ -1061,87 +1071,55 @@ export default function AdminTeachers() {
               {/* ══ GROUPS TAB ══ */}
               {panelTab === 'groups' && (
                 <div style={{ padding: 24 }}>
-                  <h4 style={{ fontSize: 14, fontWeight: 600, margin: '0 0 14px', color: 'var(--text)' }}>Группы ({selectedTeacher.groups_count})</h4>
-                  {mockExtended.groups.slice(0, selectedTeacher.groups_count || 3).map((g, i) => (
-                    <div key={i} style={{
-                      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
-                      background: 'var(--bg)', borderRadius: 'var(--radius-sm)', marginBottom: 8,
-                    }}>
-                      <div style={{
-                        width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center',
-                        justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14,
-                        background: ['#3b82f6','#8b5cf6','#ec4899','#f97316','#10b981'][i % 5],
-                      }}>{g.charAt(0)}</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{g}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                          {Math.floor(Math.random() * 8 + 4)} уроков · {Math.floor(Math.random() * 6 + 3)} студентов
+                  <h4 style={{ fontSize: 14, fontWeight: 600, margin: '0 0 14px', color: 'var(--text)' }}>Группы ({teacherGroups.length})</h4>
+                  {teacherGroups.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--muted)', fontSize: 13 }}>
+                      Нет назначенных групп
+                    </div>
+                  ) : teacherGroups.map((g, i) => {
+                    const lessons = teacherLessons.filter(l => l.group_id === g.id);
+                    return (
+                      <div key={g.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
+                        background: 'var(--bg)', borderRadius: 'var(--radius-sm)', marginBottom: 8,
+                      }}>
+                        <div style={{
+                          width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center',
+                          justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14,
+                          background: ['#3b82f6','#8b5cf6','#ec4899','#f97316','#10b981'][i % 5],
+                        }}>{(g.name || '?').charAt(0)}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{g.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                            {lessons.length} уроков · {g.current_students || 0} студентов
+                          </div>
                         </div>
                       </div>
-                      <button style={{ ...s.rowBtn, color: 'var(--blue-500)' }}
-                        onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface)'; }}>
-                        <SChevronRight />
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
               {/* ══ REVIEWS TAB ══ */}
               {panelTab === 'reviews' && (
                 <div style={{ padding: 24 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                    <Stars rating={selectedTeacher.rating || 0} />
-                    <span style={{ fontSize: 13, color: 'var(--muted)' }}>{mockExtended.reviews.length} отзыва</span>
+                  <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted)', fontSize: 13 }}>
+                    <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.5 }}>⭐</div>
+                    <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Пока нет отзывов</div>
+                    <div>Отзывы студентов появятся здесь после первых занятий</div>
                   </div>
-                  {mockExtended.reviews.map((r, i) => (
-                    <div key={i} style={{
-                      padding: '14px 16px', background: 'var(--bg)', borderRadius: 'var(--radius-sm)',
-                      marginBottom: 8, border: '1px solid var(--border)',
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                        <span style={{ fontWeight: 600, fontSize: 13 }}>{r.student}</span>
-                        <Stars rating={r.rating} />
-                      </div>
-                      <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>"{r.text}"</p>
-                      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6 }}>{formatDate(r.date)}</div>
-                    </div>
-                  ))}
                 </div>
               )}
 
               {/* ══ DOCUMENTS TAB ══ */}
               {panelTab === 'docs' && (
                 <div style={{ padding: 24 }}>
-                  <h4 style={{ fontSize: 14, fontWeight: 600, margin: '0 0 14px', color: 'var(--text)' }}>Документы и контракт</h4>
-                  {[
-                    { name: 'Трудовой договор.pdf', date: '15.01.2026', size: '2.4 MB' },
-                    { name: 'Паспортные данные.pdf', date: '10.01.2026', size: '1.1 MB' },
-                    { name: 'Диплом об образовании.pdf', date: '05.01.2026', size: '3.8 MB' },
-                    { name: 'Сертификат IELTS (8.0).pdf', date: '20.12.2025', size: '0.8 MB' },
-                  ].map((doc, i) => (
-                    <div key={i} style={{
-                      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
-                      background: 'var(--bg)', borderRadius: 'var(--radius-sm)', marginBottom: 6,
-                      cursor: 'pointer', transition: 'background 0.12s',
-                    }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'var(--bg)'}>
-                      <div style={{ color: '#3b82f6' }}><SDoc /></div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>{doc.date} · {doc.size}</div>
-                      </div>
-                      <button style={{ ...s.rowBtn }} title="Скачать"
-                        onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface)'; e.currentTarget.style.color = 'var(--text)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--muted)'; }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
-                  <button className="ld-btn ld-btn--outline ld-btn--block" style={{ marginTop: 12 }}>
+                  <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted)', fontSize: 13 }}>
+                    <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.5 }}>📄</div>
+                    <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Нет документов</div>
+                    <div>Загружайте трудовой договор, дипломы, сертификаты</div>
+                  </div>
+                  <button className="ld-btn ld-btn--outline ld-btn--block" style={{ marginTop: 12 }} disabled>
                     <SPlus /> Добавить документ
                   </button>
                 </div>
@@ -1150,91 +1128,71 @@ export default function AdminTeachers() {
               {/* ══ ACTIVITY TAB ══ */}
               {panelTab === 'activity' && (
                 <div style={{ padding: 24 }}>
-                  <h4 style={{ fontSize: 14, fontWeight: 600, margin: '0 0 14px', color: 'var(--text)' }}>История активности</h4>
-                  {[
-                    { text: 'Проведён урок IELTS Advanced', time: new Date(Date.now() - 3600000).toISOString(), type: 'lesson' },
-                    { text: 'Выставлены оценки 6 студентам', time: new Date(Date.now() - 7200000).toISOString(), type: 'grade' },
-                    { text: 'Обновлён учебный план General English', time: new Date(Date.now() - 86400000).toISOString(), type: 'plan' },
-                    { text: 'Зачислен новый студент Марк Л.', time: new Date(Date.now() - 172800000).toISOString(), type: 'enroll' },
-                    { text: 'Проведена консультация с родителем', time: new Date(Date.now() - 259200000).toISOString(), type: 'meeting' },
-                    { text: 'Отчёт о посещаемости за апрель', time: new Date(Date.now() - 345600000).toISOString(), type: 'report' },
-                  ].map((a, i) => (
-                    <div key={i} style={{
-                      display: 'flex', gap: 10, padding: '10px 0',
-                      borderBottom: i < 5 ? '1px solid var(--border)' : 'none',
-                    }}>
-                      <div style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                        background: i % 2 === 0 ? 'rgba(59,130,246,0.1)' : 'rgba(16,185,129,0.1)',
-                        color: i % 2 === 0 ? '#3b82f6' : '#10b981' }}>
-                        <SActivity />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, color: 'var(--text)' }}>{a.text}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{timeAgo(a.time)}</div>
-                      </div>
-                    </div>
-                  ))}
+                  <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted)', fontSize: 13 }}>
+                    <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.5 }}>📊</div>
+                    <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Пока нет активности</div>
+                    <div>История появится после первых уроков, оценок и других действий</div>
+                  </div>
                 </div>
               )}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* ════════════ ADD / EDIT MODAL ════════════ */}
-      {showModal && (
-        <div className="ld-overlay" style={{ justifyContent: 'center' }} onClick={() => setShowModal(false)}>
-          <div className="ld-modal" style={{ width: 500 }} onClick={e => e.stopPropagation()}>
-            <div className="ld-modal-header">
-              <h3>{editingTeacher ? 'Редактировать преподавателя' : 'Новый преподаватель'}</h3>
-              <button className="ld-panel-close" onClick={() => setShowModal(false)}><SClose /></button>
-            </div>
-            <form onSubmit={handleSave} className="ld-modal-body">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <label className="ld-field" style={{ gridColumn: '1 / -1' }}>
-                  <span>Имя и фамилия</span>
-                  <input className="ld-input" name="name" value={form.name} onChange={handleChange} placeholder="Иван Петров" required />
-                </label>
-                <label className="ld-field">
-                  <span>Email</span>
-                  <input className="ld-input" name="email" type="email" value={form.email} onChange={handleChange} placeholder="ivan@example.com" required />
-                </label>
-                <label className="ld-field">
-                  <span>Телефон</span>
-                  <input className="ld-input" name="phone" value={form.phone} onChange={handleChange} placeholder="+998901234567" />
-                </label>
-                <label className="ld-field">
-                  <span>Пароль {editingTeacher && '(оставьте пустым, чтобы не менять)'}</span>
-                  <input className="ld-input" name="password" type="password" value={form.password} onChange={handleChange}
-                    placeholder={editingTeacher ? 'Не менять' : 'Минимум 6 символов'} required={!editingTeacher} />
-                </label>
-                <label className="ld-field">
-                  <span>Статус</span>
-                  <select className="ld-input" name="status" value={form.status} onChange={handleChange}>
-                    <option value="active">Активен</option>
-                    <option value="vacation">На отпуске</option>
-                    <option value="inactive">Неактивен</option>
-                  </select>
-                </label>
-              </div>
-              <label className="ld-field">
-                <span>Предметы (через запятую)</span>
-                <input className="ld-input" name="subjects" value={form.subjects} onChange={handleChange} placeholder="IELTS, General English, Business English" required />
-              </label>
-              <label className="ld-field">
-                <span>Биография</span>
-                <textarea className="ld-input" name="bio" value={form.bio} onChange={handleChange} rows={3} placeholder="Опыт работы, образование..." />
-              </label>
-              <div className="ld-modal-actions">
-                <button type="button" className="ld-btn ld-btn--outline" onClick={() => setShowModal(false)}>Отмена</button>
-                <button type="submit" className="ld-btn ld-btn--primary" disabled={saving}>
-                  {saving ? 'Сохранение...' : editingTeacher ? 'Сохранить' : 'Создать'}
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={editingTeacher ? 'Редактировать преподавателя' : 'Новый преподаватель'}
+        width={500}
+        footer={
+          <>
+            <button type="button" className="ld-btn ld-btn--outline" onClick={() => setShowModal(false)}>Отмена</button>
+            <button type="submit" form="teacher-form" className="ld-btn ld-btn--primary" disabled={saving}>
+              {saving ? 'Сохранение...' : editingTeacher ? 'Сохранить' : 'Создать'}
+            </button>
+          </>
+        }
+      >
+        <form id="teacher-form" onSubmit={handleSave}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <label className="ld-field" style={{ gridColumn: '1 / -1' }}>
+              <span>Имя и фамилия</span>
+              <input className="ld-input" name="name" value={form.name} onChange={handleChange} placeholder="Иван Петров" required />
+            </label>
+            <label className="ld-field">
+              <span>Email</span>
+              <input className="ld-input" name="email" type="email" value={form.email} onChange={handleChange} placeholder="ivan@example.com" required />
+            </label>
+            <label className="ld-field">
+              <span>Телефон</span>
+              <input className="ld-input" name="phone" value={form.phone} onChange={handleChange} placeholder="+998901234567" />
+            </label>
+            <label className="ld-field">
+              <span>Пароль {editingTeacher && '(оставьте пустым, чтобы не менять)'}</span>
+              <input className="ld-input" name="password" type="password" value={form.password} onChange={handleChange}
+                placeholder={editingTeacher ? 'Не менять' : 'Минимум 6 символов'} required={!editingTeacher} />
+            </label>
+            <label className="ld-field">
+              <span>Статус</span>
+              <select className="ld-input" name="status" value={form.status} onChange={handleChange}>
+                <option value="active">Активен</option>
+                <option value="vacation">На отпуске</option>
+                <option value="inactive">Неактивен</option>
+              </select>
+            </label>
           </div>
-        </div>
-      )}
+          <label className="ld-field">
+            <span>Предметы (через запятую)</span>
+            <input className="ld-input" name="subjects" value={form.subjects} onChange={handleChange} placeholder="IELTS, General English, Business English" required />
+          </label>
+          <label className="ld-field">
+            <span>Биография</span>
+            <textarea className="ld-input" name="bio" value={form.bio} onChange={handleChange} rows={3} placeholder="Опыт работы, образование..." />
+          </label>
+        </form>
+      </Modal>
 
     </div>
   );

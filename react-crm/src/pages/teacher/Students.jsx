@@ -2,163 +2,34 @@ import { useState, useEffect, useMemo } from 'react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 
-/* ── SVG Icons ── */
-const SSearch = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-  </svg>
-);
-const SFilter = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="12" y1="18" x2="20" y2="18"/>
-  </svg>
-);
-const SPlus = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-  </svg>
-);
-const SChevron = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="6 9 12 15 18 9"/>
-  </svg>
-);
-const SSort = ({ active, dir }) => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={active ? 'var(--blue-400)' : 'var(--muted)'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    {dir === 'asc' ? (
-      <polyline points="18 15 12 9 6 15"/>
-    ) : (
-      <polyline points="6 9 12 15 18 9"/>
-    )}
-  </svg>
-);
-const SArrowUp = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
-  </svg>
-);
-const SArrowDown = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
-  </svg>
-);
-const SStar = ({ filled }) => (
-  <svg width="11" height="11" viewBox="0 0 24 24" fill={filled ? '#f59e0b' : 'none'} stroke={filled ? '#f59e0b' : 'rgba(255,255,255,0.2)'} strokeWidth="2">
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-  </svg>
-);
-const SGradCap = () => (
-  <svg width="80" height="80" viewBox="0 0 120 120" fill="none">
-    <rect x="10" y="20" width="100" height="80" rx="16" fill="currentColor" opacity="0.04"/>
-    <path d="M60 28L20 50L60 72L100 50L60 28Z" fill="url(#g-grad)" opacity="0.12"/>
-    <path d="M60 28L20 50L60 72L100 50L60 28Z" stroke="url(#g-grad)" strokeWidth="1.5" opacity="0.3"/>
-    <line x1="60" y1="72" x2="60" y2="90" stroke="currentColor" strokeWidth="1.5" opacity="0.15"/>
-    <path d="M45 82L60 90L75 82" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.15"/>
-    <circle cx="60" cy="92" r="4" fill="currentColor" opacity="0.08"/>
-    <path d="M35 55V68C35 68 45 75 60 75C75 75 85 68 85 68V55" stroke="url(#g-grad)" strokeWidth="1.2" opacity="0.2" strokeLinecap="round"/>
-    <defs>
-      <linearGradient id="g-grad" x1="20" y1="28" x2="100" y2="72">
-        <stop offset="0%" stopColor="#3b82f6"/>
-        <stop offset="100%" stopColor="#06b6d4"/>
-      </linearGradient>
-    </defs>
-  </svg>
-);
-const SMore = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
-  </svg>
-);
-const SRefresh = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-  </svg>
-);
-const SBook = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-  </svg>
-);
-const SPhone = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
-  </svg>
-);
-const SMail = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
-  </svg>
-);
-const SClock = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-  </svg>
-);
-const SCalendar = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-  </svg>
-);
-const SUserPlus = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
-  </svg>
-);
+const ico = {
+  arrow: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>,
+  search: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+  chev: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>,
+  phone: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>,
+  mail: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><polyline points="22,4 12,13 2,4"/></svg>,
+  cal: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+  plus: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+};
 
-/* ── Utils ── */
 const initials = (name) => (name || '?').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase();
-const avColors = ['#2563eb','#7c3aed','#db2777','#dc2626','#ea580c','#ca8a04','#16a34a','#0891b2','#4f46e5','#be185d'];
-const avColor = (id) => avColors[(id || 0) % avColors.length];
-const statusLabel = { active: 'Активен', vacation: 'В отпуске', inactive: 'Неактивен' };
-const levelLabel = { 1: 'Начальный', 2: 'Продолжающий', 3: 'Средний', 4: 'Продвинутый', 5: 'Эксперт' };
+const levelLabel = { 1: 'Beginner', 2: 'Elementary', 3: 'Intermediate', 4: 'Advanced', 5: 'Expert' };
 
 const formatLastVisit = (ds) => {
   if (!ds) return '—';
-  const d = new Date(ds); const n = new Date();
-  const diff = Math.floor((n - d) / (1000 * 60 * 60 * 24));
+  const d = new Date(ds);
+  const diff = Math.floor((Date.now() - d) / (86400000));
   if (diff === 0) return 'сегодня';
   if (diff === 1) return 'вчера';
-  if (diff < 7) return `${diff} дн. назад`;
-  return d.toLocaleDateString();
-};
-
-const formatRegDate = (ds) => {
-  if (!ds) return '—';
-  const d = new Date(ds);
+  if (diff < 7) return `${diff} дн назад`;
   return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 };
 
-/* ── Components ── */
-const StatusBadge = ({ status }) => {
-  const colors = { active: 'green', vacation: 'yellow', inactive: 'red' };
-  const c = colors[status] || 'muted';
-  return (
-    <span className={`ts-badge ts-badge--${c}`}>
-      <span className="ts-badge-dot" />
-      {statusLabel[status] || status}
-    </span>
-  );
+const statusOf = (s) => {
+  const m = { active: { tag: 'ed-tag--lime', label: 'Активен' }, vacation: { tag: 'ed-tag--amber', label: 'Отпуск' }, inactive: { tag: 'ed-tag--coral', label: 'Неактивен' } };
+  return m[s] || { tag: 'ed-tag--mute', label: s || '—' };
 };
 
-const Stars = ({ level }) => (
-  <div className="ts-stars">
-    {[1,2,3,4,5].map(i => <SStar key={i} filled={i <= level} />)}
-  </div>
-);
-
-const TH = ({ children, sortKey, sort, onSort, style }) => {
-  const active = sort.key === sortKey;
-  return (
-    <th style={style} className={`ts-th ${active ? 'ts-th--active' : ''}`} onClick={() => onSort(sortKey)}>
-      {children}
-      <span className="ts-th-arrows">
-        <SSort active={active} dir={active ? sort.dir : 'asc'} />
-      </span>
-    </th>
-  );
-};
-
-/* ── Main ── */
 export default function TeacherStudents() {
   const { user } = useAuth();
   const [groups, setGroups] = useState([]);
@@ -166,203 +37,233 @@ export default function TeacherStudents() {
   const [students, setStudents] = useState([]);
   const [search, setSearch] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
-  const [sort, setSort] = useState({ key: '', dir: 'asc' });
-  const [page, setPage] = useState(1);
-  const perPage = 12;
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user?.id) {
-      api.get(`/api/teacher/groups/${user.id}`).then(({ data }) => {
-        setGroups(data);
-        if (data.length > 0 && !selectedGroup) setSelectedGroup(data[0].id);
-      }).catch(() => {});
-    }
+    if (!user?.id) return;
+    api.get(`/api/teacher/groups/${user.id}`).then(({ data }) => {
+      setGroups(data);
+      if (data.length > 0 && !selectedGroup) setSelectedGroup(data[0].id);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, [user?.id]);
 
   useEffect(() => {
     if (selectedGroup) {
       api.get(`/api/groups/${selectedGroup}/students`).then(({ data }) => setStudents(data)).catch(() => setStudents([]));
-      setPage(1);
     }
   }, [selectedGroup]);
 
   const selName = groups.find(g => g.id === selectedGroup)?.name || '';
 
   const filtered = useMemo(() => {
-    let arr = students;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      arr = arr.filter(s =>
-        (s.name || '').toLowerCase().includes(q) ||
-        (s.email || '').toLowerCase().includes(q) ||
-        (s.phone || '').includes(q)
-      );
-    }
-    if (sort.key) {
-      arr = [...arr].sort((a, b) => {
-        const va = (a[sort.key] || '').toString().toLowerCase();
-        const vb = (b[sort.key] || '').toString().toLowerCase();
-        return sort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
-      });
-    }
-    return arr;
-  }, [students, search, sort]);
+    if (!search.trim()) return students;
+    const q = search.toLowerCase();
+    return students.filter(s =>
+      (s.name || '').toLowerCase().includes(q) ||
+      (s.email || '').toLowerCase().includes(q) ||
+      (s.phone || '').includes(q)
+    );
+  }, [students, search]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
-  const paginated = filtered.slice(0, page * perPage);
-  const hasMore = paginated.length < filtered.length;
+  if (loading) return (
+    <div className="ed-page">
+      <div className="ed-loading">
+        <div className="ed-spinner" />
+        <div className="ed-loading-text">Открываем список группы…</div>
+      </div>
+    </div>
+  );
 
-  const handleSort = (key) => {
-    setSort(p => ({ key, dir: p.key === key && p.dir === 'asc' ? 'desc' : 'asc' }));
-  };
+  const today = new Date();
+  const issueNum = `№${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getFullYear()).slice(-2)}`;
+  const totalStudents = groups.reduce((sum, g) => sum + (g.current_students || 0), 0);
 
   return (
-    <div className="page-content">
-      {/* ═══ Header ═══ */}
-      <div className="ts-hdr">
-        <div>
-          <h1 className="ts-hdr-title">Мои студенты</h1>
-          <p className="ts-hdr-sub">
-            {selectedGroup
-              ? `${filtered.length} студент${filtered.length !== 1 ? 'ов' : ''} в группе «${selName}»`
-              : 'Выберите группу'}
-          </p>
+    <div className="ed-page">
+      <div className="ed-masthead">
+        <div className="ed-masthead-l">
+          <span>TEACHER JOURNAL</span>
+          <span className="ed-masthead-sep" />
+          <span>SECTION 02 / STUDENTS</span>
+          <span className="ed-masthead-sep" />
+          <span>{issueNum}</span>
         </div>
-        <button className="ts-add-btn" onClick={() => {}}>
-          <SPlus /> Добавить студента
-        </button>
+        <div className="ed-masthead-c"><span className="ed-masthead-logo">TilUser</span></div>
+        <div className="ed-masthead-r"><span>{totalStudents} TOTAL</span></div>
       </div>
 
-      {/* ═══ Toolbar ═══ */}
-      <div className="ts-toolbar">
-        <div className="ts-search">
-          <SSearch />
-          <input type="text" placeholder="Поиск по студентам..." value={search} onChange={e => setSearch(e.target.value)} />
-          {search && <button className="ts-search-clear" onClick={() => setSearch('')}>✕</button>}
+      <div className="ed-page-head">
+        <div className="ed-page-eyebrow">— Students / 02</div>
+        <h1 className="ed-page-title">Мои <em>студенты</em>.</h1>
+        <p className="ed-page-lead">
+          {selectedGroup ? <>Группа <em style={{ fontStyle: 'italic', color: 'var(--ed-iris)' }}>«{selName}»</em> — {filtered.length} {filtered.length === 1 ? 'студент' : filtered.length > 1 && filtered.length < 5 ? 'студента' : 'студентов'}</> : 'Выберите группу из списка ниже'}
+        </p>
+
+        <div className="ed-page-bar">
+          <div style={{ display: 'flex', gap: 40, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ed-text-mute)', marginBottom: 4 }}>Всего</div>
+              <div style={{ fontFamily: 'Fraunces, serif', fontWeight: 300, fontSize: 42, letterSpacing: '-0.03em', lineHeight: 1 }}>{totalStudents}</div>
+            </div>
+            <div>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ed-text-mute)', marginBottom: 4 }}>Групп</div>
+              <div style={{ fontFamily: 'Fraunces, serif', fontWeight: 300, fontSize: 42, letterSpacing: '-0.03em', lineHeight: 1 }}>{groups.length}</div>
+            </div>
+            <div>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ed-text-mute)', marginBottom: 4 }}>В выборке</div>
+              <div style={{ fontFamily: 'Fraunces, serif', fontWeight: 300, fontSize: 42, letterSpacing: '-0.03em', lineHeight: 1, fontStyle: 'italic', color: 'var(--ed-iris)' }}>{filtered.length}</div>
+            </div>
+          </div>
         </div>
-        <div className="ts-group-select" onClick={() => setShowDropdown(!showDropdown)}>
-          <span>{selName || 'Выберите группу'}</span>
-          <SChevron />
+      </div>
+
+      <div className="ed-toolbar">
+        <div className="ed-search">
+          {ico.search}
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name / email / phone" />
+        </div>
+        {/* Group selector */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowDropdown(!showDropdown)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 10,
+              padding: '12px 18px', borderRadius: 100,
+              background: 'var(--ed-surface)', border: '1px solid var(--ed-border)',
+              color: 'var(--ed-text)', fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase',
+              cursor: 'pointer', whiteSpace: 'nowrap', minWidth: 200,
+            }}>
+            <span>{selName || 'Выберите группу'}</span>
+            <span style={{ marginLeft: 'auto', color: 'var(--ed-text-mute)' }}>{ico.chev}</span>
+          </button>
           {showDropdown && (
-            <div className="ts-dropdown">
-              {groups.map(g => (
-                <button key={g.id} className={`ts-dropdown-item ${g.id === selectedGroup ? 'ts-dropdown-item--active' : ''}`}
-                  onClick={e => { e.stopPropagation(); setSelectedGroup(g.id); setShowDropdown(false); }}>
-                  <span className="ts-dropdown-dot" />
-                  <span>{g.name}</span>
-                  <span className="ts-dropdown-count">{g.current_students || '0'}</span>
-                </button>
-              ))}
-              {groups.length === 0 && <div className="ts-dropdown-empty">Нет групп</div>}
+            <div style={{
+              position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, right: 0, minWidth: 280,
+              maxHeight: 320, overflowY: 'auto',
+              background: '#1a1f2e',
+              border: '1.5px solid rgba(255,255,255,0.18)',
+              borderRadius: 16, boxShadow: '0 -24px 60px rgba(0,0,0,0.55), 0 -4px 14px rgba(0,0,0,0.35)',
+              padding: 6, zIndex: 9999, color: '#fff',
+              animation: 'ed-dropdown-pop 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}>
+              {groups.length === 0 ? (
+                <div style={{
+                  padding: '24px 18px',
+                  textAlign: 'center',
+                  fontSize: 13,
+                  color: '#fff',
+                  lineHeight: 1.5,
+                }}>
+                  <div style={{ fontSize: 28, marginBottom: 8 }}>📭</div>
+                  <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Нет групп</div>
+                  <div style={{ fontSize: 12, color: '#9ca3af' }}>
+                    Попросите администратора создать группу и назначить вам как преподавателю
+                  </div>
+                </div>
+              ) : (
+                groups.map(g => (
+                  <button key={g.id}
+                    onClick={() => { setSelectedGroup(g.id); setShowDropdown(false); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                      padding: '12px 14px', border: 'none', borderRadius: 10,
+                      background: g.id === selectedGroup ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+                      color: 'var(--text, #fff)', cursor: 'pointer', textAlign: 'left',
+                      fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 500,
+                      transition: 'background 0.12s',
+                    }}
+                    onMouseEnter={e => { if (g.id !== selectedGroup) e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+                    onMouseLeave={e => { if (g.id !== selectedGroup) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#6366f1', flexShrink: 0 }} />
+                    <span style={{ flex: 1 }}>{g.name}</span>
+                    <span style={{
+                      padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+                      background: 'rgba(255,255,255,0.08)', color: 'var(--muted, #9ca3af)',
+                    }}>{g.current_students || 0}</span>
+                  </button>
+                ))
+              )}
             </div>
           )}
         </div>
-        <button className="ts-btn ts-btn--outline" title="Обновить" onClick={() => selectedGroup && api.get(`/api/groups/${selectedGroup}/students`).then(({ data }) => setStudents(data))}>
-          <SRefresh />
-        </button>
-        <button className="ts-btn ts-btn--outline">
-          <SFilter /> Фильтр
-        </button>
+        <button className="ed-btn ed-btn--sm">{ico.plus} Добавить</button>
       </div>
 
-      {/* ═══ Content ═══ */}
-      {selectedGroup ? (
-        <div className="ts-table-wrap">
-          <table className="ts-table">
+      {!selectedGroup ? (
+        <div className="ed-empty">
+          <div className="ed-empty-eyebrow">— No selection —</div>
+          <div className="ed-empty-title">Выберите\nгруппу</div>
+          <div className="ed-empty-desc">Чтобы увидеть студентов, выберите группу из списка выше</div>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="ed-empty">
+          <div className="ed-empty-eyebrow">— Empty roster —</div>
+          <div className="ed-empty-title">{search ? 'Ничего\nне найдено' : 'В группе\nпока никого'}</div>
+          <div className="ed-empty-desc">{search ? 'Поменяйте поисковый запрос' : 'Добавьте студента, чтобы начать работу с группой'}</div>
+        </div>
+      ) : (
+        <div style={{ background: 'var(--ed-surface)', border: '1px solid var(--ed-border)', borderRadius: 22, overflow: 'hidden' }}>
+          <table className="ed-teacher-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                <th className="ts-th ts-th--avatar" style={{ width: 52 }}></th>
-                <TH sortKey="name" sort={sort} onSort={handleSort}>Имя и Фамилия</TH>
-                <TH sortKey="group" sort={sort} onSort={handleSort}>Группа</TH>
-                <TH sortKey="level" sort={sort} onSort={handleSort}>Уровень</TH>
-                <TH sortKey="phone" sort={sort} onSort={handleSort}>Телефон</TH>
-                <TH sortKey="email" sort={sort} onSort={handleSort}>Email</TH>
-                <TH sortKey="enrolled_at" sort={sort} onSort={handleSort}>Регистрация</TH>
-                <TH sortKey="last_visit" sort={sort} onSort={handleSort}>Последний визит</TH>
-                <TH sortKey="status" sort={sort} onSort={handleSort} style={{ width: 110 }}>Статус</TH>
-                <th style={{ width: 48 }}></th>
+                {['', 'Имя', 'Уровень', 'Email', 'Телефон', 'Регистрация', 'Последний визит', 'Статус'].map((h, i) => (
+                  <th key={i} style={{
+                    padding: '16px 18px', textAlign: i === 0 ? 'center' : 'left',
+                    fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+                    fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase',
+                    color: 'var(--ed-text-mute)', borderBottom: '1px solid var(--ed-border)',
+                    background: 'var(--ed-paper-soft)', whiteSpace: 'nowrap',
+                  }}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {paginated.length === 0 ? (
-                <tr>
-                  <td colSpan={10}>
-                    <div className="ts-empty">
-                      <div className="ts-empty-illustration">
-                        <SGradCap />
-                      </div>
-                      <h3 className="ts-empty-title">{search ? 'Ничего не найдено' : 'Нет студентов'}</h3>
-                      <p className="ts-empty-desc">
-                        {search ? 'Попробуйте изменить поисковый запрос' : 'В этой группе пока нет студентов'}
-                      </p>
-                      {!search && (
-                        <button className="ts-add-btn ts-add-btn--sm" onClick={() => {}}>
-                          <SPlus /> Добавить студента
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                paginated.map(s => {
-                  const lvl = s.level || 1;
-                  return (
-                    <tr key={s.student_id} className="ts-row">
-                      <td>
-                        <div className="ts-avatar" style={{ background: avColor(s.student_id) }}>
-                          {initials(s.name)}
-                          <span className={`ts-avatar-status ${s.status === 'active' ? 'ts-avatar-status--on' : 'ts-avatar-status--off'}`} />
-                        </div>
-                      </td>
-                      <td><span className="ts-cell-name">{s.name}</span></td>
-                      <td><span className="ts-cell-muted">{selName}</span></td>
-                      <td>
-                        <div className="ts-cell-level">
-                          <span className="ts-level-label">{levelLabel[lvl] || 'Начальный'}</span>
-                          <Stars level={lvl} />
-                        </div>
-                      </td>
-                      <td><span className="ts-cell-iconed"><SPhone />{s.phone || '—'}</span></td>
-                      <td><span className="ts-cell-iconed ts-cell-muted"><SMail />{s.email}</span></td>
-                      <td><span className="ts-cell-iconed"><SCalendar />{formatRegDate(s.enrolled_at)}</span></td>
-                      <td><span className="ts-cell-iconed ts-cell-muted"><SClock />{formatLastVisit(s.last_visit)}</span></td>
-                      <td><StatusBadge status={s.status || 'active'} /></td>
-                      <td><button className="ts-more-btn" title="Действия"><SMore /></button></td>
-                    </tr>
-                  );
-                })
-              )}
+              {filtered.map((s, i) => {
+                const stat = statusOf(s.status || 'active');
+                const lvl = s.level || 1;
+                return (
+                  <tr key={s.student_id || i} style={{ borderBottom: '1px solid var(--ed-border)', transition: 'background 0.15s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--ed-paper-soft)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <td style={{ padding: '16px 18px', width: 56 }}>
+                      <div style={{
+                        width: 40, height: 40, borderRadius: 12,
+                        background: 'var(--ed-ink)', color: 'var(--ed-paper)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontFamily: 'Fraunces, serif', fontWeight: 500, fontSize: 14, letterSpacing: '-0.02em',
+                        margin: '0 auto',
+                      }}>{initials(s.name)}</div>
+                    </td>
+                    <td style={{ padding: '16px 18px' }}>
+                      <div style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, fontSize: 16, letterSpacing: '-0.015em', color: 'var(--ed-text)' }}>{s.name}</div>
+                      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.08em', color: 'var(--ed-text-mute)', textTransform: 'uppercase', marginTop: 2 }}>#{s.student_id}</div>
+                    </td>
+                    <td style={{ padding: '16px 18px' }}>
+                      <span className="ed-tag ed-tag--iris">{levelLabel[lvl] || `L${lvl}`}</span>
+                    </td>
+                    <td style={{ padding: '16px 18px', fontSize: 13, color: 'var(--ed-text-soft)' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{ico.mail} {s.email || '—'}</span>
+                    </td>
+                    <td style={{ padding: '16px 18px', fontSize: 13, color: 'var(--ed-text-soft)' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{ico.phone} {s.phone || '—'}</span>
+                    </td>
+                    <td style={{ padding: '16px 18px', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ed-text-mute)' }}>
+                      {s.enrolled_at ? new Date(s.enrolled_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : '—'}
+                    </td>
+                    <td style={{ padding: '16px 18px', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ed-text-mute)' }}>
+                      {formatLastVisit(s.last_visit)}
+                    </td>
+                    <td style={{ padding: '16px 18px' }}>
+                      <span className={`ed-tag ${stat.tag}`}>{stat.label}</span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
-        </div>
-      ) : (
-        <div className="ts-empty" style={{ marginTop: 80 }}>
-          <div className="ts-empty-illustration">
-            <SBook />
-          </div>
-          <h3 className="ts-empty-title">Выберите группу</h3>
-          <p className="ts-empty-desc">Выберите группу из списка, чтобы увидеть студентов</p>
-        </div>
-      )}
-
-      {/* ═══ Pagination ═══ */}
-      {selectedGroup && filtered.length > 0 && (
-        <div className="ts-pagination">
-          <span className="ts-pagination-info">
-            Показано {paginated.length} из {filtered.length}
-          </span>
-          <div className="ts-pagination-actions">
-            {page > 1 && (
-              <button className="ts-btn ts-btn--sm" onClick={() => setPage(p => p - 1)}>
-                <SArrowUp />
-              </button>
-            )}
-            {hasMore && (
-              <button className="ts-btn ts-btn--primary ts-btn--sm" onClick={() => setPage(p => p + 1)}>
-                Показать ещё
-              </button>
-            )}
-          </div>
         </div>
       )}
     </div>

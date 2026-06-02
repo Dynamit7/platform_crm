@@ -206,6 +206,7 @@ async def confirm_hw_submission(callback: types.CallbackQuery, state: FSMContext
             
     # Sync with CRM
     try:
+        headers = {"X-Bot-Secret": config.BOT_TOKEN.get_secret_value()}
         async with aiohttp.ClientSession() as http_session:
             payload = {
                 "telegram_id": db_user.telegram_id,
@@ -214,7 +215,7 @@ async def confirm_hw_submission(callback: types.CallbackQuery, state: FSMContext
                 "title": f"ДЗ к уроку {lesson_dt}" if lesson else "ДЗ из бота",
                 "content": caption if file_type == "text" else f"[{file_type.upper()}] {file_id}"
             }
-            await http_session.post(f"{config.API_URL}/sync-homework", json=payload, timeout=3)
+            await http_session.post(f"{config.API_URL}/sync-homework", json=payload, headers=headers, timeout=3)
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"Failed to sync homework to CRM: {e}")

@@ -17,8 +17,8 @@ def get_lesson_feedback_kb(lesson_id: int) -> InlineKeyboardMarkup:
     # 5 stars in one row
     stars_row = []
     for i in range(1, 6):
-        stars_row.append(InlineKeyboardButton(text=f"{i} ⭐", callback_data=f"st_rate_{lesson_id}_{i}"))
+        stars_row.append(InlineKeyboardButton(text=f"{i} ⭐", callback_data=f"rate_lesson:{lesson_id}"))
     buttons.append(stars_row)
     
-    buttons.append([InlineKeyboardButton(text="❌ Пропустить", callback_data="st_rate_skip")])
+    buttons.append([InlineKeyboardButton(text="❌ Пропустить", callback_data="student:main")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)

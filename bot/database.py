@@ -3,11 +3,13 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from bot.config import config
 
 # Create async engine
+_db_url = config.DATABASE_URL
+_connect_args = {"timeout": 15} if "sqlite" in _db_url else {}
 engine = create_async_engine(
-    config.DATABASE_URL,
-    echo=False,  # Set to True for debugging SQL queries
+    _db_url,
+    echo=False,
     future=True,
-    connect_args={"timeout": 15}
+    connect_args=_connect_args,
 )
 
 # Create async session factory (Renamed for consistency)

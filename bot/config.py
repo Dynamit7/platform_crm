@@ -18,14 +18,16 @@ class Settings(BaseSettings):
 
     # --- Database Configuration ---
     # Defaulting to local SQLite for easier deployment and testing
-    DATABASE_URL: str = "sqlite+aiosqlite:///./education_center_v2.db"
+    # For production: postgresql+asyncpg://user:pass@host:5432/dbname
+    DATABASE_URL: str = "sqlite+aiosqlite:///./education_center.db"
     
     # --- Administrator Settings ---
     # Can be a single ID (int) or a list [123, 456] / 123, 456
     ADMIN_IDS: List[int] = []
 
     # --- Project Environment ---
-    ENVIRONMENT: str = "production"  # development, production
+    ENVIRONMENT: str = "production"
+    TZ: str = "Asia/Tashkent"
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
     
@@ -35,7 +37,7 @@ class Settings(BaseSettings):
     # --- ЮKassa Settings (Payments) ---
     YOOKASSA_SHOP_ID: str = ""
     YOOKASSA_SECRET_KEY: SecretStr = SecretStr("")
-    PAYMENT_RETURN_URL: str = "https://t.me/SmartEduBot"
+    PAYMENT_RETURN_URL: str = "https://tiluser.org"
 
     # --- Notification Settings ---
     CHANNEL_ID: Optional[str] = None
@@ -78,8 +80,8 @@ class Settings(BaseSettings):
             v = v.replace("sqlite://", "sqlite+aiosqlite://")
             
         if "sqlite" in v and "///./" in v and v.count("/") < 5:
-            # Resolve to absolute path in project root
-            project_root = Path(__file__).parent.parent.absolute().as_posix()
+            # Resolve to absolute path in web/ subdirectory
+            project_root = (Path(__file__).parent.parent / 'web').absolute().as_posix()
             v = v.replace("///./", f"///{project_root}/")
         return v
 

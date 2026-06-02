@@ -13,7 +13,7 @@ class UserRepository(BaseRepository[User]):
             select(User)
             .where(User.telegram_id == telegram_id)
             .options(
-                selectinload(User.student),
+                selectinload(User.student_profile),
                 selectinload(User.teacher),
                 selectinload(User.admin)
             )

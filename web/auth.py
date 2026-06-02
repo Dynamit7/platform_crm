@@ -5,18 +5,15 @@ from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from database import get_db
 import models
 import secrets
 import os
-import time
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# ──────────────────────────────────────
-# Config — читается из .env
-# ──────────────────────────────────────
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY не задан в .env! Создайте .env файл на основе .env.example")
@@ -28,23 +25,14 @@ REFRESH_TOKEN_EXPIRE_DAYS = 30
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-# ──────────────────────────────────────
-# In-memory rate limiter (simple)
-# ──────────────────────────────────────
-_attempts: dict = {}
-
-def check_rate_limit(key: str, max_attempts: int = 20, window_seconds: int = 60):
-    """Returns True if under limit, False if rate limited."""
-    now = time.time()
-    window_start = now - window_seconds
-    if key in _attempts:
-        _attempts[key] = [t for t in _attempts[key] if t > window_start]
-        if len(_attempts[key]) >= max_attempts:
-            return False
-        _attempts[key].append(now)
-    else:
-        _attempts[key] = [now]
-    return True
+def check_rate_limit(key: str, db: Session, max_attempts: int = 20, window_seconds: int = 60):
+    window_start = datetime.utcnow() - timedelta(seconds=window_seconds)
+    count = db.query(func.count(models.LoginAttempt.id)).filter(
+        models.LoginAttempt.email == key,
+        models.LoginAttempt.created_at > window_start,
+        models.LoginAttempt.success == False,
+    ).scalar()
+    return (count or 0) < max_attempts
 
 def get_client_ip(request: Request) -> str:
     forwarded = request.headers.get("X-Forwarded-For")
@@ -106,15 +94,16 @@ def create_db_session(db: Session, user_id: int) -> str:
     return raw_token
 
 
-def rotate_db_session(db: Session, old_token: str) -> Optional[str]:
-    """Delete old session and create new one. Returns new refresh token or None."""
+def rotate_db_session(db: Session, old_token: str):
+    """Delete old session and create new one. Returns (new_token, user_id) or None."""
     session = db.query(models.Session).filter(models.Session.refresh_token == old_token).first()
     if not session or session.expires_at < datetime.utcnow():
         return None
     user_id = session.user_id
     db.delete(session)
     db.commit()
-    return create_db_session(db, user_id)
+    new_token = create_db_session(db, user_id)
+    return new_token, user_id
 
 
 def cleanup_expired_sessions(db: Session):

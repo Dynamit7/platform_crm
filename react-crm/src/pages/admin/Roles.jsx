@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
+import Modal from '../../components/Modal';
 
 const SPlus = () => (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>);
 const SClose = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>);
@@ -117,7 +118,7 @@ export default function AdminRoles() {
   }), [admins]);
 
   return (
-    <div className="page-content" style={{ padding: '24px 28px' }}>
+    <div className="page-content ed-page ed-admin">
       <div style={s.header}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: '-0.4px', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -254,77 +255,77 @@ export default function AdminRoles() {
       </div>
 
       {/* Edit Role Modal */}
-      {editingUser && (
-        <div className="ld-overlay" onClick={() => setEditingUser(null)}>
-          <div className="ld-modal" style={{ width: 400 }} onClick={e => e.stopPropagation()}>
-            <div className="ld-modal-header">
-              <h3><SKey style={{ marginRight: 8 }} /> Изменить роль</h3>
-              <button className="ld-panel-close" onClick={() => setEditingUser(null)}><SClose /></button>
-            </div>
-            <div className="ld-modal-body">
-              <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
-                Пользователь: <strong>{editingUser.name || editingUser.email}</strong>
-              </p>
-              <label className="ld-field">
-                <span>Новая роль</span>
-                <select className="ld-input" value={editRole} onChange={e => setEditRole(e.target.value)}
-                  style={{ cursor: 'pointer', fontFamily: 'inherit' }}>
-                  <option value="super_admin">👑 Super Admin</option>
-                  <option value="admin">🛡️ Администратор</option>
-                  <option value="teacher">📚 Преподаватель</option>
-                  <option value="student">👨‍🎓 Студент</option>
-                </select>
-              </label>
-            </div>
-            <div className="ld-modal-actions">
-              <button className="ld-btn ld-btn--outline" onClick={() => setEditingUser(null)}>Отмена</button>
-              <button className="ld-btn ld-btn--primary" onClick={saveRole} disabled={editSaving || editRole === editingUser.role}>
-                {editSaving ? 'Сохранение...' : 'Сохранить'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={!!editingUser}
+        onClose={() => setEditingUser(null)}
+        title="Изменить роль"
+        width={400}
+        footer={
+          <>
+            <button type="button" className="ld-btn ld-btn--outline" onClick={() => setEditingUser(null)}>Отмена</button>
+            <button type="button" className="ld-btn ld-btn--primary" onClick={saveRole} disabled={editSaving || (editingUser && editRole === editingUser.role)}>
+              {editSaving ? 'Сохранение...' : 'Сохранить'}
+            </button>
+          </>
+        }
+      >
+        {editingUser && (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              Пользователь: <strong>{editingUser.name || editingUser.email}</strong>
+            </p>
+            <label className="ld-field">
+              <span>Новая роль</span>
+              <select className="ld-input" value={editRole} onChange={e => setEditRole(e.target.value)}
+                style={{ cursor: 'pointer', fontFamily: 'inherit' }}>
+                <option value="super_admin">👑 Super Admin</option>
+                <option value="admin">🛡️ Администратор</option>
+                <option value="teacher">📚 Преподаватель</option>
+                <option value="student">👨‍🎓 Студент</option>
+              </select>
+            </label>
+          </>
+        )}
+      </Modal>
 
       {/* Create Admin Modal */}
-      {showCreateModal && (
-        <div className="ld-overlay" onClick={() => setShowCreateModal(false)}>
-          <div className="ld-modal" style={{ width: 440 }} onClick={e => e.stopPropagation()}>
-            <div className="ld-modal-header">
-              <h3>Создать администратора</h3>
-              <button className="ld-panel-close" onClick={() => setShowCreateModal(false)}><SClose /></button>
-            </div>
-            <form onSubmit={createAdmin} className="ld-modal-body">
-              <label className="ld-field">
-                <span>Имя</span>
-                <input className="ld-input" value={createForm.name} onChange={e => setCreateForm(p => ({ ...p, name: e.target.value }))} placeholder="Имя и фамилия" required />
-              </label>
-              <label className="ld-field">
-                <span>Email</span>
-                <input className="ld-input" type="email" value={createForm.email} onChange={e => setCreateForm(p => ({ ...p, email: e.target.value }))} placeholder="email@example.com" required />
-              </label>
-              <label className="ld-field">
-                <span>Пароль</span>
-                <input className="ld-input" type="password" value={createForm.password} onChange={e => setCreateForm(p => ({ ...p, password: e.target.value }))} placeholder="Минимум 6 символов" required minLength={6} />
-              </label>
-              <label className="ld-field">
-                <span>Роль</span>
-                <select className="ld-input" value={createForm.role} onChange={e => setCreateForm(p => ({ ...p, role: e.target.value }))}
-                  style={{ cursor: 'pointer', fontFamily: 'inherit' }}>
-                  <option value="admin">🛡️ Администратор</option>
-                  <option value="super_admin">👑 Super Admin</option>
-                </select>
-              </label>
-              <div className="ld-modal-actions">
-                <button type="button" className="ld-btn ld-btn--outline" onClick={() => setShowCreateModal(false)}>Отмена</button>
-                <button type="submit" className="ld-btn ld-btn--primary" disabled={creating}>
-                  {creating ? 'Создание...' : 'Создать'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Создать администратора"
+        width={440}
+        footer={
+          <>
+            <button type="button" className="ld-btn ld-btn--outline" onClick={() => setShowCreateModal(false)}>Отмена</button>
+            <button type="submit" form="role-create-form" className="ld-btn ld-btn--primary" disabled={creating}>
+              {creating ? 'Создание...' : 'Создать'}
+            </button>
+          </>
+        }
+      >
+        <form id="role-create-form" onSubmit={createAdmin}>
+          <label className="ld-field">
+            <span>Имя</span>
+            <input className="ld-input" value={createForm.name} onChange={e => setCreateForm(p => ({ ...p, name: e.target.value }))} placeholder="Имя и фамилия" required />
+          </label>
+          <label className="ld-field">
+            <span>Email</span>
+            <input className="ld-input" type="email" value={createForm.email} onChange={e => setCreateForm(p => ({ ...p, email: e.target.value }))} placeholder="email@example.com" required />
+          </label>
+          <label className="ld-field">
+            <span>Пароль</span>
+            <input className="ld-input" type="password" value={createForm.password} onChange={e => setCreateForm(p => ({ ...p, password: e.target.value }))} placeholder="Минимум 6 символов" required minLength={6} />
+          </label>
+          <label className="ld-field">
+            <span>Роль</span>
+            <select className="ld-input" value={createForm.role} onChange={e => setCreateForm(p => ({ ...p, role: e.target.value }))}
+              style={{ cursor: 'pointer', fontFamily: 'inherit' }}>
+              <option value="admin">🛡️ Администратор</option>
+              <option value="super_admin">👑 Super Admin</option>
+            </select>
+          </label>
+        </form>
+      </Modal>
     </div>
   );
 }

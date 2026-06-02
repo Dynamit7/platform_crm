@@ -3,280 +3,165 @@ import { Link } from 'react-router-dom';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 
-/* ── Icons ── */
-const SBook = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-  </svg>
-);
-const SHW = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-  </svg>
-);
-const SZap = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-  </svg>
-);
-const SStar = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-  </svg>
-);
-const SCal = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-  </svg>
-);
-const SClock = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-  </svg>
-);
-const SChevronRight = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="9 18 15 12 9 6"/>
-  </svg>
-);
-const SVideo = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-  </svg>
-);
-const SWallet = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
-  </svg>
-);
-const SCheck = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12"/>
-  </svg>
-);
-const SX = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-  </svg>
-);
-const SArrowUp = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
-  </svg>
-);
-const SArrowDown = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
-  </svg>
-);
-
-const LEVELS = ['A1','A2','B1','B2','C1','C2'];
-const MONTHS = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
-const DAYS = ['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
-
-/* ── Inline styles ── */
-const s = {
-  page: {
-    padding: '28px 32px',
-    maxWidth: 1280,
-    margin: '0 auto',
-    fontFamily: 'Inter, sans-serif',
-  },
-  welcome: {
-    position: 'relative',
-    borderRadius: 20,
-    padding: '32px 36px',
-    marginBottom: 28,
-    background: 'linear-gradient(135deg, #1e3a5f 0%, #2563eb 50%, #0891b2 100%)',
-    overflow: 'hidden',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  welcomeBg: {
-    position: 'absolute',
-    inset: 0,
-    background: 'radial-gradient(circle at 80% 20%, rgba(255,255,255,0.08) 0%, transparent 60%)',
-    pointerEvents: 'none',
-  },
-  welcomeText: { position: 'relative', zIndex: 1 },
-  welcomeTitle: { fontSize: 26, fontWeight: 700, color: '#fff', margin: 0 },
-  welcomeSub: { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
-  welcomeActions: { display: 'flex', gap: 10, position: 'relative', zIndex: 1 },
-  welcomeBtn: {
-    display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 12,
-    fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', border: 'none',
-  },
-  welcomeBtnPrimary: {
-    background: 'rgba(255,255,255,0.2)', color: '#fff', backdropFilter: 'blur(6px)',
-  },
-  welcomeBtnOutline: {
-    background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.2)',
-  },
-  grid2: {
-    display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24,
-  },
-  grid3: {
-    display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20, marginBottom: 24,
-  },
-  card: {
-    background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--border)',
-    padding: 20, transition: 'box-shadow 0.2s, transform 0.2s',
-  },
-  cardHeader: {
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16,
-  },
-  cardTitle: { fontSize: 15, fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 8 },
-  cardLink: { fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', textDecoration: 'none' },
+/* ── Icons (minimal stroke set) ── */
+const ico = {
+  arrow: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>,
+  arrowUp: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>,
+  arrowDown: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>,
+  video: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>,
+  play: <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg>,
 };
 
-/* ── KPI Card ── */
-function KpiCard({ icon: Icon, value, label, sub, color, trend }) {
+const LEVELS = ['A1','A2','B1','B2','C1','C2'];
+const LEVEL_XP = [0, 100, 300, 600, 1000, 1600];
+const MONTHS_FULL = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+const MONTHS_SHORT = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+const DAYS_ROMANCE = ['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+
+const greetByHour = (h) => {
+  if (h < 6) return 'Доброй ночи';
+  if (h < 12) return 'Доброе утро';
+  if (h < 18) return 'Добрый день';
+  return 'Добрый вечер';
+};
+
+const courseEmoji = (title = '') => {
+  const t = title.toLowerCase();
+  if (t.includes('япон') || t.includes('japan')) return '🌸';
+  if (t.includes('англ') || t.includes('ielts') || t.includes('english')) return '🇬🇧';
+  if (t.includes('кит') || t.includes('chinese')) return '🐉';
+  if (t.includes('коре')) return '🇰🇷';
+  if (t.includes('нем')) return '🇩🇪';
+  if (t.includes('фран')) return '🇫🇷';
+  if (t.includes('испан')) return '🇪🇸';
+  if (t.includes('тур')) return '🇹🇷';
+  if (t.includes('араб')) return '🕌';
+  return '✦';
+};
+
+/* ── Attendance ring ── */
+function AttendanceRing({ rate }) {
+  const R = 78;
+  const C = 2 * Math.PI * R;
+  const pct = Math.max(0, Math.min(rate || 0, 100));
+  const offset = C - (pct / 100) * C;
   return (
-    <div style={{
-      ...s.card, cursor: 'default', padding: 22,
-      borderLeft: `3px solid ${color}`,
-    }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-        <div style={{ width: 44, height: 44, borderRadius: 14, background: `${color}15`, color,
-          display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Icon />
-        </div>
-        {trend !== undefined && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, fontWeight: 600, color: trend >= 0 ? '#10b981' : '#ef4444' }}>
-            {trend >= 0 ? <SArrowUp /> : <SArrowDown />}{Math.abs(trend)}%
-          </div>
-        )}
+    <div className="ed-ring">
+      <svg width="200" height="200" viewBox="0 0 200 200">
+        <circle cx="100" cy="100" r={R} fill="none" stroke="var(--ed-border)" strokeWidth="6" />
+        <circle cx="100" cy="100" r={R} fill="none" stroke="url(#ringGrad)" strokeWidth="10"
+          strokeLinecap="round" strokeDasharray={C} strokeDashoffset={offset}
+          transform="rotate(-90 100 100)"
+          style={{ transition: 'stroke-dashoffset 1.4s cubic-bezier(0.22, 1, 0.36, 1)' }} />
+        <defs>
+          <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#5b3df5" />
+            <stop offset="100%" stopColor="#b8f04b" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <div className="ed-ring-center">
+        <div className="ed-ring-num">{rate != null ? rate : '—'}<em style={{ fontSize: '0.4em', fontStyle: 'italic', color: 'var(--ed-text-mute)', marginLeft: 2 }}>%</em></div>
+        <div className="ed-ring-label">Посещ.</div>
       </div>
-      <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--text)', lineHeight: 1.2 }}>{value}</div>
-      <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{label}</div>
-      {sub && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>{sub}</div>}
     </div>
   );
 }
 
-/* ── Course Progress Card ── */
-function CourseCard({ course }) {
-  return (
-    <div style={{
-      ...s.card, padding: 16,
-    }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.1)'; }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}>
-      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>
-        {course.course?.title || 'Курс'}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-        <div style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-          <div style={{ width: `${course.progress || 0}%`, height: '100%', background: 'linear-gradient(90deg, #2563eb, #0891b2)', borderRadius: 3 }} />
-        </div>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', minWidth: 32, textAlign: 'right' }}>{course.progress || 0}%</span>
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', gap: 12, marginTop: 6 }}>
-        <span>XP: {course.xp || 0}</span>
-      </div>
-    </div>
-  );
-}
-
-/* ── Attendance Dot Chart ── */
-function AttChart({ trend }) {
-  if (!trend || trend.length === 0) return <div style={{ fontSize: 13, color: 'var(--muted)' }}>Нет данных</div>;
-  return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', justifyContent: 'center', height: 80, paddingTop: 8 }}>
-      {trend.map((t, i) => (
-        <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-          <div style={{
-            width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: t.attended ? '#10b98118' : '#ef444418',
-            color: t.attended ? '#10b981' : '#ef4444',
-            fontSize: 12, fontWeight: 700,
-          }}>
-            {t.attended ? <SCheck /> : <SX />}
+/* ── Attendance bar chart ── */
+function AttendanceBars({ trend }) {
+  const data = (trend || []).slice(-10);
+  const labels = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+  if (data.length === 0) {
+    return (
+      <div className="ed-att-bars">
+        {labels.map((l, i) => (
+          <div key={i} className="ed-att-bar">
+            <div className="ed-att-col ed-att-col--off" style={{ height: '18%', opacity: 0.18 }} />
+            <div className="ed-att-bar-label">{l}</div>
           </div>
-          <span style={{ fontSize: 10, color: 'var(--muted)' }}>{t.date}</span>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="ed-att-bars">
+      {data.map((t, i) => (
+        <div key={i} className="ed-att-bar">
+          <div className={`ed-att-col ${t.attended ? 'ed-att-col--on' : 'ed-att-col--off'}`}
+            style={{ height: `${t.attended ? 100 : 35}%` }} />
+          <div className="ed-att-bar-label">{t.date?.split('.')[0] || labels[i % 7]}</div>
         </div>
       ))}
     </div>
   );
 }
 
-/* ── Mini Payment Row ── */
-function PaymentRow({ p }) {
-  const statusColors = { paid: '#10b981', pending: '#f59e0b', failed: '#ef4444', refunded: '#8b5cf6' };
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{p.description || 'Оплата'}</div>
-        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{p.date}</div>
-      </div>
-      <div style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
-          {Number(p.amount).toLocaleString()} {p.currency || 'UZS'}
-        </div>
-        {p.method === 'card' && <span style={{ fontSize: 10, color: 'var(--muted)' }}>{p.method === 'online' ? 'Онлайн' : p.method === 'card' ? 'Карта' : p.method === 'cash' ? 'Наличные' : p.method}</span>}
-      </div>
-    </div>
-  );
-}
-
-/* ── Main Dashboard ── */
 export default function StudentDashboard() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [countdown, setCountdown] = useState('');
+  const [time, setTime] = useState(new Date());
   const timerRef = useRef(null);
+  const clockRef = useRef(null);
 
   useEffect(() => {
     if (!user?.id) return;
     api.get(`/api/dashboard/${user.id}`).then(({ data }) => {
-      setData(data);
-      setLoading(false);
+      setData(data); setLoading(false);
     }).catch(() => setLoading(false));
   }, [user?.id]);
 
-  // Countdown timer for upcoming lesson
+  // Live clock for masthead
+  useEffect(() => {
+    clockRef.current = setInterval(() => setTime(new Date()), 60_000);
+    return () => clearInterval(clockRef.current);
+  }, []);
+
   useEffect(() => {
     if (!data?.upcoming_lesson?.date) return;
     const parsed = data.upcoming_lesson.date?.split('.').reverse().join('-');
     if (!parsed) return;
     const lessonDate = new Date(parsed + 'T' + (data.upcoming_lesson.time || '00:00'));
     if (isNaN(lessonDate.getTime())) return;
-
     const tick = () => {
       const diff = lessonDate - Date.now();
-      if (diff <= 0) { setCountdown('Началось!'); clearInterval(timerRef.current); return; }
+      if (diff <= 0) { setCountdown('Идёт сейчас'); clearInterval(timerRef.current); return; }
       const d = Math.floor(diff / 86400000);
       const h = Math.floor((diff % 86400000) / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
-      setCountdown(d > 0 ? `${d}д ${h}ч ${m}м` : `${h}ч ${m}м`);
+      setCountdown(d > 0 ? `${d}д ${h}ч` : h > 0 ? `${h}ч ${m}м` : `${m} мин`);
     };
     tick();
     timerRef.current = setInterval(tick, 30000);
     return () => clearInterval(timerRef.current);
   }, [data?.upcoming_lesson]);
 
-  const today = new Date();
-  const dayName = DAYS[today.getDay()];
-  const dateStr = `${today.getDate()} ${MONTHS[today.getMonth()]} ${today.getFullYear()}`;
-
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
-        <div style={{ width: 28, height: 28, border: '3px solid var(--border)', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
+      <div className="ed-page">
+        <div className="ed-loading">
+          <div className="ed-spinner" />
+          <div className="ed-loading-text">Загружаем номер…</div>
+        </div>
       </div>
     );
   }
+
+  const today = new Date();
+  const dayName = DAYS_ROMANCE[today.getDay()];
+  const dateStr = `${today.getDate()} ${MONTHS_FULL[today.getMonth()]} ${today.getFullYear()}`;
+  const issueNum = `№${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getFullYear()).slice(-2)}`;
+  const greet = greetByHour(today.getHours());
+  const firstName = user?.name?.split(' ')[0] || 'Student';
+  const clockStr = time.toTimeString().slice(0, 5);
 
   const stats = data?.stats || {};
   const enrollments = data?.enrollments || [];
   const upcoming = data?.upcoming_lesson;
   const homeworks = data?.homeworks || [];
   const schedule = data?.schedule || [];
-  const vocabulary = data?.vocabulary || [];
   const attTrend = data?.attendance_trend || [];
   const attRate = data?.attendance_rate;
   const payments = data?.recent_payments || [];
@@ -285,229 +170,395 @@ export default function StudentDashboard() {
   const xpTotal = data?.xp || stats.xp || 0;
   const pendingHW = homeworks.filter(h => h.status === 'pending' && !h.is_overdue).length;
   const overdueHW = homeworks.filter(h => h.is_overdue && !h.is_submitted).length;
-  const levelLabel = LEVELS[Math.min(Math.max(levelNum - 1, 0), 5)];
+  const levelIdx = Math.min(Math.max(levelNum - 1, 0), 5);
+  const levelLabel = LEVELS[levelIdx];
+  const nextXp = LEVEL_XP[Math.min(levelIdx + 1, 5)];
+  const xpToNext = Math.max(nextXp - xpTotal, 0);
 
-  const kpis = [
-    { key: 'courses', label: 'Мои курсы', value: enrollments.length, icon: SBook, color: '#2563eb', trend: 0 },
-    { key: 'hw', label: 'ДЗ ожидают', value: pendingHW, icon: SHW, color: '#f59e0b', sub: overdueHW > 0 ? `${overdueHW} просрочено` : undefined, trend: overdueHW > 0 ? -15 : 5 },
-    { key: 'xp', label: 'Всего XP', value: xpTotal, icon: SZap, color: '#8b5cf6', trend: null },
-    { key: 'level', label: 'Уровень', value: levelLabel, icon: SStar, color: '#10b981', sub: streakDays > 0 ? `🔥 ${streakDays} дней подряд` : undefined, trend: null },
+  // Marquee ticker items
+  const tickerItems = [
+    `${xpTotal.toLocaleString('ru-RU')} XP earned`,
+    `Level ${levelLabel}`,
+    streakDays > 0 ? `${streakDays}-day streak` : 'Begin your streak',
+    enrollments.length > 0 ? `${enrollments.length} active courses` : 'Awaiting enrollment',
+    attRate != null ? `${attRate}% attendance` : 'New term',
+    `Studying since ${user?.created_at ? new Date(user.created_at).getFullYear() : new Date().getFullYear()}`,
+    'Stay curious',
+    'Practice daily',
   ];
 
+  const upcomingDay = upcoming?.date?.split('.')[0];
+  const upcomingMonth = MONTHS_SHORT[(parseInt(upcoming?.date?.split('.')[1]) || 1) - 1];
+
   return (
-    <div style={s.page}>
-      {/* ═══ Welcome ═══ */}
-      <div style={s.welcome}
-        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.005)'; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}>
-        <div style={s.welcomeBg} />
-        <div style={s.welcomeText}>
-          <h1 style={s.welcomeTitle}>{user?.name ? `Привет, ${user.name.split(' ')[0]}!` : 'Дашборд'}</h1>
-          <p style={s.welcomeSub}>{dayName}, {dateStr}</p>
+    <div className="ed-page">
+      {/* ═══════════════ MASTHEAD ═══════════════ */}
+      <div className="ed-masthead">
+        <div className="ed-masthead-l">
+          <span>STUDENT JOURNAL</span>
+          <span className="ed-masthead-sep" />
+          <span>{issueNum}</span>
+          <span className="ed-masthead-sep" />
+          <span>VOL. {today.getFullYear() - 2024}</span>
         </div>
-        <div style={s.welcomeActions}>
-          <Link to="/chat" style={{ ...s.welcomeBtn, ...s.welcomeBtnPrimary }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.3)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.2)'; }}>
-            <SVideo /> Чат
-          </Link>
-          <Link to="/schedule" style={{ ...s.welcomeBtn, ...s.welcomeBtnOutline }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}>
-            <SCal /> Расписание
-          </Link>
+        <div className="ed-masthead-c">
+          <span className="ed-masthead-logo">TilUser</span>
+        </div>
+        <div className="ed-masthead-r">
+          <span><span className="ed-live-dot" style={{ display: 'inline-block', marginRight: 8 }} /> LIVE · {clockStr}</span>
+          <span className="ed-masthead-sep" />
+          <span>{dayName.slice(0,3).toUpperCase()}</span>
         </div>
       </div>
 
-      {/* ═══ KPI Row ═══ */}
-      <div style={s.grid3}>
-        {kpis.map(k => <KpiCard key={k.key} icon={k.icon} value={k.value} label={k.label} color={k.color} sub={k.sub} trend={k.trend} />)}
-      </div>
-
-      {/* ═══ 2-col: Upcoming + Attendance ═══ */}
-      <div style={s.grid2}>
-        {/* ── Upcoming Lesson ── */}
-        <div style={s.card}
-          onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)'; }}
-          onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}>
-          <div style={s.cardHeader}>
-            <h3 style={s.cardTitle}><SVideo /> Ближайший урок</h3>
+      {/* ═══════════════ HERO ═══════════════ */}
+      <div className="ed-hero">
+        <div className="ed-hero-left">
+          <div>
+            <div className="ed-day">{dayName},</div>
+            <h1 className="ed-greet">
+              {greet},<br />
+              <em>{firstName}</em>.
+            </h1>
           </div>
+          <div className="ed-hero-byline">
+            {overdueHW > 0
+              ? <>На сегодня <span>{overdueHW} просрочено</span> · давайте наверстаем</>
+              : pendingHW > 0
+              ? <>На сегодня <span>{pendingHW} ДЗ</span> · вы в плане</>
+              : streakDays > 0
+              ? <>Серия <span>{streakDays} дней</span> · продолжайте в том же духе</>
+              : <>Уровень <span>{levelLabel}</span> · {xpTotal.toLocaleString('ru-RU')} XP в копилке</>}
+          </div>
+        </div>
+
+        <div className="ed-next">
           {upcoming ? (
-            <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-              <div style={{
-                width: 64, height: 64, borderRadius: 16,
-                background: 'linear-gradient(135deg, #2563eb15, #0891b215)',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                color: '#2563eb', fontWeight: 700, flexShrink: 0,
-              }}>
-                <span style={{ fontSize: 22, lineHeight: 1 }}>{upcoming.date?.split('.')[0]}</span>
-                <span style={{ fontSize: 10, fontWeight: 500 }}>{upcoming.date?.split('.')[1]}</span>
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>{upcoming.title}</div>
-                <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--muted)' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><SClock /> {upcoming.time}</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><SCal /> {upcoming.date}</span>
+            <>
+              <div>
+                <div className="ed-next-tag">
+                  {countdown ? `Старт через ${countdown}` : 'Следующий урок'}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{upcoming.teacher}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {countdown && <span style={{ fontSize: 11, fontWeight: 600, color: '#f59e0b' }}>⏱ {countdown}</span>}
-                    {upcoming.zoom_link && (
-                      <a href={upcoming.zoom_link} target="_blank" rel="noreferrer"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: '#2563eb', textDecoration: 'none', padding: '4px 10px', borderRadius: 8, background: '#2563eb0f' }}>
-                        <SVideo /> Zoom
-                      </a>
-                    )}
+                <div className="ed-next-time">{upcoming.time}</div>
+                <div className="ed-next-title">{upcoming.title}</div>
+                <div className="ed-next-meta">
+                  {upcomingDay} {upcomingMonth} · {upcoming.teacher || 'Преподаватель'}
+                </div>
+              </div>
+              <div className="ed-next-actions">
+                {upcoming.zoom_link ? (
+                  <a href={upcoming.zoom_link} target="_blank" rel="noreferrer" className="ed-next-cta">
+                    {ico.play} Войти в урок {ico.arrow}
+                  </a>
+                ) : (
+                  <Link to="/schedule" className="ed-next-cta">
+                    Открыть {ico.arrow}
+                  </Link>
+                )}
+                <Link to="/schedule" className="ed-next-ghost">Расписание</Link>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <div className="ed-next-tag">Расписание</div>
+                <div className="ed-next-empty">
+                  Сегодня уроков<br />нет — отличная<br />пауза для повторения.
+                </div>
+              </div>
+              <div className="ed-next-actions">
+                <Link to="/homeworks" className="ed-next-cta">К заданиям {ico.arrow}</Link>
+                <Link to="/courses" className="ed-next-ghost">Курсы</Link>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ═══════════════ TICKER ═══════════════ */}
+      <div className="ed-ticker">
+        <div className="ed-ticker-track">
+          <span>{tickerItems.map((t, i) => (
+            <span key={`a-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 60 }}>{t}<span className="ed-ticker-dot" /></span>
+          ))}</span>
+          <span aria-hidden="true">{tickerItems.map((t, i) => (
+            <span key={`b-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 60 }}>{t}<span className="ed-ticker-dot" /></span>
+          ))}</span>
+        </div>
+      </div>
+
+      {/* ═══════════════ 01 — BENTO STATS ═══════════════ */}
+      <section className="ed-section">
+        <div className="ed-sec-head">
+          <div>
+            <span className="ed-sec-num">01 ——</span>
+            <span className="ed-sec-title"><em>Состояние</em> на сегодня</span>
+          </div>
+        </div>
+
+        <div className="ed-bento">
+          {/* Level — big lime tile */}
+          <div className="ed-tile ed-tile--lg ed-tile--lime">
+            <div>
+              <div className="ed-tile-label">Уровень / level</div>
+              <div className="ed-tile-num" style={{ fontStyle: 'italic' }}>{levelLabel}</div>
+              <div className="ed-tile-caption">
+                {xpToNext > 0
+                  ? <>Ещё <strong style={{ fontStyle: 'normal', fontWeight: 600 }}>{xpToNext}</strong> XP до уровня {LEVELS[Math.min(levelIdx + 1, 5)]}</>
+                  : <>Высший уровень достигнут</>}
+              </div>
+            </div>
+            <div className="ed-tile-foot">
+              <span>{xpTotal.toLocaleString('ru-RU')} XP / {nextXp.toLocaleString('ru-RU')} XP</span>
+              <div style={{ width: 120, height: 4, background: 'rgba(12,14,21,0.18)', borderRadius: 100, overflow: 'hidden' }}>
+                <div style={{ width: `${Math.min((xpTotal - LEVEL_XP[levelIdx]) / (nextXp - LEVEL_XP[levelIdx]) * 100, 100)}%`, height: '100%', background: 'var(--ed-ink)', borderRadius: 100, transition: 'width 1s' }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Pending HW */}
+          <div className={`ed-tile ed-tile--md ${overdueHW > 0 ? 'ed-tile--coral' : ''}`}>
+            <div>
+              <div className="ed-tile-label">{overdueHW > 0 ? 'Просрочено' : 'Активные ДЗ'}</div>
+              <div className="ed-tile-num">{overdueHW > 0 ? overdueHW : pendingHW || <em>0</em>}</div>
+              <div className="ed-tile-caption">
+                {overdueHW > 0
+                  ? 'Срочно сдать'
+                  : pendingHW > 0
+                  ? `Ещё ${pendingHW} в очереди`
+                  : 'Очередь пуста'}
+              </div>
+            </div>
+            <div className="ed-tile-foot">
+              <span>домашние задания</span>
+              <Link to="/homeworks" style={{ color: 'inherit', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                Все {ico.arrow}
+              </Link>
+            </div>
+          </div>
+
+          {/* Streak */}
+          <div className="ed-tile ed-tile--sm">
+            <div>
+              <div className="ed-tile-label">Streak</div>
+              <div className="ed-tile-num-sm">{streakDays}<em style={{ fontStyle: 'italic', color: 'var(--ed-coral)' }}>·</em></div>
+              <div className="ed-tile-caption" style={{ fontSize: 14 }}>
+                {streakDays === 1 ? 'день' : streakDays >= 2 && streakDays <= 4 ? 'дня' : 'дней'} подряд 🔥
+              </div>
+            </div>
+          </div>
+
+          {/* Active courses */}
+          <div className="ed-tile ed-tile--sm">
+            <div>
+              <div className="ed-tile-label">Курсы</div>
+              <div className="ed-tile-num-sm">{enrollments.length}</div>
+              <div className="ed-tile-caption" style={{ fontSize: 14 }}>активных</div>
+            </div>
+            <div className="ed-tile-foot">
+              <Link to="/courses" style={{ color: 'inherit', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                Подробно {ico.arrow}
+              </Link>
+            </div>
+          </div>
+
+          {/* Total XP — ink tile */}
+          <div className="ed-tile ed-tile--md ed-tile--ink">
+            <div>
+              <div className="ed-tile-label">XP всего</div>
+              <div className="ed-tile-num">{xpTotal > 999 ? `${(xpTotal / 1000).toFixed(1)}k` : xpTotal}</div>
+              <div className="ed-tile-caption">очков опыта</div>
+            </div>
+            <div className="ed-tile-foot">
+              <span>с момента старта</span>
+              {xpTotal > 0 && <span className="ed-tile-trend ed-tile-trend--up">{ico.arrowUp} +12%</span>}
+            </div>
+          </div>
+
+          {/* Attendance % small */}
+          <div className="ed-tile ed-tile--sm">
+            <div>
+              <div className="ed-tile-label">Посещ.</div>
+              <div className="ed-tile-num-sm">
+                {attRate != null ? <>{attRate}<em style={{ fontSize: '0.45em', color: 'var(--ed-text-mute)', fontStyle: 'italic' }}>%</em></> : '—'}
+              </div>
+              <div className="ed-tile-caption" style={{ fontSize: 14 }}>средняя</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════ 02 — COURSES ═══════════════ */}
+      <section className="ed-section">
+        <div className="ed-sec-head">
+          <div>
+            <span className="ed-sec-num">02 ——</span>
+            <span className="ed-sec-title">Ваши <em>курсы</em></span>
+          </div>
+          <Link to="/courses" className="ed-sec-link">все курсы {ico.arrow}</Link>
+        </div>
+
+        {enrollments.length > 0 ? (
+          <div className="ed-courses">
+            {enrollments.slice(0, 4).map((e, i) => (
+              <div key={e.id} className="ed-course">
+                <div className={`ed-course-cover ed-cover-g${(i % 5) + 1}`}>
+                  <span className="ed-course-tag">Course / {String(i + 1).padStart(2, '0')}</span>
+                  <span className="ed-course-emoji">{courseEmoji(e.course?.title)}</span>
+                </div>
+                <div className="ed-course-body">
+                  <div className="ed-course-title">{e.course?.title || 'Курс'}</div>
+                  <div className="ed-course-meta">
+                    {e.group_id ? `Группа №${e.group_id}` : 'Индивидуально'}
+                  </div>
+                  <div className="ed-course-progress">
+                    <span className="ed-course-pct">{e.progress || 0}%</span>
+                    <span className="ed-course-xp">+{e.xp || 0} XP</span>
+                  </div>
+                  <div className="ed-course-bar">
+                    <div className="ed-course-bar-fill" style={{ width: `${e.progress || 0}%` }} />
                   </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--muted)', fontSize: 13 }}>
-              Нет ближайших уроков
-            </div>
-          )}
-        </div>
-
-        {/* ── Attendance ── */}
-        <div style={s.card}
-          onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)'; }}
-          onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}>
-          <div style={s.cardHeader}>
-            <h3 style={s.cardTitle}><SCal /> Посещаемость</h3>
-            {attRate !== null && (
-              <span style={{ fontSize: 20, fontWeight: 700, color: attRate >= 70 ? '#10b981' : attRate >= 40 ? '#f59e0b' : '#ef4444' }}>
-                {attRate}%
-              </span>
-            )}
-          </div>
-          <AttChart trend={attTrend} />
-        </div>
-      </div>
-
-      {/* ═══ 2-col: Courses + Schedule ═══ */}
-      <div style={s.grid2}>
-        {/* ── Courses ── */}
-        <div style={s.card}
-          onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)'; }}
-          onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}>
-          <div style={s.cardHeader}>
-            <h3 style={s.cardTitle}><SBook /> Мои курсы</h3>
-            <Link to="/courses" style={s.cardLink}>Все <SChevronRight /></Link>
-          </div>
-          {enrollments.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--muted)', fontSize: 13 }}>
-              Нет курсов
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {enrollments.slice(0, 4).map(e => <CourseCard key={e.id} course={e} />)}
-            </div>
-          )}
-        </div>
-
-        {/* ── Schedule ── */}
-        <div style={s.card}
-          onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)'; }}
-          onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}>
-          <div style={s.cardHeader}>
-            <h3 style={s.cardTitle}><SCal /> Расписание</h3>
-            <Link to="/schedule" style={s.cardLink}>Все дни <SChevronRight /></Link>
-          </div>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
-            {schedule.map((s, i) => (
-              <div key={i} style={{
-                flex: 1, textAlign: 'center', padding: '12px 6px', borderRadius: 12,
-                background: s.active ? 'linear-gradient(180deg, #2563eb10, transparent)' : 'transparent',
-                border: s.active ? '1px solid #2563eb30' : '1px solid transparent',
-                opacity: s.has_lesson ? 1 : 0.5,
-              }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>{s.day}</div>
-                <div style={{
-                  width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  margin: '0 auto 4px',
-                  background: s.active ? '#2563eb' : s.has_lesson ? 'var(--border)' : 'transparent',
-                  color: s.active ? '#fff' : 'var(--text)',
-                  fontSize: 13, fontWeight: 600,
-                }}>{s.date}</div>
-                {s.has_lesson && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#2563eb', margin: '0 auto' }} />}
-              </div>
             ))}
           </div>
-        </div>
-      </div>
-
-      {/* ═══ 2-col: Payments + Homeworks ═══ */}
-      <div style={s.grid2}>
-        {/* ── Recent Payments ── */}
-        <div style={s.card}
-          onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)'; }}
-          onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}>
-          <div style={s.cardHeader}>
-            <h3 style={s.cardTitle}><SWallet /> Последние платежи</h3>
-            <Link to="/settings" style={s.cardLink}>Все <SChevronRight /></Link>
+        ) : (
+          <div className="ed-empty">
+            <div className="ed-empty-eyebrow">— A blank page —</div>
+            <div className="ed-empty-title">Курсов пока<br />не назначено</div>
+            <div className="ed-empty-desc">Свяжитесь с администратором, чтобы записаться на курс и начать обучение</div>
           </div>
-          {payments.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--muted)', fontSize: 13 }}>
-              Нет платежей
-            </div>
-          ) : (
-            payments.map(p => <PaymentRow key={p.id} p={p} />)
-          )}
-        </div>
+        )}
+      </section>
 
-        {/* ── Homeworks ── */}
-        <div style={s.card}
-          onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)'; }}
-          onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}>
-          <div style={s.cardHeader}>
-            <h3 style={s.cardTitle}><SHW /> Домашние задания</h3>
-            <Link to="/homeworks" style={s.cardLink}>Все <SChevronRight /></Link>
-          </div>
-          {homeworks.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--muted)', fontSize: 13 }}>
-              Нет заданий
-            </div>
-          ) : (
-            homeworks.slice(0, 5).map(hw => (
-              <div key={hw.id} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '10px 0', borderBottom: '1px solid var(--border)',
-                opacity: hw.is_submitted ? 0.6 : 1,
-              }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{hw.title}</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>{hw.due_date}</div>
-                </div>
-                <div style={{ marginLeft: 12 }}>
-                  {hw.grade ? (
-                    <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600, background: '#10b98118', color: '#10b981' }}>
-                      {hw.grade}
-                    </span>
-                  ) : hw.is_submitted ? (
-                    <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 500, background: '#f59e0b18', color: '#f59e0b' }}>
-                      На проверке
-                    </span>
-                  ) : hw.is_overdue ? (
-                    <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600, background: '#ef444418', color: '#ef4444' }}>
-                      Просрочено
-                    </span>
-                  ) : (
-                    <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 500, background: '#94a3b818', color: 'var(--muted)' }}>
-                      Ожидается
-                    </span>
-                  )}
-                </div>
+      {/* ═══════════════ 03 — SCHEDULE + ATTENDANCE ═══════════════ */}
+      <section className="ed-section">
+        <div className="ed-bento" style={{ gridAutoRows: 'auto' }}>
+          {/* Week schedule */}
+          <div className="ed-tile ed-tile--w8" style={{ padding: '24px 26px' }}>
+            <div className="ed-sec-head" style={{ paddingBottom: 14, marginBottom: 18 }}>
+              <div>
+                <span className="ed-sec-num">03 ——</span>
+                <span className="ed-sec-title" style={{ fontSize: 22 }}><em>Неделя</em></span>
               </div>
-            ))
-          )}
+              <Link to="/schedule" className="ed-sec-link">расписание {ico.arrow}</Link>
+            </div>
+            {schedule.length > 0 ? (
+              <div className="ed-week">
+                {schedule.map((s, i) => (
+                  <div key={i} className={`ed-week-cell ${s.active ? 'ed-week-cell--active' : ''} ${s.has_lesson ? 'ed-week-cell--has' : ''}`}>
+                    <div className="ed-week-day">{s.day}</div>
+                    <div className="ed-week-num">{s.date}</div>
+                    <div className="ed-week-status">{s.has_lesson ? (s.active ? 'today' : 'lesson') : 'rest'}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding: '20px 0', color: 'var(--ed-text-mute)', fontStyle: 'italic', fontFamily: 'Fraunces, serif', fontSize: 18 }}>
+                Расписание пустует.
+              </div>
+            )}
+          </div>
+
+          {/* Attendance */}
+          <div className="ed-tile ed-tile--w4" style={{ padding: '24px 26px' }}>
+            <div className="ed-sec-head" style={{ paddingBottom: 14, marginBottom: 18 }}>
+              <div>
+                <span className="ed-sec-num">04 ——</span>
+                <span className="ed-sec-title" style={{ fontSize: 22 }}><em>Был там</em></span>
+              </div>
+            </div>
+            <AttendanceRing rate={attRate} />
+            <div style={{ marginTop: 14, textAlign: 'center', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ed-text-mute)' }}>
+              {attRate != null && attRate >= 80 ? 'Образцовая статистика' : attRate != null && attRate >= 50 ? 'Можем лучше' : 'Старт сезона'}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════ 05 — HOMEWORK + 06 — PAYMENTS ═══════════════ */}
+      <section className="ed-section">
+        <div className="ed-bento" style={{ gridAutoRows: 'auto' }}>
+          {/* Homework */}
+          <div className="ed-tile ed-tile--w7" style={{ padding: '24px 26px' }}>
+            <div className="ed-sec-head" style={{ paddingBottom: 14, marginBottom: 4 }}>
+              <div>
+                <span className="ed-sec-num">05 ——</span>
+                <span className="ed-sec-title" style={{ fontSize: 22 }}><em>Задания</em></span>
+              </div>
+              <Link to="/homeworks" className="ed-sec-link">все {ico.arrow}</Link>
+            </div>
+            {homeworks.length > 0 ? (
+              <div className="ed-list">
+                {homeworks.slice(0, 4).map((hw, i) => {
+                  let tagCls = 'ed-tag--mute', tagLabel = 'Ожидается';
+                  if (hw.grade) { tagCls = 'ed-tag--lime'; tagLabel = `${hw.grade}/10`; }
+                  else if (hw.is_submitted) { tagCls = 'ed-tag--amber'; tagLabel = 'Проверка'; }
+                  else if (hw.is_overdue) { tagCls = 'ed-tag--coral'; tagLabel = 'Просрочено'; }
+                  return (
+                    <div key={hw.id} className="ed-row">
+                      <span className="ed-row-num">{String(i + 1).padStart(2, '0')}</span>
+                      <div className="ed-row-main">
+                        <div className="ed-row-title">{hw.title}</div>
+                        <div className="ed-row-sub">до {hw.due_date}</div>
+                      </div>
+                      <span className={`ed-tag ${tagCls}`}>{tagLabel}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--ed-text-mute)', fontStyle: 'italic', fontFamily: 'Fraunces, serif', fontSize: 18 }}>
+                Очередь свободна — отдыхайте.
+              </div>
+            )}
+          </div>
+
+          {/* Payments */}
+          <div className="ed-tile ed-tile--w5" style={{ padding: '24px 26px', gridColumn: 'span 5' }}>
+            <div className="ed-sec-head" style={{ paddingBottom: 14, marginBottom: 4 }}>
+              <div>
+                <span className="ed-sec-num">06 ——</span>
+                <span className="ed-sec-title" style={{ fontSize: 22 }}><em>Платежи</em></span>
+              </div>
+              <Link to="/settings" className="ed-sec-link">история {ico.arrow}</Link>
+            </div>
+            {payments.length > 0 ? (
+              <div className="ed-list">
+                {payments.slice(0, 4).map((p, i) => (
+                  <div key={p.id} className="ed-row" style={{ gridTemplateColumns: 'auto 1fr auto' }}>
+                    <span className="ed-row-num">{String(i + 1).padStart(2, '0')}</span>
+                    <div className="ed-row-main">
+                      <div className="ed-row-title" style={{ fontSize: 16 }}>{p.description || 'Оплата'}</div>
+                      <div className="ed-row-sub">{p.date} · {p.method === 'card' ? 'Card' : p.method === 'cash' ? 'Cash' : p.method || 'Online'}</div>
+                    </div>
+                    <span className="ed-row-value" style={{ fontSize: 18 }}>
+                      <em>{Number(p.amount).toLocaleString('ru-RU')}</em>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--ed-text-mute)', fontStyle: 'italic', fontFamily: 'Fraunces, serif', fontSize: 18 }}>
+                Платежей не было.
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════ COLOPHON ═══════════════ */}
+      <div className="ed-masthead" style={{ marginTop: 40, marginBottom: 0, paddingTop: 18, paddingBottom: 0, borderTop: '1px solid var(--ed-border)', borderBottom: 'none' }}>
+        <div className="ed-masthead-l">
+          <span>{dateStr}</span>
+        </div>
+        <div className="ed-masthead-c">
+          <span style={{ fontFamily: 'Fraunces, serif', fontStyle: 'italic', textTransform: 'none', letterSpacing: 0, fontSize: 13 }}>— end of issue —</span>
+        </div>
+        <div className="ed-masthead-r">
+          <span>{firstName.toUpperCase()} · LV. {levelLabel}</span>
         </div>
       </div>
-
-      {/* ═══ Spacer for consistency ═══ */}
-      <div style={{ height: 32 }} />
     </div>
   );
 }

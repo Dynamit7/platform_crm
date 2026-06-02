@@ -3,11 +3,14 @@ from datetime import date, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+import logging
 
 from bot.models.education import Group, Lesson, StudentGroup
 from bot.models.user import Student
 from bot.services.notification_service import NotificationService
 from aiogram import Bot
+
+log = logging.getLogger(__name__)
 
 class GroupService:
     def __init__(self, session: AsyncSession):
@@ -153,7 +156,7 @@ class GroupService:
                         f"Это большой шаг вперед. Надеемся увидеть вас на следующих продвинутых курсах нашего центра. Удачи!"
                     )
                     count += 1
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.warning("Graduation notification failed for student %s: %s", sg.student_id, e)
                     
         return True, count

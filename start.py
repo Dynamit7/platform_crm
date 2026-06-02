@@ -6,7 +6,6 @@ start.py — единая точка запуска SmartEdu
     .venv\\Scripts\\python.exe start.py            # оба сервиса
     .venv\\Scripts\\python.exe start.py --web      # только веб
     .venv\\Scripts\\python.exe start.py --bot      # только бот
-    .venv\\Scripts\\python.exe start.py --sync     # только синхронизация БД
 """
 
 import subprocess
@@ -28,26 +27,6 @@ WEB_VENV_PYTHON = ROOT / "web" / "venv" / "Scripts" / "python.exe"
 WEB_PYTHON = str(WEB_VENV_PYTHON) if WEB_VENV_PYTHON.exists() else str(VENV_PYTHON)
 BOT_PYTHON  = str(VENV_PYTHON)
 
-
-def sync_databases():
-    """Синхронизирует данные бот↔веб перед стартом."""
-    print("🔄 Синхронизация баз данных...")
-    result = subprocess.run(
-        [str(VENV_PYTHON), "sync_dbs.py", "--both"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    if result.returncode == 0:
-        # Выведем только итоговую строку с кол-вом записей
-        for line in result.stdout.splitlines():
-            if any(x in line for x in ["👤", "💳", "✅", "📋", "👤"]):
-                print(" ", line.strip())
-        print("✅ Синхронизация завершена\n")
-    else:
-        print(f"⚠️  Синхронизация завершилась с ошибкой:\n{result.stderr[:500]}\n")
 
 
 def stream_output(proc: subprocess.Popen, prefix: str, color_code: str):
@@ -108,21 +87,12 @@ def main():
     args = sys.argv[1:]
     only_web = "--web" in args
     only_bot = "--bot" in args
-    only_sync = "--sync" in args
 
     print("=" * 55)
     print("  🎓 SmartEdu CRM — Система управления учёбой")
     print("=" * 55)
 
-    # Синхронизация БД (пропускаем только если запускаем 1 сервис без флага)
-    if not only_bot:
-        sync_databases()
-
     processes = []
-
-    if only_sync:
-        print("✅ Только синхронизация. Выход.")
-        return
 
     if only_web or (not only_bot and not only_web):
         proc_web = run_web()

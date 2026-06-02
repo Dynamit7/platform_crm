@@ -113,7 +113,7 @@ async def generate_group_journal_excel(callback: types.CallbackQuery, session: A
             try:
                 if len(str(cell.value)) > max_length:
                     max_length = len(str(cell.value))
-            except:
+            except Exception:
                 pass
         adjusted_width = (max_length + 2)
         ws.column_dimensions[column].width = adjusted_width

@@ -64,12 +64,13 @@ async def show_attendance_list(callback: types.CallbackQuery, session: AsyncSess
     
     buttons = []
     for link in student_links:
-        status = att_dict.get(link.student_id)
+        user_id = link.student.user_id
+        status = att_dict.get(user_id)
         icon = AttendanceStatus.ICONS.get(status, AttendanceStatus.ICONS[None])
         buttons.append([
             types.InlineKeyboardButton(
                 text=f"{icon} {link.student.user.full_name}", 
-                callback_data=f"t_att_pick:{lesson_id}:{link.student_id}"
+                callback_data=f"t_att_pick:{lesson_id}:{user_id}"
             )
         ])
     
@@ -90,7 +91,7 @@ async def set_attendance_status(callback: types.CallbackQuery, session: AsyncSes
     
     # Автоматическое уведомление об отсутствии
     if status == "absent":
-        stmt = select(Student).where(Student.id == int(student_id)).options(selectinload(Student.user))
+        stmt = select(Student).where(Student.user_id == int(student_id)).options(selectinload(Student.user))
         student = (await session.execute(stmt)).scalar_one_or_none()
         
         stmt_l = select(Lesson).where(Lesson.id == int(lesson_id))
@@ -114,3 +115,22 @@ async def set_attendance_status(callback: types.CallbackQuery, session: AsyncSes
     await callback.answer(f"✅ Статус: {status}\nОбщая посещаемость ученика: {rate:.1f}%")
     
     await show_attendance_list(callback, session)
+
+@router.callback_query(F.data.startswith("t_att_save_"))
+async def save_attendance_and_exit(callback: types.CallbackQuery, session: AsyncSession):
+    lesson_id = int(callback.data.split("_")[-1])
+    stmt = select(Lesson).where(Lesson.id == lesson_id).options(selectinload(Lesson.group))
+    lesson = (await session.execute(stmt)).scalar_one_or_none()
+    if not lesson:
+        await callback.answer("Урок не найден", show_alert=True)
+        return
+    group_id = lesson.group_id
+    await callback.answer("✅ Посещаемость сохранена!", show_alert=True)
+    await callback.message.edit_text(
+        f"📖 *Урок*\nГруппа: `{lesson.group.name}`\nДата: `{lesson.lesson_date.strftime('%d.%m.%Y')}`\n\nПосещаемость сохранена.",
+        parse_mode="Markdown",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text="⬅️ К уроку", callback_data=f"t_lesson_view_{lesson_id}")],
+            [types.InlineKeyboardButton(text="👥 К группе", callback_data=f"t_group:{group_id}")]
+        ])
+    )

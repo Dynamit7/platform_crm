@@ -7,6 +7,11 @@ from bot.models.user import UserRole
 
 router = Router(name="admin_users")
 
+@router.callback_query(F.data == "admin_users:teachers")
+async def admin_users_teachers(callback: types.CallbackQuery):
+    from .teachers import show_teachers_menu
+    await show_teachers_menu(callback)
+
 @router.callback_query(F.data == "admin_users:search")
 async def start_user_search(callback: types.CallbackQuery, state: FSMContext):
     """Переход в режим поиска."""
@@ -116,12 +121,17 @@ async def manage_user_profile(callback: types.CallbackQuery, session: AsyncSessi
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons))
     await callback.answer()
 
+ALLOWED_BOT_ROLES = {"student", "teacher"}
+
 @router.callback_query(F.data.startswith("user_role:"))
 async def change_user_role(callback: types.CallbackQuery, session: AsyncSession):
     parts = callback.data.split(":")
     user_id = int(parts[1])
     new_role = parts[2]
-    
+
+    if new_role not in ALLOWED_BOT_ROLES:
+        return await callback.answer("Недопустимая роль", show_alert=True)
+
     user_repo = UserRepository(session)
     user = await user_repo.get_by_id(user_id)
     if not user:

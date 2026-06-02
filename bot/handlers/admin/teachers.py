@@ -1,7 +1,6 @@
 import logging
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.services.teacher_service import TeacherService
@@ -11,11 +10,6 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 router = Router(name="admin_teachers")
 logger = logging.getLogger(__name__)
-
-class TeacherAddStates(StatesGroup):
-    waiting_for_name = State()
-    waiting_for_phone = State()
-    waiting_for_specialization = State()
 
 @router.callback_query(F.data == "admin:teachers")
 async def show_teachers_menu(callback: types.CallbackQuery):
@@ -100,3 +94,45 @@ async def view_teacher_details(callback: types.CallbackQuery, session: AsyncSess
         f"📅 В базе с: {t.groups[0].created_at.strftime('%d.%m.%Y') if hasattr(t, 'groups') and t.groups else '--.--.----'}"
     )
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_teacher_view_kb(t.id))
+
+@router.callback_query(F.data.startswith("admin:teacher_edit:"))
+async def edit_teacher(callback: types.CallbackQuery, session: AsyncSession):
+    await view_teacher_details(callback, session)
+
+@router.callback_query(F.data.startswith("admin:teacher_assign:"))
+async def assign_teacher_course(callback: types.CallbackQuery, session: AsyncSession):
+    teacher_id = int(callback.data.split(":")[2])
+    from sqlalchemy.orm import selectinload
+    from bot.models.user import Teacher
+    res = await session.execute(select(Teacher).options(selectinload(Teacher.user)).where(Teacher.id == teacher_id))
+    t = res.scalar_one()
+    t_name = t.user.full_name if t.user else f"ID {t.id}"
+    from bot.models.education import Course
+    stmt_c = select(Course).where(Course.is_active == True)
+    courses = (await session.execute(stmt_c)).scalars().all()
+    text = f"📚 *Назначение преподавателя на курс*\n\n👤 *{t_name}*\n\nВыберите курс для назначения:"
+    buttons = []
+    for c in courses:
+        buttons.append([types.InlineKeyboardButton(text=f"🎓 {c.name}", callback_data=f"admin:teacher_assign_course:{teacher_id}:{c.id}")])
+    buttons.append([types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin:teacher_view:{teacher_id}")])
+    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons))
+
+@router.callback_query(F.data.startswith("admin:teacher_assign_course:"))
+async def assign_teacher_course_execute(callback: types.CallbackQuery, session: AsyncSession):
+    parts = callback.data.split(":")
+    teacher_id = int(parts[2])
+    course_id = int(parts[3])
+    from bot.models.education import Group, TeacherCourse
+    from sqlalchemy.orm import selectinload
+    from bot.models.user import Teacher
+    res = await session.execute(select(Teacher).options(selectinload(Teacher.user)).where(Teacher.id == teacher_id))
+    t = res.scalar_one()
+    t_name = t.user.full_name if t.user else f"ID {t.id}"
+    existing = await session.execute(select(TeacherCourse).where(TeacherCourse.teacher_id == teacher_id, TeacherCourse.course_id == course_id))
+    if not existing.scalar_one_or_none():
+        session.add(TeacherCourse(teacher_id=teacher_id, course_id=course_id))
+        await session.commit()
+        await callback.answer(f"✅ Преподаватель {t_name} назначен на курс!", show_alert=True)
+    else:
+        await callback.answer("Преподаватель уже назначен на этот курс", show_alert=True)
+    await view_teacher_details(callback, session)

@@ -3,7 +3,7 @@ from aiogram.filters import Command
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.models.user import User, UserRole
-from bot.keyboards.teacher.main import get_teacher_main_menu
+from bot.keyboards.teacher import get_teacher_main_menu
 from bot.repositories.teacher import TeacherRepository
 
 router = Router(name="teacher_base")

@@ -1,4 +1,24 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from datetime import date, timedelta
+from typing import List
+from bot.models.education import Lesson
+
+def get_teacher_main_menu() -> ReplyKeyboardMarkup:
+    keyboard = [
+        [KeyboardButton(text="📅 Моё расписание"), KeyboardButton(text="👥 Мои группы")],
+        [KeyboardButton(text="📋 Отчёты"), KeyboardButton(text="📚 Материалы")],
+        [KeyboardButton(text="💬 Чат")],
+        [KeyboardButton(text="🏠 Главное меню")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+
+def get_teacher_panel_keyboard() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton(text="📅 Моё расписание", callback_data="teacher_schedule")],
+        [InlineKeyboardButton(text="👥 Мои группы", callback_data="teacher_groups")],
+        [InlineKeyboardButton(text="✍️ Выставить оценки", callback_data="teacher_marks")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def get_teacher_main_kb() -> InlineKeyboardMarkup:
     """Главное меню преподавателя."""
@@ -49,6 +69,54 @@ def get_attendance_status_kb(lesson_id: int, student_id: int) -> InlineKeyboardM
             InlineKeyboardButton(text="⏳ Опоздал", callback_data=f"att_set:{lesson_id}:{student_id}:late")
         ],
         [InlineKeyboardButton(text="⬅️ К списку", callback_data=f"t_att_start:{lesson_id}")]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def get_week_navigation_kb(target_date: date) -> InlineKeyboardMarkup:
+    start_of_week = target_date - timedelta(days=target_date.weekday())
+    day_buttons = []
+    days_ru = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    row = []
+    for i in range(7):
+        current_day = start_of_week + timedelta(days=i)
+        prefix = "✅ " if current_day == target_date else ""
+        row.append(InlineKeyboardButton(
+            text=f"{prefix}{days_ru[i]}", 
+            callback_data=f"t_sch_date_{current_day.isoformat()}"
+        ))
+    day_buttons.append(row)
+    prev_week = target_date - timedelta(days=7)
+    next_week = target_date + timedelta(days=7)
+    day_buttons.append([
+        InlineKeyboardButton(text="⬅️ Пред. неделя", callback_data=f"t_sch_date_{prev_week.isoformat()}"),
+        InlineKeyboardButton(text="След. неделя ➡️", callback_data=f"t_sch_date_{next_week.isoformat()}"),
+    ])
+    day_buttons.append([
+        InlineKeyboardButton(text="🔄 Сегодня", callback_data="teacher_schedule_today")
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=day_buttons)
+
+def get_lessons_list_kb(lessons: List[Lesson]) -> InlineKeyboardMarkup:
+    buttons = []
+    for lesson in lessons:
+        time_str = lesson.lesson_time or "--:--"
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"🕒 {time_str} | {lesson.group.name} | {lesson.topic[:20]}...", 
+                callback_data=f"t_lesson_view_{lesson.id}"
+            )
+        ])
+    if not lessons:
+        buttons.append([InlineKeyboardButton(text="Занятий нет", callback_data="none")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def get_lesson_action_kb(lesson_id: int) -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton(text="✅ Отметить посещаемость", callback_data=f"t_att_start_{lesson_id}")],
+        [InlineKeyboardButton(text="📝 Домашнее задание", callback_data=f"t_hw_set_{lesson_id}")],
+        [InlineKeyboardButton(text="📚 Материалы", callback_data=f"t_mat_send_{lesson_id}")],
+        [InlineKeyboardButton(text="📊 Отчёт по уроку", callback_data=f"t_rep_gen_{lesson_id}")],
+        [InlineKeyboardButton(text="🔙 К расписанию", callback_data="teacher_schedule_today")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 

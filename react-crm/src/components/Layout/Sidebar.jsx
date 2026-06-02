@@ -1,6 +1,7 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useChat } from '../../context/ChatContext';
 import { useState, useEffect } from 'react';
 
 const ICONS = {
@@ -50,6 +51,7 @@ const ADMIN_LINK_META = [
   { label: 'Группы', path: '/admin/groups', icon: 'groups' },
   { label: 'Курсы', path: '/admin/courses', icon: 'bookOpen' },
   { label: 'Посещаемость', path: '/admin/attendance', icon: 'userCheck' },
+  { label: 'Платежи', path: '/admin/payments', icon: 'creditCard' },
   { section: 'Коммуникация' },
   { label: 'Чат', path: '/chat', icon: 'messageSquare' },
   { label: 'Рассылка', path: '/admin/broadcast', icon: 'megaphone' },
@@ -86,6 +88,8 @@ const STUDENT_LINK_META = [
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const { toggle, theme } = useTheme();
+  const chat = useChat();
+  const totalUnread = chat?.totalUnread || 0;
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar_collapsed') === 'true');
@@ -189,9 +193,29 @@ export default function Sidebar() {
               !(collapsed && !isMobile) && <div key={`s-${i}`} className="sidebar-section-label">{item.section}</div>
             ) : (
               <NavLink key={item.path} to={item.path} className={({ isActive }) => isActive ? 'active' : ''}
-                style={collapsed && !isMobile ? { justifyContent: 'center', padding: '12px 0' } : {}}>
+                style={collapsed && !isMobile ? { justifyContent: 'center', padding: '12px 0', position: 'relative' } : { position: 'relative' }}>
                 <span className="icon">{ICONS[item.icon]}</span>
                 {!(collapsed && !isMobile) && item.label}
+                {item.path === '/chat' && totalUnread > 0 && (
+                  <span style={{
+                    marginLeft: 'auto',
+                    minWidth: 20,
+                    height: 20,
+                    padding: '0 6px',
+                    borderRadius: 10,
+                    background: '#ef4444',
+                    color: '#fff',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    lineHeight: 1,
+                    ...(collapsed && !isMobile ? { position: 'absolute', top: 6, right: 6, marginLeft: 0 } : {}),
+                  }}>
+                    {totalUnread > 99 ? '99+' : totalUnread}
+                  </span>
+                )}
               </NavLink>
             )
           )}

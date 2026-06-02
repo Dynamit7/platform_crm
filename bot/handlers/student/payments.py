@@ -113,7 +113,7 @@ async def process_payment_start(callback: types.CallbackQuery, state: FSMContext
     await state.set_state(StudentPaymentStates.waiting_for_receipt)
 
 @router.message(StudentPaymentStates.waiting_for_receipt, F.photo)
-async def process_payment_receipt(message: types.Message, state: FSMContext, session: AsyncSession):
+async def process_payment_receipt(message: types.Message, state: FSMContext, session: AsyncSession, db_user: User):
     data = await state.get_data()
     amount = data['pay_amount']
     

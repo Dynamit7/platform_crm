@@ -3,35 +3,14 @@ import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 
-const ChevronDown = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="6 9 12 15 18 9"/>
-  </svg>
-);
+const ico = {
+  arrow: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>,
+  plus: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  close: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  check: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+};
 
-const PlusIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-  </svg>
-);
-
-const BookIcon = () => (
-  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-  </svg>
-);
-
-const CalIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-  </svg>
-);
-
-const ClockIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-  </svg>
-);
+const MONTHS_SHORT = ['ЯНВ','ФЕВ','МАР','АПР','МАЙ','ИЮН','ИЮЛ','АВГ','СЕН','ОКТ','НОЯ','ДЕК'];
 
 export default function TeacherLessons() {
   const { user } = useAuth();
@@ -39,12 +18,17 @@ export default function TeacherLessons() {
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [lessons, setLessons] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ topic: '', lesson_date: '', lesson_time: '', homework: '' });
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    api.get(`/api/teacher/groups/${user?.id}`).then(({ data }) => setGroups(data)).catch(() => {});
+    if (!user?.id) return;
+    api.get(`/api/teacher/groups/${user?.id}`).then(({ data }) => {
+      setGroups(data);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, [user?.id]);
 
   useEffect(() => {
@@ -57,140 +41,166 @@ export default function TeacherLessons() {
     e.preventDefault();
     setBusy(true);
     try {
-      const scheduled_at = form.lesson_date
-        ? `${form.lesson_date}T${form.lesson_time || '10:00'}:00`
-        : new Date().toISOString();
+      const scheduled_at = form.lesson_date ? `${form.lesson_date}T${form.lesson_time || '10:00'}:00` : new Date().toISOString();
       await api.post('/api/lessons', { group_id: parseInt(selectedGroup), topic: form.topic, scheduled_at, homework: form.homework });
-      if (add) add('Урок создан', 'success');
+      add && add('Урок создан', 'success');
       setShowForm(false);
       setForm({ topic: '', lesson_date: '', lesson_time: '', homework: '' });
       const { data } = await api.get(`/api/groups/${selectedGroup}/lessons`);
       setLessons(data);
-    } catch { if (add) add('Ошибка', 'error'); }
+    } catch { add && add('Ошибка', 'error'); }
     finally { setBusy(false); }
   };
 
+  if (loading) return (
+    <div className="ed-page">
+      <div className="ed-loading">
+        <div className="ed-spinner" />
+        <div className="ed-loading-text">Открываем планер уроков…</div>
+      </div>
+    </div>
+  );
+
   const groupName = groups.find(g => g.id === selectedGroup)?.name || '';
+  const today = new Date();
+  const issueNum = `№${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getFullYear()).slice(-2)}`;
+  const completed = lessons.filter(l => l.is_completed).length;
+  const upcoming = lessons.filter(l => !l.is_completed).length;
 
   return (
-    <div className="page-content">
-      <div className="page-header">
-        <div className="page-header-left">
-          <h1>Уроки</h1>
-          <p>{selectedGroup ? `Группа «${groupName}» — ${lessons.length} уроков` : 'Выберите группу'}</p>
+    <div className="ed-page">
+      <div className="ed-masthead">
+        <div className="ed-masthead-l">
+          <span>TEACHER JOURNAL</span>
+          <span className="ed-masthead-sep" />
+          <span>SECTION 04 / LESSONS</span>
+          <span className="ed-masthead-sep" />
+          <span>{issueNum}</span>
         </div>
-        <div className="page-header-right">
-          {selectedGroup && (
-            <button className="tg-btn tg-btn--primary" onClick={() => setShowForm(!showForm)}>
-              <PlusIcon /> {showForm ? 'Отмена' : 'Создать урок'}
-            </button>
-          )}
-        </div>
+        <div className="ed-masthead-c"><span className="ed-masthead-logo">TilUser</span></div>
+        <div className="ed-masthead-r"><span>{lessons.length} TOTAL</span></div>
       </div>
 
-      <div className="tg-topbar">
-        <div className="tg-filter-select">
-          <select value={selectedGroup || ''} onChange={e => setSelectedGroup(e.target.value || null)}>
-            <option value="">Выберите группу</option>
-            {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-          </select>
-          <ChevronDown />
-        </div>
-      </div>
+      <div className="ed-page-head">
+        <div className="ed-page-eyebrow">— Lessons / 04</div>
+        <h1 className="ed-page-title"><em>Уроки</em>.</h1>
+        <p className="ed-page-lead">
+          {selectedGroup
+            ? <>Группа <em style={{ fontStyle: 'italic', color: 'var(--ed-iris)' }}>«{groupName}»</em> — {lessons.length} {lessons.length === 1 ? 'урок' : 'уроков'}</>
+            : 'Выберите группу из списка ниже'}
+        </p>
 
-      {!selectedGroup && (
-        <div className="tg-empty" style={{ marginTop: 40 }}>
-          <div style={{ fontSize: 40, marginBottom: 14, color: 'var(--muted)' }}><BookIcon /></div>
-          <div className="tg-empty-title">Выберите группу</div>
-          <div className="tg-empty-desc">Выберите группу, чтобы управлять уроками</div>
-        </div>
-      )}
-
-      {showForm && (
-        <div className="panel" style={{ marginBottom: 20 }}>
-          <div className="panel-header"><h2>Новый урок</h2></div>
-          <div className="panel-body">
-            <form onSubmit={createLesson}>
-              <div className="form-group" style={{ marginBottom: 16 }}>
-                <label>Тема урока</label>
-                <input type="text" className="form-input" placeholder="Введите тему урока"
-                  value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })} required />
+        {selectedGroup && (
+          <div className="ed-page-bar">
+            <div style={{ display: 'flex', gap: 40, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ed-text-mute)', marginBottom: 4 }}>Всего</div>
+                <div style={{ fontFamily: 'Fraunces, serif', fontWeight: 300, fontSize: 42, letterSpacing: '-0.03em', lineHeight: 1 }}>{lessons.length}</div>
               </div>
-              <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label>Дата</label>
-                  <input type="date" className="form-input"
-                    value={form.lesson_date} onChange={e => setForm({ ...form, lesson_date: e.target.value })} required />
-                </div>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label>Время</label>
-                  <input type="time" className="form-input"
-                    value={form.lesson_time} onChange={e => setForm({ ...form, lesson_time: e.target.value })} />
-                </div>
+              <div>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ed-text-mute)', marginBottom: 4 }}>Проведено</div>
+                <div style={{ fontFamily: 'Fraunces, serif', fontWeight: 300, fontSize: 42, letterSpacing: '-0.03em', lineHeight: 1 }}>{completed}</div>
               </div>
-              <div className="form-group" style={{ marginBottom: 20 }}>
-                <label>Домашнее задание</label>
-                <textarea className="form-input" rows={3} placeholder="Описание ДЗ..."
-                  value={form.homework} onChange={e => setForm({ ...form, homework: e.target.value })} />
+              <div>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ed-text-mute)', marginBottom: 4 }}>Запланировано</div>
+                <div style={{ fontFamily: 'Fraunces, serif', fontWeight: 300, fontSize: 42, letterSpacing: '-0.03em', lineHeight: 1, fontStyle: 'italic', color: 'var(--ed-iris)' }}>{upcoming}</div>
               </div>
-              <button type="submit" className="btn btn-primary" disabled={busy}>
-                {busy ? 'Создание...' : 'Создать урок'}
-              </button>
-            </form>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {selectedGroup && lessons.length === 0 && (
-        <div className="tg-empty" style={{ marginTop: 20 }}>
-          <div className="tg-empty-title">Нет уроков</div>
-          <div className="tg-empty-desc">Создайте первый урок для этой группы</div>
-          <button className="tg-btn tg-btn--primary" style={{ marginTop: 16 }} onClick={() => setShowForm(true)}>
-            <PlusIcon /> Создать урок
+      <div className="ed-toolbar">
+        <select value={selectedGroup || ''} onChange={e => setSelectedGroup(e.target.value || null)}
+          style={{
+            padding: '11px 18px', borderRadius: 100, border: '1px solid var(--ed-border)',
+            background: 'var(--ed-surface)', color: 'var(--ed-text)',
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 600,
+            letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', outline: 'none',
+            minWidth: 240,
+          }}>
+          <option value="">Выберите группу</option>
+          {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+        </select>
+        {selectedGroup && (
+          <button className="ed-btn ed-btn--sm" onClick={() => setShowForm(!showForm)}>
+            {showForm ? <>{ico.close} Отмена</> : <>{ico.plus} Создать урок</>}
           </button>
+        )}
+      </div>
+
+      {showForm && selectedGroup && (
+        <div style={{ background: 'var(--ed-surface)', border: '1px solid var(--ed-border)', borderRadius: 22, padding: 28, marginBottom: 28 }}>
+          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ed-text-mute)', marginBottom: 6 }}>— New lesson</div>
+          <div style={{ fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontWeight: 400, fontSize: 28, letterSpacing: '-0.025em', marginBottom: 22, color: 'var(--ed-text)' }}>Новый <em>урок</em></div>
+          <form onSubmit={createLesson}>
+            <div className="ed-field">
+              <label className="ed-field-label">Тема урока</label>
+              <input className="ed-input" type="text" placeholder="например, Глаголы です/だ"
+                value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })} required />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div className="ed-field">
+                <label className="ed-field-label">Дата</label>
+                <input className="ed-input" type="date"
+                  value={form.lesson_date} onChange={e => setForm({ ...form, lesson_date: e.target.value })} required />
+              </div>
+              <div className="ed-field">
+                <label className="ed-field-label">Время</label>
+                <input className="ed-input" type="time"
+                  value={form.lesson_time} onChange={e => setForm({ ...form, lesson_time: e.target.value })} />
+              </div>
+            </div>
+            <div className="ed-field">
+              <label className="ed-field-label">Домашнее задание</label>
+              <textarea className="ed-input" rows={3} placeholder="Описание задания…"
+                value={form.homework} onChange={e => setForm({ ...form, homework: e.target.value })} />
+            </div>
+            <button type="submit" className="ed-btn" disabled={busy} style={{ marginTop: 10 }}>
+              {busy ? 'Создание…' : <>{ico.check} Создать урок</>}
+            </button>
+          </form>
         </div>
       )}
 
-      {selectedGroup && lessons.length > 0 && (
-        <div className="tg-table-wrap">
-          <table className="tg-table">
-            <thead>
-              <tr>
-                <th>Тема</th>
-                <th>Дата</th>
-                <th>Время</th>
-                <th>Статус</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lessons.map(l => {
-                const dt = l.scheduled_at ? new Date(l.scheduled_at) : null;
-                const dateStr = dt ? dt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', weekday: 'short' }) : '—';
-                const timeStr = dt ? dt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '—';
-                return (
-                  <tr key={l.id}>
-                    <td><div className="tg-name">{l.topic}</div></td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-                        <CalIcon /> {dateStr}
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
-                        <ClockIcon /> {timeStr}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`tg-badge ${l.is_completed ? 'tg-badge--green' : 'tg-badge--gray'}`}>
-                        <span className="tg-badge-dot" />
-                        {l.is_completed ? 'Проведён' : 'Запланирован'}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      {!selectedGroup ? (
+        <div className="ed-empty">
+          <div className="ed-empty-eyebrow">— No selection —</div>
+          <div className="ed-empty-title">Выберите\nгруппу</div>
+          <div className="ed-empty-desc">Чтобы увидеть уроки и создавать новые, выберите группу выше</div>
+        </div>
+      ) : lessons.length === 0 ? (
+        <div className="ed-empty">
+          <div className="ed-empty-eyebrow">— Blank planner —</div>
+          <div className="ed-empty-title">Уроков\nпока нет</div>
+          <div className="ed-empty-desc">Создайте первый урок для этой группы — он появится в расписании студентов</div>
+        </div>
+      ) : (
+        <div className="ed-sched-list">
+          {lessons.map((l, i) => {
+            const dt = l.scheduled_at ? new Date(l.scheduled_at) : null;
+            const day = dt ? dt.getDate() : '—';
+            const mon = dt ? MONTHS_SHORT[dt.getMonth()] : '';
+            const timeStr = dt ? dt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '—';
+            return (
+              <div key={l.id} className={`ed-sched-row ${l.is_completed ? '' : ''}`} style={{ gridTemplateColumns: '88px 1fr auto auto' }}>
+                <div className="ed-sched-day" style={{ width: 88, height: 80 }}>
+                  <div className="ed-sched-day-num" style={{ fontSize: 32 }}>{day}</div>
+                  <div className="ed-sched-day-label">{mon}</div>
+                </div>
+                <div>
+                  <div className="ed-sched-info-title" style={{ fontSize: 18 }}>{l.topic}</div>
+                  <div className="ed-sched-info-sub">{timeStr} · #{String(i + 1).padStart(3, '0')}</div>
+                </div>
+                {l.homework && (
+                  <span className="ed-tag ed-tag--iris">📝 ДЗ</span>
+                )}
+                <span className={`ed-tag ${l.is_completed ? 'ed-tag--lime' : 'ed-tag--mute'}`}>
+                  {l.is_completed ? '✓ Проведён' : '○ Запланирован'}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

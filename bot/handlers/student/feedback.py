@@ -76,13 +76,14 @@ async def save_feedback(state: FSMContext, session: AsyncSession, db_user: User,
         
     # Sync with CRM
     try:
+        headers = {"X-Bot-Secret": config.BOT_TOKEN.get_secret_value()}
         async with aiohttp.ClientSession() as http_session:
             payload = {
                 "telegram_id": db_user.telegram_id,
                 "rating": data['rating'],
                 "text": comment
             }
-            await http_session.post(f"{config.API_URL}/sync-review", json=payload, timeout=3)
+            await http_session.post(f"{config.API_URL}/sync-review", json=payload, headers=headers, timeout=3)
     except Exception as e:
         logger.error(f"Failed to sync review to CRM: {e}")
     

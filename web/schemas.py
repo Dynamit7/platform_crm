@@ -26,12 +26,12 @@ class Token(BaseModel):
 class UserPublic(BaseModel):
     id: int
     telegram_id: Optional[int] = None
-    name: str
-    email: str
+    name: Optional[str] = None
+    email: Optional[str] = None
     phone: Optional[str] = None
     role: str
     avatar_url: Optional[str] = None
-    registration_source: str = "web"
+    registration_source: Optional[str] = "web"
     created_at: Optional[datetime] = None
     is_active: Optional[bool] = True
 
@@ -39,9 +39,11 @@ class UserPublic(BaseModel):
         from_attributes = True
 
 class AdminStudentPublic(UserPublic):
+    email: Optional[str] = None
     groups: List[str] = []
     group_ids: List[int] = []
     level: Optional[int] = None
+    status: str = "active"
     last_activity_date: Optional[date] = None
     registration_date: Optional[date] = None
     total_paid: float = 0
@@ -163,12 +165,13 @@ class BotReviewSync(BaseModel):
 class CourseBase(BaseModel):
     title: str
     description: str
-    duration: str
-    price: float
+    duration: Optional[str] = None
+    price: Optional[float] = None
     image_url: Optional[str] = None
 
 class CourseCreate(CourseBase):
-    pass
+    duration: str
+    price: float
 
 class CourseUpdate(BaseModel):
     title: Optional[str] = None
@@ -190,12 +193,21 @@ class Course(CourseBase):
 # ──────────────────────────────────────
 class TeacherBase(BaseModel):
     name: str
-    bio: str
+    bio: Optional[str] = None
     photo_url: Optional[str] = None
-    subjects: str
+    subjects: Optional[str] = None
 
 class TeacherCreate(TeacherBase):
     pass
+
+class TeacherUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+    photo_url: Optional[str] = None
+    subjects: Optional[str] = None
+    specialization: Optional[str] = None
 
 class Teacher(TeacherBase):
     id: int
@@ -227,6 +239,7 @@ class Group(GroupCreate):
     created_at: Optional[datetime] = None
     course: Optional[Course] = None
     teacher: Optional[Teacher] = None
+    current_students: Optional[int] = 0
 
     class Config:
         from_attributes = True
@@ -244,6 +257,18 @@ class LessonCreate(BaseModel):
     homework: Optional[str] = None
     lesson_date: Optional[date] = None
     lesson_time: Optional[str] = None
+
+class LessonUpdate(BaseModel):
+    topic: Optional[str] = None
+    description: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
+    zoom_link: Optional[str] = None
+    homework: Optional[str] = None
+    lesson_date: Optional[date] = None
+    lesson_time: Optional[str] = None
+    is_completed: Optional[bool] = None
+    is_recorded: Optional[bool] = None
+    recording_url: Optional[str] = None
 
 class Lesson(LessonCreate):
     id: int

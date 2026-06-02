@@ -2,7 +2,7 @@ from aiogram import Router, types, F
 from aiogram.filters import CommandStart
 from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards.common import get_start_keyboard
-from bot.models.user import User
+from bot.models.user import User, UserRole
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command, StateFilter
 
@@ -13,11 +13,12 @@ from bot.config import config
 
 @router.message(CommandStart())
 async def cmd_start(message: types.Message, db_user: User, session: AsyncSession):
-    is_registered = db_user is not None
-    
+    # PENDING users haven't completed registration yet — show "Записаться"
+    is_registered = db_user is not None and db_user.role != UserRole.PENDING
+
     # Save user upon /start if they don't exist
-    if not is_registered:
-        from bot.models.user import User as DBUser, UserRole
+    if db_user is None:
+        from bot.models.user import User as DBUser
         from sqlalchemy import select
         
         # Double check just in case
@@ -37,6 +38,7 @@ async def cmd_start(message: types.Message, db_user: User, session: AsyncSession
 
             # Sync user with Web API
             try:
+                headers = {"X-Bot-Secret": config.BOT_TOKEN.get_secret_value()}
                 async with aiohttp.ClientSession() as http_session:
                     payload = {
                         "telegram_id": message.from_user.id,
@@ -44,7 +46,7 @@ async def cmd_start(message: types.Message, db_user: User, session: AsyncSession
                         "phone": None,
                         "email": None
                     }
-                    await http_session.post(f"{config.API_URL}/sync-user", json=payload, timeout=3)
+                    await http_session.post(f"{config.API_URL}/sync-user", json=payload, headers=headers, timeout=3)
             except Exception as e:
                 # Log error or pass if API is unreachable
                 print(f"Failed to sync user with API: {e}")
@@ -61,6 +63,11 @@ async def cmd_start(message: types.Message, db_user: User, session: AsyncSession
         parse_mode="Markdown",
         reply_markup=get_start_keyboard(is_registered)
     )
+
+@router.callback_query(F.data == "teacher:panel")
+async def redirect_to_teacher_panel(callback: types.CallbackQuery, db_user: User):
+    from bot.handlers.teacher.panel import show_teacher_panel
+    await show_teacher_panel(callback, db_user)
 
 @router.callback_query(F.data == "about:info")
 async def process_about_info(callback: types.CallbackQuery):

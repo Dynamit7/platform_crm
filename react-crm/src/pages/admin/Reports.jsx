@@ -134,7 +134,7 @@ export default function AdminReports() {
   useEffect(() => { load(); }, []);
 
   if (loading) {
-    return <div className="page-content"><div className="page-loading"><div className="spinner" /></div></div>;
+    return <div className="page-content ed-page ed-admin"><div className="page-loading"><div className="spinner" /></div></div>;
   }
 
   const s = data?.summary || {};
@@ -205,7 +205,7 @@ export default function AdminReports() {
   const maxConv = Math.max(...convBySource.map(c => c.total), 1);
 
   return (
-    <div className="page-content">
+    <div className="page-content ed-page ed-admin">
       {/* ═══ Top Bar ═══ */}
       <div className="rp-topbar">
         <div className="rp-topbar-left">

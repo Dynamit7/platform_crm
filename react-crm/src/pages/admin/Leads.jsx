@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
+import Modal from '../../components/Modal';
 
 /* ── SVG Icons ── */
 const SSearch = () => (
@@ -75,6 +76,13 @@ const STATUS_CONFIG = {
   enrolled:  { label: 'Зачислен',  color: '#10b981', bg: 'rgba(16,185,129,0.1)', dot: '#10b981' },
   lost:      { label: 'Потерян',   color: '#ef4444', bg: 'rgba(239,68,68,0.1)', dot: '#ef4444' },
 };
+
+const Row = ({ label, children }) => (
+  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+    <span style={{ fontSize: 13, color: 'var(--muted)' }}>{label}</span>
+    <span style={{ fontSize: 13.5, textAlign: 'right', wordBreak: 'break-word' }}>{children}</span>
+  </div>
+);
 
 const SOURCE_LABELS = { manual: 'Вручную', web: 'Сайт', telegram: 'Telegram' };
 
@@ -191,7 +199,7 @@ export default function Leads() {
   ];
 
   return (
-    <div className="page-content">
+    <div className="page-content ed-page ed-admin">
       {/* ═══ Header ═══ */}
       <div className="ld-header">
         <div className="ld-header-left">
@@ -341,124 +349,147 @@ export default function Leads() {
         </div>
       )}
 
-      {/* ════════ SIDE PANEL ════════ */}
-      {selectedLead && (
-        <div className="ld-overlay" onClick={() => setSelectedLead(null)}>
-          <div className="ld-panel" onClick={e => e.stopPropagation()}>
-            <div className="ld-panel-header">
-              <h3>Карточка заявки</h3>
-              <button className="ld-panel-close" onClick={() => setSelectedLead(null)}><SClose /></button>
-            </div>
-            <div className="ld-panel-body">
-              <div className="ld-panel-avatar" style={{ background: `hsl(${selectedLead.id * 37 % 360}, 55%, 50%)` }}>
+      {/* ════════ LEAD DETAIL — portal-based centered modal ════════ */}
+      <Modal
+        open={!!selectedLead}
+        onClose={() => setSelectedLead(null)}
+        title="Карточка заявки"
+        width={460}
+      >
+        {selectedLead && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <div
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 26,
+                  fontWeight: 700,
+                  color: '#fff',
+                  background: `hsl(${selectedLead.id * 37 % 360}, 55%, 50%)`,
+                }}
+              >
                 {selectedLead.name.charAt(0).toUpperCase()}
               </div>
-              <h4 className="ld-panel-name">{selectedLead.name}</h4>
+              <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{selectedLead.name}</h4>
+            </div>
 
-              <div className="ld-panel-status-row">
-                <span className="ld-panel-label">Статус</span>
-                <select className="ld-status-select ld-status-select--lg" value={selectedLead.status}
-                  style={{ background: STATUS_CONFIG[selectedLead.status]?.bg, color: STATUS_CONFIG[selectedLead.status]?.color, borderColor: STATUS_CONFIG[selectedLead.status]?.color + '40' }}
-                  onChange={e => updateStatus(selectedLead.id, e.target.value)}>
-                  {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                </select>
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <span style={{ fontSize: 13, color: 'var(--muted)' }}>Статус</span>
+              <select
+                className="ld-status-select ld-status-select--lg"
+                value={selectedLead.status}
+                style={{
+                  background: STATUS_CONFIG[selectedLead.status]?.bg,
+                  color: STATUS_CONFIG[selectedLead.status]?.color,
+                  borderColor: STATUS_CONFIG[selectedLead.status]?.color + '40',
+                }}
+                onChange={e => updateStatus(selectedLead.id, e.target.value)}
+              >
+                {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              </select>
+            </div>
 
-              <div className="ld-panel-divider" />
+            <div style={{ height: 1, background: 'var(--border)' }} />
 
-              <div className="ld-panel-field">
-                <span className="ld-panel-label">Телефон</span>
-                <a href={`tel:${selectedLead.phone}`} className="ld-panel-value ld-panel-value--link">{selectedLead.phone}</a>
-              </div>
+            <div style={{ display: 'grid', rowGap: 10 }}>
+              <Row label="Телефон">
+                <a href={`tel:${selectedLead.phone}`} style={{ color: 'var(--blue-500, #3b82f6)' }}>{selectedLead.phone}</a>
+              </Row>
               {selectedLead.email && (
-                <div className="ld-panel-field">
-                  <span className="ld-panel-label">Email</span>
-                  <a href={`mailto:${selectedLead.email}`} className="ld-panel-value ld-panel-value--link">{selectedLead.email}</a>
-                </div>
+                <Row label="Email">
+                  <a href={`mailto:${selectedLead.email}`} style={{ color: 'var(--blue-500, #3b82f6)' }}>{selectedLead.email}</a>
+                </Row>
               )}
-              <div className="ld-panel-field">
-                <span className="ld-panel-label">Курс</span>
-                <span className="ld-panel-value">{selectedLead.course?.title || '—'}</span>
-              </div>
-              <div className="ld-panel-field">
-                <span className="ld-panel-label">Источник</span>
-                <span className="ld-panel-value">{SOURCE_ICONS[selectedLead.source] || '📝'} {SOURCE_LABELS[selectedLead.source] || selectedLead.source}</span>
-              </div>
-              <div className="ld-panel-field">
-                <span className="ld-panel-label">Создана</span>
-                <span className="ld-panel-value">{new Date(selectedLead.created_at).toLocaleString('ru-RU')}</span>
-              </div>
+              <Row label="Курс">{selectedLead.course?.title || '—'}</Row>
+              <Row label="Источник">
+                {SOURCE_ICONS[selectedLead.source] || '📝'} {SOURCE_LABELS[selectedLead.source] || selectedLead.source}
+              </Row>
+              <Row label="Создана">{new Date(selectedLead.created_at).toLocaleString('ru-RU')}</Row>
+            </div>
 
-              <div className="ld-panel-divider" />
+            <div style={{ height: 1, background: 'var(--border)' }} />
 
-              <div className="ld-panel-field">
-                <span className="ld-panel-label">Заметки</span>
-                <p className="ld-panel-notes">{selectedLead.notes || 'Нет заметок'}</p>
-              </div>
+            <div>
+              <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>Заметки</div>
+              <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                {selectedLead.notes || 'Нет заметок'}
+              </p>
+            </div>
 
-              <div className="ld-panel-divider" />
-
-              <div className="ld-panel-actions">
-                <button className="ld-btn ld-btn--primary ld-btn--block" onClick={() => { window.location.href = `tel:${selectedLead.phone}`; }}>
-                  <SPhone /> Позвонить
-                </button>
-                <button className="ld-btn ld-btn--outline ld-btn--block" onClick={() => convertLead(selectedLead.id)} disabled={selectedLead.status !== 'contacted'}>
-                  <SUserPlus /> Конвертировать в студента
-                </button>
-                <button className="ld-btn ld-btn--outline ld-btn--block" style={{ color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.3)' }}
-                  onClick={() => deleteLead(selectedLead.id)}>
-                  Удалить заявку
-                </button>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+              <button
+                className="ld-btn ld-btn--primary ld-btn--block"
+                onClick={() => { window.location.href = `tel:${selectedLead.phone}`; }}
+              >
+                <SPhone /> Позвонить
+              </button>
+              <button
+                className="ld-btn ld-btn--outline ld-btn--block"
+                onClick={() => convertLead(selectedLead.id)}
+                disabled={selectedLead.status !== 'contacted'}
+              >
+                <SUserPlus /> Конвертировать в студента
+              </button>
+              <button
+                className="ld-btn ld-btn--outline ld-btn--block"
+                style={{ color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.3)' }}
+                onClick={() => deleteLead(selectedLead.id)}
+              >
+                Удалить заявку
+              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* ════════ CREATE MODAL ════════ */}
-      {showCreate && (
-        <div className="ld-overlay" onClick={() => setShowCreate(false)}>
-          <div className="ld-modal" onClick={e => e.stopPropagation()}>
-            <div className="ld-modal-header">
-              <h3>Новая заявка</h3>
-              <button className="ld-panel-close" onClick={() => setShowCreate(false)}><SClose /></button>
-            </div>
-            <form onSubmit={handleCreate} className="ld-modal-body">
-              <label className="ld-field">
-                <span>Имя и фамилия</span>
-                <input className="ld-input" name="name" value={createForm.name} onChange={e => setCreateForm(p => ({ ...p, name: e.target.value }))} placeholder="Иван Петров" required />
-              </label>
-              <label className="ld-field">
-                <span>Телефон</span>
-                <input className="ld-input" name="phone" value={createForm.phone} onChange={e => setCreateForm(p => ({ ...p, phone: e.target.value }))} placeholder="+998901234567" required />
-              </label>
-              <label className="ld-field">
-                <span>Курс</span>
-                <select className="ld-input" value={createForm.course_id} onChange={e => setCreateForm(p => ({ ...p, course_id: e.target.value }))}>
-                  <option value="">— Не выбран —</option>
-                  {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
-                </select>
-              </label>
-              <label className="ld-field">
-                <span>Источник</span>
-                <select className="ld-input" value={createForm.source} onChange={e => setCreateForm(p => ({ ...p, source: e.target.value }))}>
-                  <option value="manual">Вручную</option>
-                  <option value="web">Сайт</option>
-                  <option value="telegram">Telegram</option>
-                </select>
-              </label>
-              <label className="ld-field">
-                <span>Заметки</span>
-                <textarea className="ld-input" rows={3} value={createForm.notes} onChange={e => setCreateForm(p => ({ ...p, notes: e.target.value }))} placeholder="Дополнительная информация..." />
-              </label>
-              <div className="ld-modal-actions">
-                <button type="button" className="ld-btn ld-btn--outline" onClick={() => setShowCreate(false)}>Отмена</button>
-                <button type="submit" className="ld-btn ld-btn--primary" disabled={saving}>{saving ? 'Сохранение...' : 'Создать'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        title="Новая заявка"
+        width={480}
+        footer={
+          <>
+            <button type="button" className="ld-btn ld-btn--outline" onClick={() => setShowCreate(false)}>Отмена</button>
+            <button type="submit" form="lead-create-form" className="ld-btn ld-btn--primary" disabled={saving}>{saving ? 'Сохранение...' : 'Создать'}</button>
+          </>
+        }
+      >
+        <form id="lead-create-form" onSubmit={handleCreate}>
+          <label className="ld-field">
+            <span>Имя и фамилия</span>
+            <input className="ld-input" name="name" value={createForm.name} onChange={e => setCreateForm(p => ({ ...p, name: e.target.value }))} placeholder="Иван Петров" required />
+          </label>
+          <label className="ld-field">
+            <span>Телефон</span>
+            <input className="ld-input" name="phone" value={createForm.phone} onChange={e => setCreateForm(p => ({ ...p, phone: e.target.value }))} placeholder="+998901234567" required />
+          </label>
+          <label className="ld-field">
+            <span>Курс</span>
+            <select className="ld-input" value={createForm.course_id} onChange={e => setCreateForm(p => ({ ...p, course_id: e.target.value }))}>
+              <option value="">— Не выбран —</option>
+              {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+            </select>
+          </label>
+          <label className="ld-field">
+            <span>Источник</span>
+            <select className="ld-input" value={createForm.source} onChange={e => setCreateForm(p => ({ ...p, source: e.target.value }))}>
+              <option value="manual">Вручную</option>
+              <option value="web">Сайт</option>
+              <option value="telegram">Telegram</option>
+            </select>
+          </label>
+          <label className="ld-field">
+            <span>Заметки</span>
+            <textarea className="ld-input" rows={3} value={createForm.notes} onChange={e => setCreateForm(p => ({ ...p, notes: e.target.value }))} placeholder="Дополнительная информация..." />
+          </label>
+        </form>
+      </Modal>
     </div>
   );
 }

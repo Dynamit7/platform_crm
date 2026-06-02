@@ -1,9 +1,28 @@
 # SmartEdu CRM — Docker Production
 # Usage:
-#   docker compose up --build -d
-#   docker compose -f docker-compose.yml -f docker-compose.override.yml up -d
+#   docker compose up --build -d                   # SQLite (dev)
+#   docker compose --profile prod up --build -d    # PostgreSQL (prod)
 
 services:
+  # ── PostgreSQL (production only) ──────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: smartedu_db
+    restart: unless-stopped
+    profiles: ["prod"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: education_crm
+      POSTGRES_USER: smartedu
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smartedu_secret}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartedu -d education_crm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Web (FastAPI + React SPA) ─────────────────────────────
   web:
     build:
       context: .
@@ -11,18 +30,19 @@ services:
     container_name: smartedu_web
     restart: unless-stopped
     volumes:
-      - ./education_center_v2.db:/app/education_center_v2.db
+      - ./education_center.db:/app/education_center.db
       - ./web/frontend/uploads:/app/web/frontend/uploads
     env_file:
       - web/.env
     environment:
-      - DATABASE_URL=sqlite:///./education_center_v2.db
+      DATABASE_URL: ${WEB_DB_URL:-sqlite:////app/education_center.db}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/admin/stats"]
       interval: 30s
       timeout: 10s
       retries: 3
 
+  # ── Telegram Bot ──────────────────────────────────────────
   bot:
     build:
       context: .
@@ -30,16 +50,18 @@ services:
     container_name: smartedu_bot
     restart: unless-stopped
     volumes:
-      - ./education_center_v2.db:/app/education_center_v2.db
+      - ./education_center.db:/app/education_center.db
       - ./bot.log:/app/bot.log
     env_file:
       - .env
     environment:
-      - API_URL=http://web:8000/api/bot
+      API_URL: http://web:8000/api/bot
+      DATABASE_URL: ${BOT_DB_URL:-sqlite+aiosqlite:////app/education_center.db}
     depends_on:
       web:
         condition: service_healthy
 
+  # ── Nginx (reverse proxy + SSL) ───────────────────────────
   nginx:
     image: nginx:alpine
     container_name: smartedu_nginx
@@ -53,3 +75,6 @@ services:
       - web
       - bot
     restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -161,7 +161,7 @@ export default function AdminReviews() {
   const hasActiveFilters = statusFilter || courseFilter || teacherFilter || search;
 
   return (
-    <div style={s.page}>
+    <div className="ed-page ed-admin" style={s.page}>
       {/* Header */}
       <div style={s.header}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -265,13 +265,9 @@ export default function AdminReviews() {
                 <p style={s.text}>{r.text}</p>
 
                 {/* Media */}
-                {r.media_urls && (() => {
-                  try { return JSON.parse(r.media_urls); } catch { return []; }
-                })().filter(Boolean).length > 0 && (
+                {(Array.isArray(r.media_urls) ? r.media_urls : (() => { try { return JSON.parse(r.media_urls || '[]'); } catch { return []; } })()).filter(Boolean).length > 0 && (
                   <div style={s.mediaRow}>
-                    {(() => {
-                      try { return JSON.parse(r.media_urls).filter(Boolean); } catch { return []; }
-                    })().map((url, i) => (
+                    {(Array.isArray(r.media_urls) ? r.media_urls : (() => { try { return JSON.parse(r.media_urls || '[]'); } catch { return []; } })()).filter(Boolean).map((url, i) => (
                       url.match(/\.(mp4|webm|ogg)/i) ? (
                         <video key={i} src={url} style={s.mediaThumb} muted
                           onMouseEnter={e => e.currentTarget.play().catch(() => {})}

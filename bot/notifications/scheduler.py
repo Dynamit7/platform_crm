@@ -4,6 +4,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from bot.config import config
 from bot.database import async_session_factory
 from bot.models.education import Lesson, StudentGroup, Group
 from bot.models.user import Student, User
@@ -15,7 +16,8 @@ logger = logging.getLogger(__name__)
 class NotificationScheduler:
     def __init__(self, bot):
         self.bot = bot
-        self.scheduler = AsyncIOScheduler()
+        tz = config.TZ or "Asia/Tashkent"
+        self.scheduler = AsyncIOScheduler(timezone=tz)
         self.notifier = NotificationService(bot)
 
     async def check_upcoming_lessons(self):

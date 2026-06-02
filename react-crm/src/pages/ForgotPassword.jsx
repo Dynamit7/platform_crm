@@ -109,7 +109,7 @@ export default function ForgotPassword() {
       <div style={s.bgCircle2} />
       <div style={s.bgDots} />
 
-      <a href="https://tiluser.uz" style={s.backBtn}
+      <a href="https://tiluser.org" style={s.backBtn}
         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.95)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.06)'; }}
         onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.7)'; e.currentTarget.style.boxShadow = 'none'; }}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

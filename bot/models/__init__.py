@@ -1,35 +1,29 @@
-from .base import Base, TimestampMixin
-from .user import User, Admin, Teacher, Student
-from .education import (
-    TrainingType, Schedule, StudentStatusModel, Course, Group,
-    Registration, StudentGroup,
-    Lesson, Attendance, StudentProgress, HomeworkSubmission,
-    Material, Feedback
+from core.models import (
+    Base,
+    User, Admin, Teacher, Student,
+    TrainingType, Schedule, Course, Group, StudentGroup,
+    Lesson, Registration, Attendance, Feedback, Material,
+    StudentStatusModel, StudentProgress, HomeworkSubmission,
+    LessonTemplate, PromoCode,
+    Finance, Payment,
+    Referral, Reminder, Achievement, StudentAchievement,
+    GlobalSetting,
+    Enrollment, Homework, Review, Lead, LeadHistory,
+    Message, VocabularyWord, Notification,
+    BroadcastCampaign, LoginAttempt, Session,
 )
-from .finance import Finance
-from .settings import GlobalSetting
-from .features import Reminder, StudentAchievement, Achievement
 
 __all__ = [
     "Base",
-    "TimestampMixin",
-    "User",
-    "Admin",
-    "Teacher",
-    "Student",
-    "TrainingType",
-    "Schedule",
-    "StudentStatusModel",
-    "Course",
-    "Group",
-    "Registration",
-    "StudentGroup",
-    "Lesson",
-    "Attendance",
-    "StudentProgress",
-    "HomeworkSubmission",
-    "Material",
-    "Feedback",
-    "Finance",
-    "GlobalSetting"
+    "User", "Admin", "Teacher", "Student",
+    "TrainingType", "Schedule", "Course", "Group", "StudentGroup",
+    "Lesson", "Registration", "Attendance", "Feedback", "Material",
+    "StudentStatusModel", "StudentProgress", "HomeworkSubmission",
+    "LessonTemplate", "PromoCode",
+    "Finance", "Payment",
+    "Referral", "Reminder", "Achievement", "StudentAchievement",
+    "GlobalSetting",
+    "Enrollment", "Homework", "Review", "Lead", "LeadHistory",
+    "Message", "VocabularyWord", "Notification",
+    "BroadcastCampaign", "LoginAttempt", "Session",
 ]

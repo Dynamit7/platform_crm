@@ -8,14 +8,14 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    const stored = localStorage.getItem('user');
+    const token = sessionStorage.getItem('access_token');
+    const stored = sessionStorage.getItem('user');
     if (token && stored) {
       api.get('/auth/me').then(({ data }) => {
-        localStorage.setItem('user', JSON.stringify(data));
+        sessionStorage.setItem('user', JSON.stringify(data));
         setUser(data);
       }).catch(() => {
-        localStorage.clear();
+        sessionStorage.clear();
         setUser(null);
       }).finally(() => setLoading(false));
     } else {
@@ -25,15 +25,15 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
-    localStorage.setItem('access_token', data.access_token);
-    localStorage.setItem('refresh_token', data.refresh_token);
-    localStorage.setItem('user', JSON.stringify(data.user));
+    sessionStorage.setItem('access_token', data.access_token);
+    sessionStorage.setItem('refresh_token', data.refresh_token);
+    sessionStorage.setItem('user', JSON.stringify(data.user));
     setUser(data.user);
     return data.user;
   };
 
   const logout = () => {
-    localStorage.clear();
+    sessionStorage.clear();
     setUser(null);
   };
 

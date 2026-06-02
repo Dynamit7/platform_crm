@@ -129,6 +129,25 @@ async def process_broadcast_message(message: types.Message, state: FSMContext, s
     )
     await state.clear()
 
+@router.callback_query(F.data == "teacher_marks")
+async def teacher_marks_handler(callback: types.CallbackQuery, session: AsyncSession, db_user: User):
+    stmt = select(Teacher).where(Teacher.user_id == db_user.id)
+    res = await session.execute(stmt)
+    teacher = res.scalar_one_or_none()
+    if not teacher:
+        await callback.answer("❌ Профиль учителя не найден в системе", show_alert=True)
+        return
+    stmt = select(Group).where(Group.teacher_id == teacher.id).options(selectinload(Group.course))
+    res = await session.execute(stmt)
+    groups = res.scalars().all()
+    if not groups:
+        await callback.message.edit_text("ℹ️ У вас пока нет назначенных групп.", reply_markup=get_teacher_main_kb())
+        return
+    text = "✍️ *Выставить оценки*\n――――――――――――――――\nВыберите группу для просмотра журнала:\n\n"
+    for g in groups:
+        text += f"🔹 *{g.name}* | `{g.course.name}`\n"
+    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_teacher_groups_kb(groups))
+
 @router.callback_query(F.data == "teacher:profile")
 async def show_teacher_profile(callback: types.CallbackQuery, session: AsyncSession, db_user: User):
     stmt = select(Teacher).options(selectinload(Teacher.user)).where(Teacher.user_id == db_user.id)

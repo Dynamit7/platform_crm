@@ -437,7 +437,7 @@ export default function Broadcast() {
   };
 
   return (
-    <div style={s.page}>
+    <div className="ed-page ed-admin" style={s.page}>
       {/* Header */}
       <div style={s.header}>
         <div>

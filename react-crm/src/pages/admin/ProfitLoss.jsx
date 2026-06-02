@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
+import Modal from '../../components/Modal';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie, Legend, Line } from 'recharts';
 
 const SPlus = () => (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>);
@@ -123,23 +124,11 @@ export default function AdminProfitLoss() {
       api.get('/api/groups').then(({ data }) => data).catch(() => []),
       api.get('/api/admin/teachers').then(({ data }) => data).catch(() => []),
     ]).then(([payData, coursesData, groupsData, teachersData]) => {
-      const now = new Date();
-      const enrichedPayments = payData.map(p => ({
-        ...p,
-        amount: p.amount || Math.floor(Math.random() * 3000000 + 500000),
-        created_at: p.created_at || new Date(now - Math.random() * 90 * 86400000).toISOString(),
-        status: p.status || 'completed',
-        method: p.method || ['cash', 'card', 'transfer', 'click', 'payme'][Math.floor(Math.random() * 5)],
-        type: p.type || 'tuition',
-        course_name: p.course_name || (p.course?.title) || '',
-        student_name: p.student?.name || 'Студент',
-        manager: p.manager || ['Анна М.','Сергей К.','Елена В.','Дмитрий П.'][Math.floor(Math.random() * 4)],
-      }));
-      setPayments(enrichedPayments);
+      setPayments(Array.isArray(payData) ? payData : []);
       setCourses(Array.isArray(coursesData) ? coursesData : []);
       setGroups(Array.isArray(groupsData) ? groupsData : []);
       setTeachers(Array.isArray(teachersData) ? teachersData : []);
-      generateTransactions(enrichedPayments);
+      generateTransactions(Array.isArray(payData) ? payData : []);
       setLoading(false);
     }).catch(() => setLoading(false));
   };
@@ -162,36 +151,21 @@ export default function AdminProfitLoss() {
 
   const generateTransactions = (payData) => {
     const txns = [];
-    const now = new Date();
     const { from } = getDateRange();
-    const monthsBack = from ? Math.max(1, Math.ceil((now - from) / (30 * 86400000))) : 3;
-
     payData.forEach(p => {
       const d = new Date(p.created_at);
       if (!from || d >= from) {
+        const studentName = p.student?.name || p.student_name || 'Студент';
+        const courseName = p.course?.title || p.course_name || '';
         txns.push({
           id: `inc_${p.id}`, type: 'income', date: p.created_at, category: p.type || 'tuition',
           categoryLabel: INCOME_CATEGORIES.find(c => c.id === (p.type || 'tuition'))?.label || 'Оплата',
-          description: `Оплата от ${p.student_name || 'Студент'} — ${p.course_name || 'Курс'}`,
+          description: `Оплата от ${studentName}${courseName ? ' — ' + courseName : ''}`,
           amount: p.amount || 0, status: p.status || 'completed', method: p.method,
-          source: p.student_name, ref_id: p.id,
+          source: studentName, ref_id: p.id,
         });
       }
     });
-
-    const expCats = [...EXPENSE_CATEGORIES];
-    for (let i = 0; i < monthsBack * 5; i++) {
-      const d = new Date(now.getTime() - Math.random() * monthsBack * 30 * 86400000);
-      const cat = expCats[Math.floor(Math.random() * expCats.length)];
-      const amounts = { salary: Math.floor(Math.random() * 8000000 + 4000000), rent: Math.floor(Math.random() * 3000000 + 2000000), marketing: Math.floor(Math.random() * 2000000 + 500000), utilities: Math.floor(Math.random() * 800000 + 200000), other: Math.floor(Math.random() * 500000 + 100000) };
-      const descs = { salary: 'Зарплата за ' + MONTHS[d.getMonth()], rent: 'Аренда помещения — ' + MONTHS[d.getMonth()], marketing: 'Реклама — ' + ['Instagram', 'Telegram', 'Facebook', 'Google'][Math.floor(Math.random() * 4)], utilities: ['Электроэнергия', 'Интернет', 'Вода', 'Отопление'][Math.floor(Math.random() * 4)], other: ['Канцелярия', 'Хозтовары', 'Оборудование', 'Транспорт'][Math.floor(Math.random() * 4)] };
-      txns.push({
-        id: `exp_${i}`, type: 'expense', date: d.toISOString(), category: cat.id,
-        categoryLabel: cat.label, description: descs[cat.id] || 'Расход',
-        amount: amounts[cat.id] || Math.floor(Math.random() * 500000 + 100000),
-        status: 'completed', method: null, source: cat.label, ref_id: null,
-      });
-    }
     txns.sort((a, b) => new Date(b.date) - new Date(a.date));
     setTransactions(txns);
   };
@@ -352,7 +326,7 @@ export default function AdminProfitLoss() {
   );
 
   if (loading) {
-    return <div className="page-content" style={{ padding: '24px 28px' }}><div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--muted)' }}>Загрузка финансовых данных...</div></div>;
+    return <div className="page-content ed-page ed-admin"><div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--muted)' }}>Загрузка финансовых данных...</div></div>;
   }
 
   const periodLabel = customDateMode ? `${formatDate(customStart)} — ${formatDate(customEnd)}` : currentMonthLabel;
@@ -360,7 +334,7 @@ export default function AdminProfitLoss() {
   const chartInterval = chartData.length > 60 ? Math.ceil(chartData.length / 8) : Math.ceil(chartData.length / 10);
 
   return (
-    <div className="page-content" style={{ padding: '24px 28px' }}>
+    <div className="page-content ed-page ed-admin">
 
       {/* ═══ HEADER ═══ */}
       <div style={s.header}>
@@ -714,80 +688,78 @@ export default function AdminProfitLoss() {
       )}
 
       {/* ═══ ADD MODAL ═══ */}
-      {showAddModal && (
-        <div className="ld-overlay" style={{ justifyContent: 'center' }} onClick={() => setShowAddModal(false)}>
-          <div className="ld-modal" style={{ width: 480 }} onClick={e => e.stopPropagation()}>
-            <div className="ld-modal-header">
-              <h3>{addType === 'income' ? 'Новый доход' : 'Новый расход'}</h3>
-              <button className="ld-panel-close" onClick={() => setShowAddModal(false)}><SClose /></button>
+      <Modal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title={addType === 'income' ? 'Новый доход' : 'Новый расход'}
+        width={480}
+        footer={
+          <>
+            <button type="button" className="ld-btn ld-btn--outline" onClick={() => setShowAddModal(false)}>Отмена</button>
+            <button type="submit" form="profitloss-add-form" className="ld-btn ld-btn--primary" style={{ background: addType === 'expense' ? '#ef4444' : undefined }} disabled={saving}>
+              {saving ? 'Сохранение...' : addType === 'income' ? 'Добавить доход' : 'Добавить расход'}
+            </button>
+          </>
+        }
+      >
+        <form id="profitloss-add-form" onSubmit={handleAddTransaction}>
+          <label className="ld-field">
+            <span>Тип</span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button type="button" onClick={() => { setAddType('income'); setAddForm(p => ({ ...p, type: 'income', category: 'tuition' })); }} style={{
+                flex: 1, padding: '9px 0', border: '2px solid', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
+                background: addType === 'income' ? 'rgba(16,185,129,0.1)' : 'none', borderColor: addType === 'income' ? '#10b981' : 'var(--border)', color: addType === 'income' ? '#10b981' : 'var(--muted)',
+              }}>↑ Доход</button>
+              <button type="button" onClick={() => { setAddType('expense'); setAddForm(p => ({ ...p, type: 'expense', category: 'rent' })); }} style={{
+                flex: 1, padding: '9px 0', border: '2px solid', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
+                background: addType === 'expense' ? 'rgba(239,68,68,0.1)' : 'none', borderColor: addType === 'expense' ? '#ef4444' : 'var(--border)', color: addType === 'expense' ? '#ef4444' : 'var(--muted)',
+              }}>↓ Расход</button>
             </div>
-            <form onSubmit={handleAddTransaction} className="ld-modal-body">
-              <label className="ld-field">
-                <span>Тип</span>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button type="button" onClick={() => { setAddType('income'); setAddForm(p => ({ ...p, type: 'income', category: 'tuition' })); }} style={{
-                    flex: 1, padding: '9px 0', border: '2px solid', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
-                    background: addType === 'income' ? 'rgba(16,185,129,0.1)' : 'none', borderColor: addType === 'income' ? '#10b981' : 'var(--border)', color: addType === 'income' ? '#10b981' : 'var(--muted)',
-                  }}>↑ Доход</button>
-                  <button type="button" onClick={() => { setAddType('expense'); setAddForm(p => ({ ...p, type: 'expense', category: 'rent' })); }} style={{
-                    flex: 1, padding: '9px 0', border: '2px solid', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
-                    background: addType === 'expense' ? 'rgba(239,68,68,0.1)' : 'none', borderColor: addType === 'expense' ? '#ef4444' : 'var(--border)', color: addType === 'expense' ? '#ef4444' : 'var(--muted)',
-                  }}>↓ Расход</button>
-                </div>
-              </label>
+          </label>
 
-              <label className="ld-field">
-                <span>Категория</span>
-                <select className="ld-input" value={addForm.category} onChange={e => setAddForm(p => ({ ...p, category: e.target.value }))}>
-                  {addType === 'income' ? INCOME_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)
-                    : expenseCategories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                </select>
-              </label>
+          <label className="ld-field">
+            <span>Категория</span>
+            <select className="ld-input" value={addForm.category} onChange={e => setAddForm(p => ({ ...p, category: e.target.value }))}>
+              {addType === 'income' ? INCOME_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)
+                : expenseCategories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+          </label>
 
-              <label className="ld-field">
-                <span>Сумма</span>
-                <input className="ld-input" type="number" value={addForm.amount} onChange={e => setAddForm(p => ({ ...p, amount: e.target.value }))} placeholder="0" required min="1" />
-              </label>
+          <label className="ld-field">
+            <span>Сумма</span>
+            <input className="ld-input" type="number" value={addForm.amount} onChange={e => setAddForm(p => ({ ...p, amount: e.target.value }))} placeholder="0" required min="1" />
+          </label>
 
-              <label className="ld-field">
-                <span>Описание</span>
-                <input className="ld-input" value={addForm.description} onChange={e => setAddForm(p => ({ ...p, description: e.target.value }))} placeholder="Назначение платежа" />
-              </label>
+          <label className="ld-field">
+            <span>Описание</span>
+            <input className="ld-input" value={addForm.description} onChange={e => setAddForm(p => ({ ...p, description: e.target.value }))} placeholder="Назначение платежа" />
+          </label>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <label className="ld-field">
-                  <span>Дата</span>
-                  <input className="ld-input" type="date" value={addForm.date} onChange={e => setAddForm(p => ({ ...p, date: e.target.value }))} />
-                </label>
-                <label className="ld-field">
-                  <span>Статус</span>
-                  <select className="ld-input" value={addForm.status} onChange={e => setAddForm(p => ({ ...p, status: e.target.value }))}>
-                    <option value="completed">Проведён</option>
-                    <option value="pending">Ожидает</option>
-                    <option value="cancelled">Отменён</option>
-                  </select>
-                </label>
-              </div>
-
-              {addType === 'income' && (
-                <label className="ld-field">
-                  <span>Метод оплаты</span>
-                  <select className="ld-input" value={addForm.method} onChange={e => setAddForm(p => ({ ...p, method: e.target.value }))}>
-                    {PAYMENT_METHODS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-                  </select>
-                </label>
-              )}
-
-              <div className="ld-modal-actions">
-                <button type="button" className="ld-btn ld-btn--outline" onClick={() => setShowAddModal(false)}>Отмена</button>
-                <button type="submit" className={`ld-btn ld-btn--primary`} style={{ background: addType === 'expense' ? '#ef4444' : undefined }} disabled={saving}>
-                  {saving ? 'Сохранение...' : addType === 'income' ? 'Добавить доход' : 'Добавить расход'}
-                </button>
-              </div>
-            </form>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <label className="ld-field">
+              <span>Дата</span>
+              <input className="ld-input" type="date" value={addForm.date} onChange={e => setAddForm(p => ({ ...p, date: e.target.value }))} />
+            </label>
+            <label className="ld-field">
+              <span>Статус</span>
+              <select className="ld-input" value={addForm.status} onChange={e => setAddForm(p => ({ ...p, status: e.target.value }))}>
+                <option value="completed">Проведён</option>
+                <option value="pending">Ожидает</option>
+                <option value="cancelled">Отменён</option>
+              </select>
+            </label>
           </div>
-        </div>
-      )}
+
+          {addType === 'income' && (
+            <label className="ld-field">
+              <span>Метод оплаты</span>
+              <select className="ld-input" value={addForm.method} onChange={e => setAddForm(p => ({ ...p, method: e.target.value }))}>
+                {PAYMENT_METHODS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </select>
+            </label>
+          )}
+        </form>
+      </Modal>
 
     </div>
   );

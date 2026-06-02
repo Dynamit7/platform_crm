@@ -17,8 +17,13 @@ async def view_student_schedule(event: types.TelegramObject, session: AsyncSessi
     text = "🗓 *Ваше ближайшее расписание*\n――――――――――――――――\n"
     
     try:
+        headers = {"X-Bot-Secret": config.BOT_TOKEN.get_secret_value()}
         async with aiohttp.ClientSession() as http_session:
-            async with http_session.get(f"{config.API_URL}/student/{db_user.telegram_id}/schedule", timeout=5) as resp:
+            async with http_session.get(
+                f"{config.API_URL}/student/{db_user.telegram_id}/schedule",
+                headers=headers,
+                timeout=5,
+            ) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     lessons = data.get("lessons", [])

@@ -35,17 +35,38 @@ async def show_settings_main(callback: types.CallbackQuery, session: AsyncSessio
     )
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_admin_settings_main_kb())
 
+@router.callback_query(F.data == "admin_set:notify")
+async def show_notify_settings(callback: types.CallbackQuery):
+    await callback.message.edit_text(
+        "🔔 *Настройки уведомлений*\n\n"
+        "В разработке. Здесь можно будет настроить:\n"
+        "• Уведомления об оплате\n"
+        "• Напоминания о занятиях\n"
+        "• Автоматические сообщения ученикам\n"
+        "• Рассылки о событиях",
+        parse_mode="Markdown",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin:settings")]
+        ])
+    )
+
+@router.callback_query(F.data == "admin_set:time")
+async def show_time_settings(callback: types.CallbackQuery):
+    await callback.message.edit_text(
+        "🕒 *Время напоминаний*\n\n"
+        "В разработке. Здесь можно будет настроить:\n"
+        "• Время отправки напоминаний о занятиях\n"
+        "• Периодичность уведомлений о задолженностях\n"
+        "• Время автоматических бэкапов",
+        parse_mode="Markdown",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin:settings")]
+        ])
+    )
+
 @router.callback_query(F.data == "admin_set:backup")
 async def send_db_backup(callback: types.CallbackQuery):
-    import os
-    from aiogram.types import FSInputFile
-    db_path = "education_center_v2.db"
-    if os.path.exists(db_path):
-        document = FSInputFile(db_path)
-        await callback.message.answer_document(document, caption="💾 ЭКСТРЕННЫЙ БЭКАП БАЗЫ ДАННЫХ\n\nНикому не передавайте этот файл!")
-        await callback.answer()
-    else:
-        await callback.answer("❌ Файл базы данных не найден!", show_alert=True)
+    await callback.answer("🔒 Функция отключена. Используйте ручное резервирование.", show_alert=True)
 
 @router.callback_query(F.data == "admin_set:info")
 async def show_info_settings(callback: types.CallbackQuery, session: AsyncSession):
@@ -61,7 +82,7 @@ async def show_info_settings(callback: types.CallbackQuery, session: AsyncSessio
     kb = types.InlineKeyboardMarkup(inline_keyboard=[
         [types.InlineKeyboardButton(text="✏️ Изменить название", callback_data="set_edit:center_name")],
         [types.InlineKeyboardButton(text="✏️ Изменить адрес", callback_data="set_edit:center_address")],
-        [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_menu:settings")]
+        [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin:settings")]
     ])
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=kb)
 

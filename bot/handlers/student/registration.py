@@ -113,23 +113,28 @@ async def process_trial_time(message: types.Message, state: FSMContext, session:
             course_interest=data["course_interest"],
             trial_time=trial_time
         )
-        
-        # Уведомляем админов
-        notifier = NotificationService(bot)
-        msg_text = f"🆕 *Новая заявка!*\n\n👤 Имя: {user.full_name}\n📞 Телефон: {user.phone}\n📚 Курс: {data['course_interest']}\n🗓 Время (пробный): {trial_time}"
-        for admin_id in config.ADMIN_IDS:
-            await bot.send_message(
-                admin_id,
-                msg_text,
-                parse_mode="Markdown"
-            )
-            
-        # Уведомляем канал
-        await notifier.notify_channel_action(f"📢 *НОВАЯ ЗАЯВКА*\n\nВ бот поступила новая заявка на обучение:\n\n👤 {user.full_name}\n📞 {user.phone}\n📚 Желаемый курс: {data['course_interest']}\n🗓 Запрос на время: {trial_time}\n\n_Перейдите в панель админа для подтверждения._")
-            
-        await message.answer("✅ Ваша заявка принята! Мы свяжемся с вами для подтверждения.")
-        await state.clear()
-        
     except Exception as e:
-        logger.error(f"Registration error: {e}")
+        logger.error(f"Registration error (DB): {e}")
         await message.answer("❌ Произошла системная ошибка. Попробуйте позже.")
+        return
+
+    # Заявка уже сохранена — пользователю сразу сообщаем об успехе.
+    await message.answer("✅ Ваша заявка принята! Мы свяжемся с вами для подтверждения.")
+    await state.clear()
+
+    # Уведомления админам/каналу — best effort. Если админ ещё не запускал
+    # бота, Telegram вернёт "chat not found", но это не должно ломать флоу.
+    msg_text = f"🆕 *Новая заявка!*\n\n👤 Имя: {user.full_name}\n📞 Телефон: {user.phone}\n📚 Курс: {data['course_interest']}\n🗓 Время (пробный): {trial_time}"
+    for admin_id in config.ADMIN_IDS:
+        try:
+            await bot.send_message(admin_id, msg_text, parse_mode="Markdown")
+        except Exception as e:
+            logger.warning(f"Failed to notify admin {admin_id}: {e}")
+
+    try:
+        notifier = NotificationService(bot)
+        await notifier.notify_channel_action(
+            f"📢 *НОВАЯ ЗАЯВКА*\n\nВ бот поступила новая заявка на обучение:\n\n👤 {user.full_name}\n📞 {user.phone}\n📚 Желаемый курс: {data['course_interest']}\n🗓 Запрос на время: {trial_time}\n\n_Перейдите в панель админа для подтверждения._"
+        )
+    except Exception as e:
+        logger.warning(f"Failed to notify channel: {e}")

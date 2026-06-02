@@ -1,8 +1,10 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import sessionmaker
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+
+from core.models import Base
 
 _web_dir = Path(__file__).parent
 _root    = _web_dir.parent
@@ -11,7 +13,7 @@ _root    = _web_dir.parent
 load_dotenv(dotenv_path=_root / ".env")           # root defaults
 load_dotenv(dotenv_path=_web_dir / ".env", override=True)  # web overrides
 
-_raw_url = os.getenv("DATABASE_URL", f"sqlite:///{_web_dir / 'education_center_web.db'}")
+_raw_url = os.getenv("DATABASE_URL", f"sqlite:///{_root / 'education_center.db'}")
 
 # Normalise: strip async driver prefix (web uses sync SQLAlchemy)
 SQLALCHEMY_DATABASE_URL = (
@@ -35,8 +37,6 @@ engine = create_engine(
     pool_pre_ping=True,
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-Base = declarative_base()
 
 
 def get_db():

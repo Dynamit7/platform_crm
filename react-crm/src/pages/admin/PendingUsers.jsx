@@ -184,7 +184,7 @@ export default function PendingUsers() {
   const todayStr = new Date().toISOString().slice(0, 10);
 
   return (
-    <div style={s.page}>
+    <div className="ed-page ed-admin" style={s.page}>
       <div style={s.header}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>

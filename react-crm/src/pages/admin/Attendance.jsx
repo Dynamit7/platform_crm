@@ -1,6 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
+import Modal from '../../components/Modal';
+
+const SPlus = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
 
 const SChevronLeft = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -137,6 +144,105 @@ export default function AdminAttendance() {
   const [busy, setBusy] = useState(false);
   const [year, setYear] = useState(new Date().getFullYear());
   const [month, setMonth] = useState(new Date().getMonth());
+  // dates the admin marked in the calendar header to be created as new lessons on save
+  const [pendingDates, setPendingDates] = useState(new Set()); // Set of "YYYY-MM-DD"
+  const [defaultTime, setDefaultTime] = useState('18:30');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createMode, setCreateMode] = useState('single'); // 'single' | 'series'
+  const [createForm, setCreateForm] = useState({ date: '', time: '18:30', topic: '', zoom_link: '' });
+  const [seriesForm, setSeriesForm] = useState({
+    start_date: '', end_date: '',
+    weekdays: [false, false, false, false, false, false, false], // Пн..Вс
+    time: '18:30', topic: '', zoom_link: '',
+  });
+  const [creating, setCreating] = useState(false);
+
+  const reloadAttendance = () => {
+    if (!selectedGroup) return;
+    api.get(`/api/groups/${selectedGroup}/attendance`).then(({ data }) => {
+      setData(data);
+      const a = {};
+      data.students?.forEach(s => {
+        if (s.attendance) Object.entries(s.attendance).forEach(([lid, val]) => { a[`${s.student_id}_${lid}`] = val; });
+      });
+      setAttendance(a);
+    }).catch(() => {});
+  };
+
+  const handleCreateLesson = async (e) => {
+    e.preventDefault();
+    if (!selectedGroup) return;
+    setCreating(true);
+    try {
+      const gid = parseInt(selectedGroup);
+      if (createMode === 'single') {
+        if (!createForm.date) { setCreating(false); return; }
+        const scheduled_at = new Date(`${createForm.date}T${createForm.time || '18:30'}:00`).toISOString();
+        await api.post('/api/lessons', {
+          group_id: gid,
+          topic: createForm.topic || 'Занятие',
+          scheduled_at,
+          lesson_date: createForm.date,
+          lesson_time: createForm.time || '18:30',
+          zoom_link: createForm.zoom_link || null,
+        });
+        if (add) add('Занятие создано', 'success');
+      } else {
+        // series mode — generate all matching dates
+        if (!seriesForm.start_date || !seriesForm.end_date) { setCreating(false); return; }
+        if (!seriesForm.weekdays.some(Boolean)) {
+          if (add) add('Выберите хотя бы один день недели', 'error');
+          setCreating(false);
+          return;
+        }
+        const start = new Date(seriesForm.start_date + 'T00:00:00');
+        const end = new Date(seriesForm.end_date + 'T00:00:00');
+        if (end < start) {
+          if (add) add('Дата окончания раньше начала', 'error');
+          setCreating(false);
+          return;
+        }
+        const dates = [];
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          // JS getDay(): 0=Sun..6=Sat. Our weekdays array: 0=Mon..6=Sun.
+          const jsDay = d.getDay();
+          const ourIdx = jsDay === 0 ? 6 : jsDay - 1;
+          if (seriesForm.weekdays[ourIdx]) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            dates.push(`${y}-${m}-${dd}`);
+          }
+        }
+        if (dates.length === 0) {
+          if (add) add('Нет дат, соответствующих выбранным дням', 'error');
+          setCreating(false);
+          return;
+        }
+        const baseTopic = seriesForm.topic || 'Занятие';
+        const lessonsPayload = dates.map((date, i) => ({
+          date,
+          time: seriesForm.time || '18:30',
+          topic: seriesForm.topic ? `${baseTopic} #${i + 1}` : baseTopic,
+          zoom_link: seriesForm.zoom_link || null,
+        }));
+        const resp = await api.post('/api/lessons/bulk', { group_id: gid, lessons: lessonsPayload });
+        const created = resp?.data?.created || 0;
+        const skipped = resp?.data?.skipped || 0;
+        if (add) add(`Создано занятий: ${created}${skipped ? `, пропущено: ${skipped}` : ''}`, created ? 'success' : 'error');
+      }
+      setCreateOpen(false);
+      setCreateForm({ date: '', time: '18:30', topic: '', zoom_link: '' });
+      setSeriesForm({ start_date: '', end_date: '', weekdays: [false,false,false,false,false,false,false], time: '18:30', topic: '', zoom_link: '' });
+      reloadAttendance();
+    } catch (err) {
+      if (add) add(err?.response?.data?.detail || 'Ошибка создания занятия', 'error');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const DAYS_RU = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 
   useEffect(() => {
     api.get('/api/groups').then(({ data }) => setGroups(data)).catch(() => {});
@@ -177,6 +283,28 @@ export default function AdminAttendance() {
   const save = async () => {
     setBusy(true);
     try {
+      // 1) Если админ натыкал новых дат в шапке — создаём пачкой ОДНИМ запросом,
+      //    бэк пошлёт студентам ОДНО суммарное уведомление.
+      const newDates = Array.from(pendingDates);
+      if (newDates.length > 0) {
+        const lessonsPayload = newDates.map(d => ({
+          date: d,
+          time: defaultTime,
+          topic: 'Занятие',
+        }));
+        const resp = await api.post('/api/lessons/bulk', {
+          group_id: parseInt(selectedGroup),
+          lessons: lessonsPayload,
+        });
+        const created = resp?.data?.created || 0;
+        const skipped = resp?.data?.skipped || 0;
+        if (add) add(`Создано занятий: ${created}${skipped ? `, пропущено: ${skipped}` : ''}`, 'success');
+        setPendingDates(new Set());
+        // reload, чтобы новые уроки появились в filteredLessons
+        await new Promise(r => setTimeout(r, 150));
+        reloadAttendance();
+      }
+      // 2) Сохраняем галочки посещаемости только для существующих уроков.
       const records = Object.entries(attendance).filter(([key]) => {
         const lid = Number(key.split('_')[1]);
         return filteredLessons.some(l => l.id === lid);
@@ -184,10 +312,37 @@ export default function AdminAttendance() {
         const [studentId, lessonId] = key.split('_').map(Number);
         return { lesson_id: lessonId, student_id: studentId, attended: val };
       });
-      await api.post(`/api/groups/${selectedGroup}/attendance`, { records });
-      if (add) add('Посещаемость сохранена', 'success');
+      if (records.length > 0) {
+        await api.post(`/api/groups/${selectedGroup}/attendance`, { records });
+        if (add) add('Посещаемость сохранена', 'success');
+        // Подтягиваем свежие данные с бэка, чтобы % и attended_count
+        // у студентов обновились в этой же сессии без перезагрузки страницы.
+        await new Promise(r => setTimeout(r, 100));
+        reloadAttendance();
+      }
     } catch { if (add) add('Ошибка сохранения', 'error'); }
     finally { setBusy(false); }
+  };
+
+  const toggleDate = (dayNum) => {
+    const y = year;
+    const m = String(month + 1).padStart(2, '0');
+    const dd = String(dayNum).padStart(2, '0');
+    const key = `${y}-${m}-${dd}`;
+    // нельзя выбирать дни, на которые уже есть урок
+    if (filteredLessons.some(l => l.d.getDate() === dayNum)) return;
+    setPendingDates(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const isPending = (dayNum) => {
+    const y = year;
+    const m = String(month + 1).padStart(2, '0');
+    const dd = String(dayNum).padStart(2, '0');
+    return pendingDates.has(`${y}-${m}-${dd}`);
   };
 
   const groupName = groups.find(g => g.id === selectedGroup)?.name || '';
@@ -204,7 +359,7 @@ export default function AdminAttendance() {
   }, [data, filteredLessons]);
 
   return (
-    <div style={s.page}>
+    <div className="ed-page ed-admin" style={s.page}>
       {/* Header */}
       <div style={s.header}>
         <div style={s.hLeft}>
@@ -212,6 +367,20 @@ export default function AdminAttendance() {
           <p style={s.hSub}>{selectedGroup ? `Группа «${groupName}»` : 'Выберите группу для просмотра'}</p>
         </div>
         <div style={s.hRight}>
+          {selectedGroup && (
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '10px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                background: 'linear-gradient(135deg, #3b82f6, #06b6d4)', color: '#fff',
+                fontSize: 13, fontWeight: 600, boxShadow: '0 4px 14px rgba(37,99,235,0.25)',
+              }}
+            >
+              <SPlus /> Новое занятие
+            </button>
+          )}
           <div style={s.selectWrap}>
             <select style={s.select} value={selectedGroup || ''} onChange={e => setSelectedGroup(e.target.value || null)}>
               <option value="">Выберите группу</option>
@@ -261,15 +430,34 @@ export default function AdminAttendance() {
               <div style={s.calStudentCol}>Студент</div>
               <div style={{ ...s.calDaysRow, gridTemplateColumns: `repeat(${daysInMonth}, minmax(32px, 1fr))` }}>
                 {Array.from({ length: daysInMonth }, (_, i) => {
+                  const dayNum = i + 1;
                   const dayOfWeek = (i + firstDay + 6) % 7;
-                  const isLesson = filteredLessons.some(l => l.d.getDate() === i + 1);
+                  const isLesson = filteredLessons.some(l => l.d.getDate() === dayNum);
+                  const pending = isPending(dayNum);
                   return (
-                    <div key={i} style={{
-                      ...s.calDayHeader,
-                      color: isLesson ? 'var(--text)' : 'var(--muted)',
-                      opacity: isLesson ? 1 : 0.5,
-                    }}>
-                      <div>{i + 1}</div>
+                    <div
+                      key={i}
+                      title={isLesson ? 'Урок уже создан' : (pending ? 'Снять выбор' : 'Кликни — создать урок в этот день')}
+                      onClick={() => toggleDate(dayNum)}
+                      style={{
+                        ...s.calDayHeader,
+                        cursor: isLesson ? 'default' : 'pointer',
+                        color: pending ? '#fff' : (isLesson ? 'var(--text)' : 'var(--muted)'),
+                        opacity: isLesson || pending ? 1 : 0.6,
+                        background: pending ? 'linear-gradient(135deg, #3b82f6, #06b6d4)' : 'transparent',
+                        borderRadius: pending ? 6 : 0,
+                        boxShadow: pending ? '0 2px 8px rgba(37,99,235,0.35)' : 'none',
+                        userSelect: 'none',
+                        transition: 'background 0.12s, color 0.12s, box-shadow 0.12s',
+                      }}
+                      onMouseEnter={e => {
+                        if (!isLesson && !pending) e.currentTarget.style.background = 'rgba(37,99,235,0.08)';
+                      }}
+                      onMouseLeave={e => {
+                        if (!pending) e.currentTarget.style.background = 'transparent';
+                      }}
+                    >
+                      <div>{dayNum}</div>
                       <div style={{ fontSize: 9 }}>{DAYS_SHORT[dayOfWeek]}</div>
                     </div>
                   );
@@ -323,7 +511,32 @@ export default function AdminAttendance() {
               })}
             </div>
 
-            <div style={s.footer}>
+            <div style={{ ...s.footer, justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--muted)' }}>
+                {pendingDates.size > 0 ? (
+                  <>
+                    <span>📅 Новых занятий: <b style={{ color: 'var(--text)' }}>{pendingDates.size}</b></span>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span>Время:</span>
+                      <input
+                        type="time"
+                        value={defaultTime}
+                        onChange={e => setDefaultTime(e.target.value)}
+                        style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 12 }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setPendingDates(new Set())}
+                      style={{ padding: '6px 10px', borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 12 }}
+                    >
+                      Сбросить
+                    </button>
+                  </>
+                ) : (
+                  <span>💡 Кликни по дню в шапке, чтобы создать на него занятие, потом «Сохранить».</span>
+                )}
+              </div>
               <button style={s.saveBtn} onClick={save} disabled={busy}
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(37,99,235,0.3)'; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
@@ -340,6 +553,147 @@ export default function AdminAttendance() {
           <div>Выберите группу для просмотра и отметки посещаемости</div>
         </div>
       )}
+
+      <Modal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title={createMode === 'single' ? 'Новое занятие' : 'Серия занятий'}
+        width={480}
+        footer={
+          <>
+            <button type="button" className="ld-btn ld-btn--outline" onClick={() => setCreateOpen(false)}>Отмена</button>
+            <button
+              type="submit"
+              form="lesson-create-form"
+              className="ld-btn ld-btn--primary"
+              disabled={
+                creating ||
+                (createMode === 'single' ? !createForm.date :
+                 (!seriesForm.start_date || !seriesForm.end_date || !seriesForm.weekdays.some(Boolean)))
+              }
+            >
+              {creating ? 'Создание…' : (createMode === 'series' ? 'Создать серию' : 'Создать')}
+            </button>
+          </>
+        }
+      >
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--bg)', borderRadius: 10, marginBottom: 18 }}>
+          {[
+            { key: 'single', label: 'Одно занятие' },
+            { key: 'series', label: 'Серия (Пн/Ср/Пт …)' },
+          ].map(t => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setCreateMode(t.key)}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                border: 'none',
+                borderRadius: 8,
+                cursor: 'pointer',
+                background: createMode === t.key ? 'var(--surface)' : 'transparent',
+                color: createMode === t.key ? 'var(--text)' : 'var(--muted)',
+                fontWeight: createMode === t.key ? 600 : 500,
+                fontSize: 13,
+                transition: 'all 0.15s',
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <form id="lesson-create-form" onSubmit={handleCreateLesson} style={{ display: 'grid', rowGap: 14 }}>
+          {createMode === 'single' ? (
+            <>
+              <label className="ld-field">
+                <span>Дата</span>
+                <input className="ld-input" type="date" required value={createForm.date}
+                  onChange={e => setCreateForm(p => ({ ...p, date: e.target.value }))} />
+              </label>
+              <label className="ld-field">
+                <span>Время начала</span>
+                <input className="ld-input" type="time" value={createForm.time}
+                  onChange={e => setCreateForm(p => ({ ...p, time: e.target.value }))} />
+              </label>
+              <label className="ld-field">
+                <span>Тема</span>
+                <input className="ld-input" type="text" placeholder="Например, Урок 12 — глаголы"
+                  value={createForm.topic}
+                  onChange={e => setCreateForm(p => ({ ...p, topic: e.target.value }))} />
+              </label>
+              <label className="ld-field">
+                <span>Zoom-ссылка (необязательно)</span>
+                <input className="ld-input" type="url" placeholder="https://zoom.us/j/…"
+                  value={createForm.zoom_link}
+                  onChange={e => setCreateForm(p => ({ ...p, zoom_link: e.target.value }))} />
+              </label>
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <label className="ld-field">
+                  <span>Период с</span>
+                  <input className="ld-input" type="date" required value={seriesForm.start_date}
+                    onChange={e => setSeriesForm(p => ({ ...p, start_date: e.target.value }))} />
+                </label>
+                <label className="ld-field">
+                  <span>по</span>
+                  <input className="ld-input" type="date" required value={seriesForm.end_date}
+                    onChange={e => setSeriesForm(p => ({ ...p, end_date: e.target.value }))} />
+                </label>
+              </div>
+              <div className="ld-field">
+                <span>Дни недели</span>
+                <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                  {DAYS_RU.map((d, i) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setSeriesForm(p => {
+                        const wd = [...p.weekdays]; wd[i] = !wd[i]; return { ...p, weekdays: wd };
+                      })}
+                      style={{
+                        padding: '8px 14px', borderRadius: 8, border: '1.5px solid var(--border)', cursor: 'pointer',
+                        background: seriesForm.weekdays[i] ? 'var(--accent-gradient, #3b82f6)' : 'transparent',
+                        color: seriesForm.weekdays[i] ? '#fff' : 'var(--text)',
+                        fontWeight: seriesForm.weekdays[i] ? 600 : 500,
+                        fontSize: 13,
+                        minWidth: 48,
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {d}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label className="ld-field">
+                <span>Время начала</span>
+                <input className="ld-input" type="time" value={seriesForm.time}
+                  onChange={e => setSeriesForm(p => ({ ...p, time: e.target.value }))} />
+              </label>
+              <label className="ld-field">
+                <span>Тема (опционально, нумерация добавится автоматически)</span>
+                <input className="ld-input" type="text" placeholder="Например, Урок"
+                  value={seriesForm.topic}
+                  onChange={e => setSeriesForm(p => ({ ...p, topic: e.target.value }))} />
+              </label>
+              <label className="ld-field">
+                <span>Zoom-ссылка (общая для всей серии)</span>
+                <input className="ld-input" type="url" placeholder="https://zoom.us/j/…"
+                  value={seriesForm.zoom_link}
+                  onChange={e => setSeriesForm(p => ({ ...p, zoom_link: e.target.value }))} />
+              </label>
+              <div style={{ fontSize: 12, color: 'var(--muted)', padding: '8px 10px', background: 'var(--bg)', borderRadius: 8 }}>
+                💡 Будет создано отдельное занятие на каждую дату в выбранные дни недели в этом периоде.
+              </div>
+            </>
+          )}
+        </form>
+      </Modal>
     </div>
   );
 }

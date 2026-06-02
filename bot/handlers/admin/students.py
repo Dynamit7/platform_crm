@@ -23,7 +23,7 @@ async def list_all_students(callback: types.CallbackQuery, session: AsyncSession
     parts = callback.data.split(":")
     page = int(parts[2]) if len(parts) > 2 else 1
     
-    stmt = select(User).where(User.role == UserRole.STUDENT).order_by(User.full_name).options(selectinload(User.student))
+    stmt = select(User).where(User.role == UserRole.STUDENT).order_by(User.full_name).options(selectinload(User.student_profile))
     result = await session.execute(stmt)
     students = result.scalars().all()
     
@@ -32,20 +32,18 @@ async def list_all_students(callback: types.CallbackQuery, session: AsyncSession
     
     builder = InlineKeyboardBuilder()
     
-    # Кнопка поиска вверху списка
     builder.row(types.InlineKeyboardButton(text="🔍 Поиск ученика", callback_data="admin_users:search"))
     
     for student_user in current_items:
-        st = student_user.student
-        # Определяем иконку статуса
+        st = student_user.student_profile
         from datetime import date as date_type
         today = date_type.today()
         if st and not st.is_active:
-            status_icon = "🚫"  # Отчислен
+            status_icon = "🚫"
         elif st and st.frozen_until and st.frozen_until >= today:
-            status_icon = "❄️"  # Заморожен
+            status_icon = "❄️"
         else:
-            status_icon = "✅"  # Активен
+            status_icon = "✅"
         builder.row(types.InlineKeyboardButton(
             text=f"{status_icon} {student_user.full_name}",
             callback_data=f"student_view:{student_user.id}"
@@ -54,8 +52,8 @@ async def list_all_students(callback: types.CallbackQuery, session: AsyncSession
     paginator.add_pagination_buttons(builder)
     builder.row(types.InlineKeyboardButton(text="⬅️ Главное меню", callback_data="admin:main"))
     
-    total_active = sum(1 for u in students if u.student and u.student.is_active)
-    total_frozen = sum(1 for u in students if u.student and u.student.frozen_until and u.student.frozen_until >= date_type.today())
+    total_active = sum(1 for u in students if u.student_profile and u.student_profile.is_active)
+    total_frozen = sum(1 for u in students if u.student_profile and u.student_profile.frozen_until and u.student_profile.frozen_until >= date_type.today())
     
     text = (
         f"👥 *Все ученики ({len(students)})*\n"
@@ -72,9 +70,9 @@ async def view_student_details(callback: types.CallbackQuery, session: AsyncSess
     else:
         user_id = int(callback.data.split(":")[1])
         
-    stmt = select(User).where(User.id == user_id).options(selectinload(User.student))
+    stmt = select(User).where(User.id == user_id).options(selectinload(User.student_profile))
     user = (await session.execute(stmt)).scalar_one()
-    student = user.student
+    student = user.student_profile
 
     status_icon = StudentStatus.ICONS[StudentStatus.ACTIVE]
     status_label = "Активен"
@@ -95,7 +93,7 @@ async def view_student_details(callback: types.CallbackQuery, session: AsyncSess
         f"📞 Тел: `{user.phone}`\n"
         f"📊 Статус: {status_icon} *{status_label}*\n"
         f"――――――――――――――――――――\n"
-        f"📅 В базе с: {user.created_at.strftime('%d.%m.%Y')}\n"
+        f"📅 В базе с: {user.created_at.strftime('%d.%m.%Y') if user.created_at else '--.--.----'}\n"
     )
     
     builder = InlineKeyboardBuilder()
@@ -236,6 +234,17 @@ async def execute_group_assignment(callback: types.CallbackQuery, session: Async
         new_prog = StudentProgress(student_id=student_id, course_id=group.course_id)
         session.add(new_prog)
     
+    # 5. Создаем Enrollment для синхронизации с вебом
+    from bot.models.education import Enrollment as EnrollmentModel
+    student_rec = (await session.execute(select(Student).where(Student.id == student_id))).scalar_one()
+    if student_rec:
+        existing_enroll = (await session.execute(
+            select(EnrollmentModel).where(EnrollmentModel.student_id == student_rec.user_id, EnrollmentModel.course_id == group.course_id)
+        )).scalar_one_or_none()
+        if not existing_enroll:
+            enroll = EnrollmentModel(student_id=student_rec.user_id, course_id=group.course_id, group_id=group_id)
+            session.add(enroll)
+    
     await session.commit()
     
     msg = "✅ Ученик успешно добавлен в учебную группу!" if status_type == "active" else "⏳ Ученик зачислен на пробный период!"
@@ -299,11 +308,15 @@ async def smart_transfer_execute(callback: types.CallbackQuery, session: AsyncSe
         o_g = (await session.execute(select(Group).where(Group.id == old_group_id))).scalar_one()
         o_g.current_students = max(0, o_g.current_students - 1)
         
-    # 2. Создаем новую
+    # 2. Проверяем, не заполнена ли целевая группа
+    n_g = (await session.execute(select(Group).where(Group.id == new_group_id))).scalar_one()
+    if n_g and n_g.max_students > 0 and n_g.current_students >= n_g.max_students:
+        await callback.answer("❌ Целевая группа заполнена!", show_alert=True)
+        return
+
     new_sg = StudentGroup(student_id=student_id, group_id=new_group_id, status="active")
     session.add(new_sg)
     
-    n_g = (await session.execute(select(Group).where(Group.id == new_group_id))).scalar_one()
     n_g.current_students += 1
     
     await session.commit()
@@ -317,10 +330,21 @@ async def toggle_student_status(callback: types.CallbackQuery, session: AsyncSes
     student_id = int(callback.data.split(":")[1])
     
     from bot.models.user import Student
+    from bot.models.education import StudentGroup, Group
     stmt = select(Student).where(Student.id == student_id)
     student = (await session.execute(stmt)).scalar_one()
     
     student.is_active = not student.is_active
+    
+    if not student.is_active:
+        stmt_sg = select(StudentGroup).where(StudentGroup.student_id == student_id, StudentGroup.status == "active")
+        active_groups = (await session.execute(stmt_sg)).scalars().all()
+        for sg in active_groups:
+            sg.status = "expelled"
+            group = await session.get(Group, sg.group_id)
+            if group:
+                group.current_students = max(0, (group.current_students or 0) - 1)
+    
     await session.commit()
     
     status_msg = "восстановлен" if student.is_active else "отчислен"

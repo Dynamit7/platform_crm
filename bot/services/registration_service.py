@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from bot.models.user import User, Student, UserRole
 from bot.models.education import Registration
+from core.models import Lead, Course
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -33,13 +34,36 @@ class RegistrationService:
                 
         await self.session.flush() # Получаем ID
 
+        # Попытка сматчить введённый юзером текст с реальным курсом по
+        # подстроке (case-insensitive). Если ничего не нашли — course_id None,
+        # а название останется в notes.
+        course_id = None
+        if course_interest:
+            ci = course_interest.strip().lower()
+            res = await self.session.execute(select(Course))
+            for c in res.scalars():
+                cname = (c.name or "").lower()
+                if cname and (ci in cname or cname in ci):
+                    course_id = c.id
+                    break
+
         new_reg = Registration(
             user_id=user.id,
-            course_id=None,
+            course_id=course_id,
             trial_lesson_time=None,
             notes=f"Интересует курс: {course_interest} | Удобное время: {trial_time}"
         )
         self.session.add(new_reg)
+
+        lead = Lead(
+            name=full_name,
+            phone=phone,
+            source="telegram",
+            course_id=course_id,
+            notes=f"Из бота. Интересует курс: {course_interest} | Удобное время: {trial_time}"
+        )
+        self.session.add(lead)
+
         await self.session.commit()
         return user
 

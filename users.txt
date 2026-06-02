@@ -1,0 +1,457 @@
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+  TIL USER — Все пользователи (Postgres: education_crm)
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+  Всего пользователей  : 36
+  Подобрано из словаря : 21
+  Сброшено на дефолт   : 15
+  Без пароля в БД       : 0
+
+  Дефолтный пароль (после сброса): Test123!
+
+  ВАЖНО:
+    - bcrypt-хэши математически нельзя расшифровать обратно.
+    - Пароли со статусом 'CRACKED' были подобраны словарём (значит они были простыми).
+    - Пароли со статусом 'RESET' были перезаписаны на дефолтный — войти можно по нему.
+    - SQLite-файл оставлен как backup (web/education_center.db.backup.before_pg.*).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ID   Email                            Имя                    Роль           Пароль                     Статус   TG
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  1    admin@tiluser.com                Super Admin            super_admin    admin123                   CRACKED  —
+  2    super@tiluser.uz                 Тимур                  teacher        Test123! (сброшен)         RESET    —
+  3    donk@tiluser.com                 Donk                   student        Test123! (сброшен)         RESET    —
+  4    admin@tiluser.uz                 —                      admin          admin123                   CRACKED  —
+  5    anna@tiluser.uz                  Teacher Anna           teacher        teacher123                 CRACKED  —
+  6    elena@tiluser.uz                 —                      teacher        teacher123                 CRACKED  —
+  7    mark@tiluser.uz                  —                      teacher        teacher123                 CRACKED  —
+  8    samat@tiluser.uz                 —                      student        student123                 CRACKED  —
+  9    nigina@tiluser.uz                —                      student        Test123! (сброшен)         RESET    —
+  10   test@test.com                    Student Test           student        student123                 CRACKED  —
+  11   tg_866916345@bot.local           System Admin           admin          changeme                   CRACKED  866916345
+  12   tg_110155894@bot.local           Самад                  teacher        Test123! (сброшен)         RESET    110155894
+  13   tg_1858104610@bot.local          Тимур                  teacher        Test123! (сброшен)         RESET    1858104610
+  14   tg_934444450@bot.local           Ллала                  student        Test123! (сброшен)         RESET    934444450
+  15   tg_1998214882@bot.local          Рахматилла             student        Test123! (сброшен)         RESET    1998214882
+  16   tg_7107327137@bot.local          悪魔                     student        changeme                   CRACKED  7107327137
+  17   tg_5856172046@bot.local          マジックヤム                 student        changeme                   CRACKED  5856172046
+  18   tg_701841376@bot.local           Mashhurbek             student        changeme                   CRACKED  701841376
+  19   tg_6821481080@bot.local          Кулбекова Сара Ойбеко  student        Test123! (сброшен)         RESET    6821481080
+  20   tg_512985813@bot.local           mmmm                   student        Test123! (сброшен)         RESET    512985813
+  21   tg_1001@bot.local                Анна В.                teacher        changeme                   CRACKED  1001
+  22   tg_1002@bot.local                Елена С.               teacher        changeme                   CRACKED  1002
+  23   tg_1003@bot.local                Марк Т.                teacher        changeme                   CRACKED  1003
+  24   tg_2001@bot.local                Самат                  student        changeme                   CRACKED  2001
+  25   tg_2002@bot.local                Нигина                 student        changeme                   CRACKED  2002
+  26   tg_2003@bot.local                Тест                   student        changeme                   CRACKED  2003
+  27   lead_1@edusmart.local            —                      student        Test123! (сброшен)         RESET    —
+  28   lead_2@edusmart.local            —                      student        Test123! (сброшен)         RESET    —
+  29   lead_3@edusmart.local            —                      student        Test123! (сброшен)         RESET    —
+  30   lead_4@edusmart.local            —                      student        Test123! (сброшен)         RESET    —
+  31   lead_5@edusmart.local            —                      student        Test123! (сброшен)         RESET    —
+  32   annatest2@test.uz                —                      teacher        test123                    CRACKED  —
+  33   integration_test@test.uz         —                      student        Test123! (сброшен)         RESET    999999999
+  34   test_34647@test.uz               —                      student        test123                    CRACKED  —
+  35   admin@test.uz                    Admin User             admin          admin123                   CRACKED  —
+  36   student@test.com                 Test Student           student        student123                 CRACKED  —
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+  Детальная информация (с bcrypt-хэшами)
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+  #1 — Super Admin
+    Email      : admin@tiluser.com
+    Роль       : super_admin
+    Телефон    : —
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : admin123
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$rJWrJUj.eYgUjnXZvvk/Oe9v7/GteLBYI90sjoFUkbmvESGCdWrt6
+
+  #2 — Тимур
+    Email      : super@tiluser.uz
+    Роль       : teacher
+    Телефон    : —
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : Test123! (сброшен)
+    Статус     : RESET
+    Hash (новый, если был reset):
+      $2b$12$EE63Bu4g5OltR.BwdxYrReIwREMhSY.YUzBAlgl/zcECJZ2W7OuGW
+
+  #3 — Donk
+    Email      : donk@tiluser.com
+    Роль       : student
+    Телефон    : —
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : Test123! (сброшен)
+    Статус     : RESET
+    Hash (новый, если был reset):
+      $2b$12$EE63Bu4g5OltR.BwdxYrReIwREMhSY.YUzBAlgl/zcECJZ2W7OuGW
+
+  #4 — —
+    Email      : admin@tiluser.uz
+    Роль       : admin
+    Телефон    : +998901234567
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : admin123
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$bI6jII/v9yILJEEsnJHy3.Y1A3eedbeWuTJNMCKsVPXEHE/s5Lqay
+
+  #5 — Teacher Anna
+    Email      : anna@tiluser.uz
+    Роль       : teacher
+    Телефон    : —
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : teacher123
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$/EjqiOcfW8/7mLkup2g2weOnIhKGf9.ZGCggHi20wBwfyJzN3b4K2
+
+  #6 — —
+    Email      : elena@tiluser.uz
+    Роль       : teacher
+    Телефон    : —
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : teacher123
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$6V7eHwMnr7beGVMUN1jHhOFnNJzB.j6j/zHcIg2z3MPshrXV4/oX2
+
+  #7 — —
+    Email      : mark@tiluser.uz
+    Роль       : teacher
+    Телефон    : —
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : teacher123
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$PEeXIVk6BuotVeH/c1RyluoZx57MfIBWfF4xUw1RkA3XAZukNbWEK
+
+  #8 — —
+    Email      : samat@tiluser.uz
+    Роль       : student
+    Телефон    : +998701234567
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : student123
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$OaoMRkRSFU7tyXFSm.YAQu0x2W/.AdlCy8U635Rbe1nu7aWabatHO
+
+  #9 — —
+    Email      : nigina@tiluser.uz
+    Роль       : student
+    Телефон    : +998911320000
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : Test123! (сброшен)
+    Статус     : RESET
+    Hash (новый, если был reset):
+      $2b$12$EE63Bu4g5OltR.BwdxYrReIwREMhSY.YUzBAlgl/zcECJZ2W7OuGW
+
+  #10 — Student Test
+    Email      : test@test.com
+    Роль       : student
+    Телефон    : 1234567890
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : student123
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$5/p.Dd7uLEwn8HR234SDVuk2QiNFQ2a671QVfnO9FNeFvWbqT3tl2
+
+  #11 — System Admin
+    Email      : tg_866916345@bot.local
+    Роль       : admin
+    Телефон    : —
+    Telegram ID: 866916345
+    Активен    : ✓
+    Пароль     : changeme
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$/b4AiGQieGtxaagO7UdyI.tJk4JqzW6SM5/JrehSbBXStnDcGa5wG
+
+  #12 — Самад
+    Email      : tg_110155894@bot.local
+    Роль       : teacher
+    Телефон    : +998903171575
+    Telegram ID: 110155894
+    Активен    : ✓
+    Пароль     : Test123! (сброшен)
+    Статус     : RESET
+    Hash (новый, если был reset):
+      $2b$12$EE63Bu4g5OltR.BwdxYrReIwREMhSY.YUzBAlgl/zcECJZ2W7OuGW
+
+  #13 — Тимур
+    Email      : tg_1858104610@bot.local
+    Роль       : teacher
+    Телефон    : +998991340202
+    Telegram ID: 1858104610
+    Активен    : ✓
+    Пароль     : Test123! (сброшен)
+    Статус     : RESET
+    Hash (новый, если был reset):
+      $2b$12$EE63Bu4g5OltR.BwdxYrReIwREMhSY.YUzBAlgl/zcECJZ2W7OuGW
+
+  #14 — Ллала
+    Email      : tg_934444450@bot.local
+    Роль       : student
+    Телефон    : +998908225553
+    Telegram ID: 934444450
+    Активен    : ✗
+    Пароль     : Test123! (сброшен)
+    Статус     : RESET
+    Hash (новый, если был reset):
+      $2b$12$EE63Bu4g5OltR.BwdxYrReIwREMhSY.YUzBAlgl/zcECJZ2W7OuGW
+
+  #15 — Рахматилла
+    Email      : tg_1998214882@bot.local
+    Роль       : student
+    Телефон    : +998887011217
+    Telegram ID: 1998214882
+    Активен    : ✓
+    Пароль     : Test123! (сброшен)
+    Статус     : RESET
+    Hash (новый, если был reset):
+      $2b$12$EE63Bu4g5OltR.BwdxYrReIwREMhSY.YUzBAlgl/zcECJZ2W7OuGW
+
+  #16 — 悪魔
+    Email      : tg_7107327137@bot.local
+    Роль       : student
+    Телефон    : —
+    Telegram ID: 7107327137
+    Активен    : ✓
+    Пароль     : changeme
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$pAV2XjA7qasgUftGcQK9puEcdXjDmTpTCMdVaAdtfay2Yp3Vj9sIO
+
+  #17 — マジックヤム
+    Email      : tg_5856172046@bot.local
+    Роль       : student
+    Телефон    : —
+    Telegram ID: 5856172046
+    Активен    : ✓
+    Пароль     : changeme
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$fXIOQ/Ex.zOnx5fAchlXGeB1eD1J.VLm93kICvrzrh3iQfTFKljvC
+
+  #18 — Mashhurbek
+    Email      : tg_701841376@bot.local
+    Роль       : student
+    Телефон    : —
+    Telegram ID: 701841376
+    Активен    : ✓
+    Пароль     : changeme
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$mNsO5Y7E1EhYvFq/4y3XgO3OaxVbvsTPUUXi6Wi8vEmW5Kwm0nhQe
+
+  #19 — Кулбекова Сара Ойбековна
+    Email      : tg_6821481080@bot.local
+    Роль       : student
+    Телефон    : +998933525885
+    Telegram ID: 6821481080
+    Активен    : ✓
+    Пароль     : Test123! (сброшен)
+    Статус     : RESET
+    Hash (новый, если был reset):
+      $2b$12$EE63Bu4g5OltR.BwdxYrReIwREMhSY.YUzBAlgl/zcECJZ2W7OuGW
+
+  #20 — mmmm
+    Email      : tg_512985813@bot.local
+    Роль       : student
+    Телефон    : +998935656402
+    Telegram ID: 512985813
+    Активен    : ✓
+    Пароль     : Test123! (сброшен)
+    Статус     : RESET
+    Hash (новый, если был reset):
+      $2b$12$EE63Bu4g5OltR.BwdxYrReIwREMhSY.YUzBAlgl/zcECJZ2W7OuGW
+
+  #21 — Анна В.
+    Email      : tg_1001@bot.local
+    Роль       : teacher
+    Телефон    : —
+    Telegram ID: 1001
+    Активен    : ✓
+    Пароль     : changeme
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$d3cXFmyd/6N6q5BL1dfb3..xRObHVzBC8papxH5tqQMQuXk1hAoQm
+
+  #22 — Елена С.
+    Email      : tg_1002@bot.local
+    Роль       : teacher
+    Телефон    : —
+    Telegram ID: 1002
+    Активен    : ✓
+    Пароль     : changeme
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$5JRmV3Mpm/uhDDCUffueQOj7uEKlQHYycvT5MlDvyBH5.8TN7zjAy
+
+  #23 — Марк Т.
+    Email      : tg_1003@bot.local
+    Роль       : teacher
+    Телефон    : —
+    Telegram ID: 1003
+    Активен    : ✓
+    Пароль     : changeme
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$o5oAWSEYKdWWXwMFW9trz.PKsZW0FwQ6LhHQvEDOz4YOTZnsUL8sm
+
+  #24 — Самат
+    Email      : tg_2001@bot.local
+    Роль       : student
+    Телефон    : —
+    Telegram ID: 2001
+    Активен    : ✓
+    Пароль     : changeme
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$JX4u3w5ffOmwR1azr9sdEuQ3byoF/lKNv9UnTurV.zhukDTC5nGXm
+
+  #25 — Нигина
+    Email      : tg_2002@bot.local
+    Роль       : student
+    Телефон    : —
+    Telegram ID: 2002
+    Активен    : ✓
+    Пароль     : changeme
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$a4au6vUJP6VxVpWzM.EoNOxiOpqhcwA1P.RWY5Q6cHpCc4KX06M.W
+
+  #26 — Тест
+    Email      : tg_2003@bot.local
+    Роль       : student
+    Телефон    : —
+    Telegram ID: 2003
+    Активен    : ✓
+    Пароль     : changeme
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$uh5Gqgw7n2JLYJu8bVCXHOEg2tHgiAKDuaKwxp4yRFK9nn6kfZk2m
+
+  #27 — —
+    Email      : lead_1@edusmart.local
+    Роль       : student
+    Телефон    : +77051234567
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : Test123! (сброшен)
+    Статус     : RESET
+    Hash (новый, если был reset):
+      $2b$12$EE63Bu4g5OltR.BwdxYrReIwREMhSY.YUzBAlgl/zcECJZ2W7OuGW
+
+  #28 — —
+    Email      : lead_2@edusmart.local
+    Роль       : student
+    Телефон    : +77771234567
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : Test123! (сброшен)
+    Статус     : RESET
+    Hash (новый, если был reset):
+      $2b$12$EE63Bu4g5OltR.BwdxYrReIwREMhSY.YUzBAlgl/zcECJZ2W7OuGW
+
+  #29 — —
+    Email      : lead_3@edusmart.local
+    Роль       : student
+    Телефон    : +77021234567
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : Test123! (сброшен)
+    Статус     : RESET
+    Hash (новый, если был reset):
+      $2b$12$EE63Bu4g5OltR.BwdxYrReIwREMhSY.YUzBAlgl/zcECJZ2W7OuGW
+
+  #30 — —
+    Email      : lead_4@edusmart.local
+    Роль       : student
+    Телефон    : +77007654321
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : Test123! (сброшен)
+    Статус     : RESET
+    Hash (новый, если был reset):
+      $2b$12$EE63Bu4g5OltR.BwdxYrReIwREMhSY.YUzBAlgl/zcECJZ2W7OuGW
+
+  #31 — —
+    Email      : lead_5@edusmart.local
+    Роль       : student
+    Телефон    : +77771239876
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : Test123! (сброшен)
+    Статус     : RESET
+    Hash (новый, если был reset):
+      $2b$12$EE63Bu4g5OltR.BwdxYrReIwREMhSY.YUzBAlgl/zcECJZ2W7OuGW
+
+  #32 — —
+    Email      : annatest2@test.uz
+    Роль       : teacher
+    Телефон    : +998901112233
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : test123
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$8icCXW6.E6RcFkKb7BrlFeRSRxhQKRSjXSClKjJH/S9WmHltj8tu.
+
+  #33 — —
+    Email      : integration_test@test.uz
+    Роль       : student
+    Телефон    : +79991112233
+    Telegram ID: 999999999
+    Активен    : ✓
+    Пароль     : Test123! (сброшен)
+    Статус     : RESET
+    Hash (новый, если был reset):
+      $2b$12$EE63Bu4g5OltR.BwdxYrReIwREMhSY.YUzBAlgl/zcECJZ2W7OuGW
+
+  #34 — —
+    Email      : test_34647@test.uz
+    Роль       : student
+    Телефон    : +79990001122
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : test123
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$tQGtEYdMffgCIoMfASCjv.o3s8HE9dPAORW7Key4SzsinY9W8HK8O
+
+  #35 — Admin User
+    Email      : admin@test.uz
+    Роль       : admin
+    Телефон    : —
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : admin123
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$GM4socfzb3Siw5CuJvCRlu4rS/S6ykeBwoGn9GZoEJ/VSGjMa6myq
+
+  #36 — Test Student
+    Email      : student@test.com
+    Роль       : student
+    Телефон    : —
+    Telegram ID: —
+    Активен    : ✓
+    Пароль     : student123
+    Статус     : CRACKED
+    Hash (новый, если был reset):
+      $2b$12$OaduRH36ymrYYxq1fUBH/.1u8bflCeSiC1o/9JIm0CNPVNUTwKxVG

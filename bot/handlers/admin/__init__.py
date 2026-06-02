@@ -1,4 +1,5 @@
 from aiogram import Router
+from bot.middlewares.admin_auth import AdminAccessMiddleware
 from .panel import router as panel_router
 from .reports import router as reports_router
 from .applications import router as apps_router
@@ -15,6 +16,8 @@ from .settings import router as settings_router
 from .leads import router as leads_router
 
 router = Router(name="admin_root")
+router.message.middleware(AdminAccessMiddleware())
+router.callback_query.middleware(AdminAccessMiddleware())
 router.include_router(panel_router)
 router.include_router(reports_router)
 router.include_router(apps_router)

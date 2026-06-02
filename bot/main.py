@@ -65,7 +65,7 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher):
     try:
         from sqlalchemy import text
         from bot.database import engine
-        from bot.models.base import Base
+        from core.models import Base
 
         async with engine.begin() as conn:
             await conn.execute(text("SELECT 1"))

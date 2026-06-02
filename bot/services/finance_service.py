@@ -26,11 +26,11 @@ class FinanceService:
         
         new_finance = Finance(
             user_id=student.user_id,
-            student_id=student_id,
+            student_id=student.user_id,
             amount=amount,
             payment_type=payment_type,
             registration_id=registration_id,
-            payment_method=payment_method,
+            method=payment_method,
             admin_id=admin_id,
             status=status
         )
@@ -125,8 +125,10 @@ class FinanceService:
         
         thirty_days_ago = date.today() - timedelta(days=30)
         
-        if not student.is_active or (student.frozen_until and student.frozen_until >= date.today()):
+        if not student.is_active:
             return True
+        if student.frozen_until and student.frozen_until >= date.today():
+            return False
             
         sg_stmt = select(StudentGroup).where(StudentGroup.student_id == student.id, StudentGroup.status.in_(["active"]))
         sgs = (await self.session.execute(sg_stmt)).scalars().all()

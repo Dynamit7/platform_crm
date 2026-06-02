@@ -14,15 +14,6 @@ from bot.keyboards.admin import get_admin_reports_keyboard
 router = Router(name="admin_reports")
 logger = logging.getLogger(__name__)
 
-@router.callback_query(F.data == "admin_menu:reports")
-async def show_reports_menu(callback: types.CallbackQuery):
-    """Главное меню отчетов."""
-    await callback.message.edit_text(
-        "📊 *Центр аналитики и отчетов*\n\nВыберите тип отчета для выгрузки в Excel:",
-        parse_mode="Markdown",
-        reply_markup=get_admin_reports_keyboard()
-    )
-
 @router.callback_query(F.data == "report_students")
 async def export_students_report(callback: types.CallbackQuery, session: AsyncSession):
     """Экспорт всех учеников."""

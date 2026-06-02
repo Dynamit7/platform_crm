@@ -5,6 +5,7 @@ from .homework import router as homework_router
 from .grading import router as grading_router
 from .group_journal import router as journal_router
 from .materials import router as materials_router
+from .schedule import router as schedule_router
 
 router = Router(name="teacher_root")
 
@@ -14,3 +15,4 @@ router.include_router(homework_router)
 router.include_router(grading_router)
 router.include_router(journal_router)
 router.include_router(materials_router)
+router.include_router(schedule_router)
