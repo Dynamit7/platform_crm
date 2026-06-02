@@ -3,9 +3,14 @@ start.py — единая точка запуска SmartEdu
 Запускает: веб-сервер (FastAPI) + Telegram-бот одновременно.
 
 Использование:
-    .venv\\Scripts\\python.exe start.py            # оба сервиса
-    .venv\\Scripts\\python.exe start.py --web      # только веб
-    .venv\\Scripts\\python.exe start.py --bot      # только бот
+    Windows:
+        .venv\\Scripts\\python.exe start.py          # оба сервиса
+        .venv\\Scripts\\python.exe start.py --web    # только веб
+        .venv\\Scripts\\python.exe start.py --bot    # только бот
+    macOS / Linux:
+        .venv/bin/python start.py                    # оба сервиса
+        .venv/bin/python start.py --web              # только веб
+        .venv/bin/python start.py --bot              # только бот
 """
 
 import subprocess
@@ -20,12 +25,32 @@ if sys.stdout.encoding != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 ROOT = Path(__file__).parent
-VENV_PYTHON = ROOT / ".venv" / "Scripts" / "python.exe"
-WEB_VENV_PYTHON = ROOT / "web" / "venv" / "Scripts" / "python.exe"
 
-# Используем venv веба для uvicorn если есть, иначе общий
-WEB_PYTHON = str(WEB_VENV_PYTHON) if WEB_VENV_PYTHON.exists() else str(VENV_PYTHON)
-BOT_PYTHON  = str(VENV_PYTHON)
+
+def venv_python(venv_dir: Path) -> Path:
+    """Возвращает путь к python внутри venv для текущей ОС.
+
+    Windows: <venv>/Scripts/python.exe
+    macOS/Linux: <venv>/bin/python
+    """
+    if os.name == "nt":
+        return venv_dir / "Scripts" / "python.exe"
+    return venv_dir / "bin" / "python"
+
+
+VENV_PYTHON = venv_python(ROOT / ".venv")
+WEB_VENV_PYTHON = venv_python(ROOT / "web" / "venv")
+
+# Используем venv веба для uvicorn если есть, иначе общий.
+# Если ни одного venv нет — берём текущий интерпретатор (sys.executable).
+if WEB_VENV_PYTHON.exists():
+    WEB_PYTHON = str(WEB_VENV_PYTHON)
+elif VENV_PYTHON.exists():
+    WEB_PYTHON = str(VENV_PYTHON)
+else:
+    WEB_PYTHON = sys.executable
+
+BOT_PYTHON = str(VENV_PYTHON) if VENV_PYTHON.exists() else sys.executable
 
 
 
