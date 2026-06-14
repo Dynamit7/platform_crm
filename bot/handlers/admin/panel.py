@@ -29,7 +29,7 @@ async def safe_edit_text(callback: types.CallbackQuery, text: str, reply_markup:
 @router.message(Command("admin"))
 async def cmd_admin_panel(message: types.Message, db_user: User, session: AsyncSession):
     """Вход в админку по команде."""
-    if not db_user or db_user.role != UserRole.ADMIN:
+    if not db_user or db_user.role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
         return
     
     from sqlalchemy import func
@@ -56,7 +56,7 @@ async def cmd_admin_panel(message: types.Message, db_user: User, session: AsyncS
 async def handle_admin_navigation(callback: types.CallbackQuery, db_user: User, session: AsyncSession, state: FSMContext):
     """Центральный обработчик навигации админ-панели."""
     print(f"[DEBUG] Admin Callback: {callback.data}")
-    if not db_user or db_user.role != UserRole.ADMIN:
+    if not db_user or db_user.role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
         await callback.answer("❌ Доступ запрещен", show_alert=True)
         return
 
